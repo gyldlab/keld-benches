@@ -25,12 +25,12 @@ Fixtures are organized **by operating system first**, then framework:
 |---|---|---|
 | [`macos/swift/appkit-wk/`](./macos/swift/appkit-wk/) | **sources** | AppKit `NSWindow` + `WKWebView` hello |
 | [`macos/swift/swiftui-wk/`](./macos/swift/swiftui-wk/) | **sources** | SwiftUI + `WKWebView` hello |
-| [`macos/electron/hello/`](./macos/electron/hello/) | stub README | Official Electron Forge / create-electron-app Release weigh |
-| [`macos/tauri/hello/`](./macos/tauri/hello/) | stub README | Official `create-tauri-app` Release weigh |
-| [`macos/wails/hello/`](./macos/wails/hello/) | stub README | Official Wails hello Release weigh |
-| [`macos/neutralino/hello/`](./macos/neutralino/hello/) | stub README | Official Neutralino hello Release weigh |
-| [`macos/nwjs/hello/`](./macos/nwjs/hello/) | stub README | Official NW.js hello Release weigh |
-| [`macos/electrobun/hello/`](./macos/electrobun/hello/) | stub README | Official Electrobun hello Release weigh |
+| [`macos/electron/hello/`](./macos/electron/hello/) | **sources + measured** | Electron 43.4.0 darwin/arm64 `.app` (2026-08-14) |
+| [`macos/tauri/hello/`](./macos/tauri/hello/) | **sources + measured** | Tauri 2.11.5 Release `.app` / DMG (2026-08-14) |
+| [`macos/wails/hello/`](./macos/wails/hello/) | **sources + measured** | Wails v3.0.0-beta.8 `wails3 package` (2026-08-14) |
+| [`macos/neutralino/hello/`](./macos/neutralino/hello/) | **sources + measured** | Neutralino 6.9.0 embedded arm64 + wrapped `.app` (2026-08-14) |
+| [`macos/nwjs/hello/`](./macos/nwjs/hello/) | **app sources + measured** | NW.js 0.114.1 normal flavor; runtime zip not committed (2026-08-14) |
+| [`macos/electrobun/hello/`](./macos/electrobun/hello/) | **sources + measured** | Electrobun 1.18.1 stable zstd / extracted `.app` (2026-08-14) |
 | [`windows/*/hello/`](./windows/) | stub READMEs | Windows packs (Electron / WebView2 / Win installers) |
 | [`linux/*/hello/`](./linux/) | stub READMEs | Linux packs (AppImage / deb / etc.) |
 

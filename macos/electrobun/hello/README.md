@@ -1,14 +1,34 @@
-# Electrobun hello — macOS (stub)
+# Electrobun hello — macOS
 
-Scaffold with the **official** Electrobun hello / create path. Place app sources
-here. **Do not** vendor Bun runtimes or large binary caches — gitignore them.
+Official `electrobun init` **hello-world** template (Electrobun **1.18.1**),
+slimmed to one 960×640 window + local HTML. System webview (`bundleCEF: false`)
++ bundled **Bun**. **Release weigh is `bunx electrobun build --env=stable`.**
 
-## Weigh recipe (outline)
+Do not vendor Bun runtimes, `node_modules/`, `build/`, or `artifacts/`.
 
-1. Minimal hello window (system webview + Bun).
-2. Official Release / pack for darwin/arm64 first (note zstd vs uncompressed
-   `.app` separately — they are different lanes).
-3. Record installer / `.app` / zstd sizes and idle RSS in
-   [`../../../MEASUREMENTS.md`](../../../MEASUREMENTS.md).
-4. Mirror summary into Keld `docs/engineering/budget-scoreboard.md` →
-   `macos/electrobun/hello/`.
+## Requires
+
+- Bun (this machine: 1.3.14)
+- `bun install` then `bunx electrobun build --env=stable` (downloads
+  `electrobun-core-darwin-arm64` on first build)
+
+## Build (Release)
+
+```bash
+cd macos/electrobun/hello
+bun install
+bunx electrobun build --env=stable
+```
+
+Lanes (different — do not blend):
+
+| Lane | Path |
+|---|---|
+| Self-extracting `.app` (zstd payload inside) | `build/stable-macos-arm64/Electrobun Hello.app` |
+| zstd tarball artifact | `artifacts/stable-macos-arm64-ElectrobunHello.app.tar.zst` |
+| Extracted `.app` after first launch | `~/Library/Application Support/com.keld.benches.electrobun/stable/self-extraction/Electrobun Hello.app` |
+
+## Weigh
+
+See [`../../../MEASUREMENTS.md`](../../../MEASUREMENTS.md) (2026-08-14).
+The wrapped `.app` stays ~18 MB until first launch extracts Bun + launcher.

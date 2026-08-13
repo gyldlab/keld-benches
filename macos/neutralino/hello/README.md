@@ -1,14 +1,48 @@
-# Neutralino hello — macOS (stub)
+# Neutralino hello — macOS
 
-Scaffold with the **official** Neutralino CLI / templates for a Release
-package. Place app sources here. **Do not** vendor large binary runtimes beyond
-what the hello needs checked in as source.
+Official [`neutralinojs-minimal`](https://github.com/neutralinojs/neutralinojs-minimal)
+template. `neu create` failed here (`Unable to download resources from internet` /
+zip extract), so the same GitHub template was cloned, then slimmed to one 960×640
+window + local HTML. **Release weigh:** `neu build --release --macos-bundle --embed-resources`.
 
-## Weigh recipe (outline)
+System webview (WKWebView). Binaries are fetched by `neu update` and gitignored
+(`bin/`). Client `resources/js/neutralino.js` is also gitignored.
 
-1. Minimal hello window.
-2. Official Release build for darwin/arm64 first.
-3. Record compressed download vs unpacked size and idle RSS in
-   [`../../../MEASUREMENTS.md`](../../../MEASUREMENTS.md).
-4. Mirror summary into Keld `docs/engineering/budget-scoreboard.md` →
-   `macos/neutralino/hello/`.
+**Note:** `--macos-bundle` only *renames* the arm64 Mach-O with a `.app`
+suffix — it is not a real bundle. For `open` / RSS this session wrapped that
+signed binary in a real `Neutralino Hello.app` (Info.plist + `Contents/MacOS`).
+
+## Requires
+
+- Node.js + `npx @neutralinojs/neu` (CLI **v11.7.2** this session)
+- Framework **v6.9.0** (`neu update --latest`)
+
+## Build (Release)
+
+```bash
+cd macos/neutralino/hello
+npx --yes @neutralinojs/neu update --latest
+npx --yes @neutralinojs/neu build --release --macos-bundle --embed-resources
+```
+
+Official output (gitignored `dist/`):
+
+- `dist/neutralino-hello/neutralino-hello-mac_arm64.app` — Mach-O (embedded resources)
+- `dist/neutralino-hello-release.zip` — **all platforms**; not a macOS-only installer
+
+Real bundle used for RSS (not committed):
+
+```bash
+BIN=dist/neutralino-hello/neutralino-hello-mac_arm64.app
+APP=/tmp/Neutralino\ Hello.app
+mkdir -p "$APP/Contents/MacOS"
+cp "$BIN" "$APP/Contents/MacOS/Neutralino Hello"
+# add Info.plist (CFBundleExecutable = Neutralino Hello), then:
+codesign --force --sign - "$APP"
+open "$APP"
+```
+
+## Weigh
+
+See [`../../../MEASUREMENTS.md`](../../../MEASUREMENTS.md) (2026-08-14).
+Paint marker: `/tmp/keld-benches-neutralino-painted`.

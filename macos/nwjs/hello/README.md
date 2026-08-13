@@ -1,16 +1,31 @@
-# NW.js hello — macOS (stub)
+# NW.js hello — macOS
 
-Scaffold with the **official** NW.js package for a Release hello. Place app
-sources here. **Do not** commit full Chromium / NW.js SDK trees — download at
-weigh time; gitignore SDKs and caches.
-
-## Weigh recipe (outline)
-
-1. Minimal hello window.
-2. Official Release package for darwin/arm64 first.
-3. Record zip / `.app` sizes and idle RSS in
-   [`../../../MEASUREMENTS.md`](../../../MEASUREMENTS.md).
-4. Mirror summary into Keld `docs/engineering/budget-scoreboard.md` →
-   `macos/nwjs/hello/`.
+Official NW.js **normal** flavor (not SDK) **v0.114.1** `osx-arm64` plus a
+one-window local HTML app. The Chromium/NW runtime zip is **not** committed.
+App sources (`package.json` + `index.html`) live here.
 
 Chromium-class: same fairness rules as Electron.
+
+## Requires
+
+- https://dl.nwjs.io/v0.114.1/nwjs-v0.114.1-osx-arm64.zip (161–162 MB download)
+
+## Package (do not commit the runtime)
+
+```bash
+cd macos/nwjs/hello
+curl -fsSL -o /tmp/nwjs-v0.114.1-osx-arm64.zip \
+  https://dl.nwjs.io/v0.114.1/nwjs-v0.114.1-osx-arm64.zip
+ditto -x -k /tmp/nwjs-v0.114.1-osx-arm64.zip /tmp/nwjs-hello-runtime
+APP="/tmp/NWJS Hello.app"
+ditto /tmp/nwjs-hello-runtime/nwjs-v0.114.1-osx-arm64/nwjs.app "$APP"
+mkdir -p "$APP/Contents/Resources/app.nw"
+cp package.json index.html "$APP/Contents/Resources/app.nw/"
+open "$APP"
+```
+
+## Weigh
+
+See [`../../../MEASUREMENTS.md`](../../../MEASUREMENTS.md) (2026-08-14).
+Paint marker: `/tmp/keld-benches-nwjs-painted`.
+Weigh the assembled `.app` (runtime + `app.nw`), not the SDK zip.

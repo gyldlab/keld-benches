@@ -1,5 +1,6 @@
 # Build products
 dist/
+out/
 *.app/
 *.dmg
 *.bin
@@ -11,6 +12,7 @@ node_modules/
 **/target/
 .cargo/
 bun.lockb
+bun.lock
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
@@ -20,3 +22,17 @@ pnpm-lock.yaml
 *.zip
 .tauri/
 src-tauri/target/
+
+# Neutralino
+bin/
+.tmp/
+.storage
+resources/js/neutralino.js
+
+# Electrobun / Hutch
+.hutch/
+.build/
+artifacts/
+
+# Wails
+build/bin/
