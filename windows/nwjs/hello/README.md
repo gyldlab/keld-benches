@@ -1,15 +1,31 @@
-# NW.js hello — Windows (stub)
+# NW.js hello — macOS
 
-Scaffold with the **official** NW.js release tooling for Windows.
-Chromium + Node. **Do not** commit NW.js SDK / Chromium trees.
+Official NW.js **normal** flavor (not SDK) **v0.114.1** `osx-arm64` plus a
+one-window local HTML app. The Chromium/NW runtime zip is **not** committed.
+App sources (`package.json` + `index.html`) live here.
 
-## Weigh recipe (outline)
+Chromium-class: same fairness rules as Electron.
 
-1. Minimal hello window (same spirit as Keld / Swift fixtures — one window).
-2. Build a **Release** Windows pack (Windows zip / installer; Chromium-class fairness rules.).
-3. Record installer / unpacked sizes and idle main-process RSS in
-   [`../../../MEASUREMENTS.md`](../../../MEASUREMENTS.md).
-4. Mirror summary into Keld `docs/engineering/budget-scoreboard.md` →
-   `windows/nwjs/hello/`.
+## Requires
 
-Place sources under this OS folder only — never at the repo root.
+- https://dl.nwjs.io/v0.114.1/nwjs-v0.114.1-osx-arm64.zip (161–162 MB download)
+
+## Package (do not commit the runtime)
+
+```bash
+cd macos/nwjs/hello
+curl -fsSL -o /tmp/nwjs-v0.114.1-osx-arm64.zip \
+  https://dl.nwjs.io/v0.114.1/nwjs-v0.114.1-osx-arm64.zip
+ditto -x -k /tmp/nwjs-v0.114.1-osx-arm64.zip /tmp/nwjs-hello-runtime
+APP="/tmp/NWJS Hello.app"
+ditto /tmp/nwjs-hello-runtime/nwjs-v0.114.1-osx-arm64/nwjs.app "$APP"
+mkdir -p "$APP/Contents/Resources/app.nw"
+cp package.json index.html "$APP/Contents/Resources/app.nw/"
+open "$APP"
+```
+
+## Weigh
+
+See [`../../../MEASUREMENTS.md`](../../../MEASUREMENTS.md) (2026-08-14).
+Paint marker: `/tmp/keld-benches-nwjs-painted`.
+Weigh the assembled `.app` (runtime + `app.nw`), not the SDK zip.

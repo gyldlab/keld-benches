@@ -1,0 +1,11 @@
+{
+  "name": "nwjs-hello",
+  "version": "1.0.0",
+  "main": "index.html",
+  "window": {
+    "title": "NW.js Hello",
+    "width": 960,
+    "height": 640,
+    "position": "center"
+  }
+}

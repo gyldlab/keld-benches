@@ -239,5 +239,86 @@ enumerated). Re-sample if citing vs WKWebView.
 
 ---
 
-Windows / Linux competitor rows: still stubs (not this machine).
+Linux competitor rows: still stubs (not this machine).
 
+
+
+---
+
+# Windows hello fixtures (2026-08-13)
+
+**Machine:** Windows 11 Home Single Language 10.0.26200, x64.
+**Engine (system-webview arms):** WebView2 Evergreen **151.0.4129.78**.
+**Toolchain:** rustc 1.93.0-x86_64-pc-windows-msvc, Go 1.26.5, Zig 0.16.0,
+Node 25.2.1, Bun 1.4.0, MSVC 14.44.35207.
+**Builds:** Release/production for every arm. **Median of 3 runs.**
+
+## Method (differs from the macOS rows — read before comparing)
+
+* `window-visible` = first moment the process owns a titled `HWND`. It is **not**
+  first paint. Not comparable to the macOS rows, which did not instrument startup.
+* RSS is `WorkingSet64`, sampled 4 s after the window appears.
+* **Helpers are the recursive descendant process tree of our own PID only.**
+  A global `Get-Process msedgewebview2` is wrong on Windows: this machine idles
+  with 6 unrelated WebView2 processes from other apps, which inflated an early
+  draft to 1,569 MB / 21 procs. `conhost.exe` excluded.
+* Main and helper RSS are reported **separately** (macOS-row convention).
+  The `total` column is the M-05 sum, given only because KEL-57 asks for it.
+
+## Fairness notes specific to these arms
+
+* On Windows the "system webview" **is** Chromium (WebView2). The macOS
+  WK-vs-Chromium lane split does **not** transfer: Keld / Tauri / Wails /
+  Neutralino all render on the same Chromium-derived engine here. Only the
+  **main process** differs meaningfully; helper cost is engine-fixed.
+* The Wails arm was scaffolded with official `wails3 init -t vanilla`, then
+  **stripped** of template extras that no other arm carries: a `GreetService`
+  binding and a goroutine emitting an event **every second**. Leaving those in
+  would have charged Wails CPU and RSS nothing else pays.
+* Every arm serves the same hello document (M-01), differing only in the engine
+  named in the copy.
+
+## Disk
+
+| Stack | Version | Binary / exe | Installer / archive |
+|---|---|---|---|
+| **Keld** `keld-host.exe` | `agent/kel-27` | **624,128 B** | none (`keld-pack` is still a `Format` enum) |
+| Keld `keld.exe` (CLI) | same | 2,439,680 B | n/a (devtools, not an app installer) |
+| Tauri | 2.11.5 | 8,634,880 B | MSI **2,846,720 B**; NSIS setup **1,828,010 B** |
+| Neutralino | 6.9.0 | 2,490,880 B | release zip **8,291,997 B** |
+| Wails | v3.0.0-beta.8 | 10,295,296 B | none produced by `wails3 build` |
+| Electron | 43.4.0 | packaged dir (forge `package`) | not made |
+| NW.js | 0.114.1 | runtime zip **209,290,666 B** | unpacked **552,990,288 B** / 478 files |
+| Electrobun | 1.18.1 | Setup.exe **423,936 B** | `.tar.zst` **33,164,123 B**; extracted **33,588,768 B** |
+
+## Idle RSS + startup (median of 3)
+
+| Stack | window-visible | Main RSS | Helper RSS | Total | Procs |
+|---|---|---|---|---|---|
+| **Keld** `keld-host --hello` | 657 ms | **22,656 KB** | 330,400 KB | 353,056 KB | 7 |
+| Tauri 2.11.5 | **61 ms** | 27,436 KB | 337,312 KB | 364,748 KB | 7 |
+| Neutralino 6.9.0 | 566 ms | 26,548 KB | 351,844 KB | 378,392 KB | 7 |
+| Wails v3.0.0-beta.8 | 766 ms | 30,264 KB | 344,884 KB | 375,148 KB | 7 |
+| Electron 43.4.0 | 185 ms | 89,500 KB | **215,536 KB** | **305,036 KB** | 4 |
+| NW.js 0.114.1 | 926 ms | 143,456 KB | 248,940 KB | 392,396 KB | 6 |
+| Electrobun 1.18.1 | **never opened** | 9,396 KB | 553,416 KB | — | 8 |
+
+## Honest reading
+
+* **Keld leads on disk and on main-process RSS.** 624,128 B is 13.8x smaller
+  than Tauri's exe and 16.5x smaller than Wails'. 22,656 KB main RSS is the
+  lowest of every arm that actually opened a window.
+* **Keld does not lead on startup.** Tauri reaches a titled window in 61 ms
+  against Keld's 657 ms — ~10x. This is Keld's worst number on Windows.
+* **Keld does not lead on total RSS.** Electron's 305,036 KB beats every
+  WebView2 arm, because it runs 4 processes where WebView2 spawns 7. Keld's
+  ~3% total-RSS edge over Tauri is inside noise; the 330 MB helper tier is
+  engine-fixed and identical across the WebView2 arms.
+* **Electrobun is not a valid row.** `electrobun build --env=stable` on Windows
+  emitted a macOS-shaped bundle (`Info.plist`, extensionless `bin/launcher`),
+  and no window ever appeared, so the 9,396 KB / 553,416 KB sample measures a
+  launcher that never rendered. Same "incomplete" status as the macOS row, for a
+  different reason. **Do not cite it.**
+* Keld's row is a **host-lane diagnostic**: `keld-host --hello` does not spawn
+  Bun, and there is no installer. It is not yet a packaged product, so the disk
+  numbers are not installer-to-installer against Tauri MSI or NW.js zip.
