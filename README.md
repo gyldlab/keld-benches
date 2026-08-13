@@ -13,23 +13,38 @@ Measured summaries are mirrored in Keld
 (private monorepo paths may differ by branch). Record raw disk / RSS / DMG here
 in [`MEASUREMENTS.md`](./MEASUREMENTS.md).
 
-## Layout
+## Layout (OS → framework → fixture)
+
+Fixtures are organized **by operating system first**, then framework:
+
+```
+{macos|windows|linux}/<framework>/...
+```
 
 | Path | Status | Fixture |
 |---|---|---|
-| [`swift/appkit-wk/`](./swift/appkit-wk/) | **sources** | AppKit `NSWindow` + `WKWebView` hello |
-| [`swift/swiftui-wk/`](./swift/swiftui-wk/) | **sources** | SwiftUI + `WKWebView` hello |
-| [`electron/hello/`](./electron/hello/) | stub README | Official Electron Forge / create-electron-app Release weigh |
-| [`tauri/hello/`](./tauri/hello/) | stub README | Official `create-tauri-app` Release weigh |
-| [`wails/hello/`](./wails/hello/) | stub README | Official Wails hello Release weigh |
-| [`neutralino/hello/`](./neutralino/hello/) | stub README | Official Neutralino hello Release weigh |
-| [`nwjs/hello/`](./nwjs/hello/) | stub README | Official NW.js hello Release weigh |
-| [`electrobun/hello/`](./electrobun/hello/) | stub README | Official Electrobun hello Release weigh |
+| [`macos/swift/appkit-wk/`](./macos/swift/appkit-wk/) | **sources** | AppKit `NSWindow` + `WKWebView` hello |
+| [`macos/swift/swiftui-wk/`](./macos/swift/swiftui-wk/) | **sources** | SwiftUI + `WKWebView` hello |
+| [`macos/electron/hello/`](./macos/electron/hello/) | stub README | Official Electron Forge / create-electron-app Release weigh |
+| [`macos/tauri/hello/`](./macos/tauri/hello/) | stub README | Official `create-tauri-app` Release weigh |
+| [`macos/wails/hello/`](./macos/wails/hello/) | stub README | Official Wails hello Release weigh |
+| [`macos/neutralino/hello/`](./macos/neutralino/hello/) | stub README | Official Neutralino hello Release weigh |
+| [`macos/nwjs/hello/`](./macos/nwjs/hello/) | stub README | Official NW.js hello Release weigh |
+| [`macos/electrobun/hello/`](./macos/electrobun/hello/) | stub README | Official Electrobun hello Release weigh |
+| [`windows/*/hello/`](./windows/) | stub READMEs | Windows packs (Electron / WebView2 / Win installers) |
+| [`linux/*/hello/`](./linux/) | stub READMEs | Linux packs (AppImage / deb / etc.) |
+
+There is **no** Swift tree under `windows/` or `linux/` (macOS-only native floors).
+
+**Agents MUST** place new fixtures under the OS folder for the machine / pack they
+actually ran. **MUST NOT** dump OS-agnostic apps at the repo root. When linking
+from Keld `budget-scoreboard.md`, use the OS-qualified path
+(e.g. `macos/swift/appkit-wk`).
 
 **Do not vendor** full Electron / Chromium / Node trees into this repo. Scaffold
 with each framework’s official release tooling, place *app sources* under the
-matching `*/hello/` tree, gitignore `node_modules`, `dist`, and toolchain caches,
-then record artifacts in `MEASUREMENTS.md`.
+matching `{os}/<framework>/hello/` tree, gitignore `node_modules`, `dist`, and
+toolchain caches, then record artifacts in `MEASUREMENTS.md`.
 
 ## Build & run — Swift (macOS)
 
@@ -40,8 +55,8 @@ Needs Xcode / Command Line Tools (`swiftc`).
 mkdir -p dist/HelloAppKit.app/Contents/MacOS
 swiftc -O -parse-as-library -target arm64-apple-macos14.0 \
   -o dist/HelloAppKit.app/Contents/MacOS/HelloAppKit \
-  swift/appkit-wk/HelloAppKit.swift
-cp swift/appkit-wk/Info.plist dist/HelloAppKit.app/Contents/
+  macos/swift/appkit-wk/HelloAppKit.swift
+cp macos/swift/appkit-wk/Info.plist dist/HelloAppKit.app/Contents/
 codesign --force --sign - dist/HelloAppKit.app
 open dist/HelloAppKit.app
 
@@ -49,8 +64,8 @@ open dist/HelloAppKit.app
 mkdir -p dist/HelloSwiftUI.app/Contents/MacOS
 swiftc -O -parse-as-library -target arm64-apple-macos14.0 \
   -o dist/HelloSwiftUI.app/Contents/MacOS/HelloSwiftUI \
-  swift/swiftui-wk/HelloSwiftUI.swift
-cp swift/swiftui-wk/Info.plist dist/HelloSwiftUI.app/Contents/
+  macos/swift/swiftui-wk/HelloSwiftUI.swift
+cp macos/swift/swiftui-wk/Info.plist dist/HelloSwiftUI.app/Contents/
 codesign --force --sign - dist/HelloSwiftUI.app
 open dist/HelloSwiftUI.app
 ```
@@ -70,10 +85,11 @@ fires.
 
 ## Fair comparison
 
-- Same Mac, same day, **Release** packages only for `vs` cells.
+- Same machine, same day, **Release** packages only for `vs` cells.
 - Split lanes: host / runtime / engine-in-bundle / wrapping — never blend.
 - Do not mix WKWebView / Chromium / Skia in one `vs` cell.
 - Stub frameworks: follow each directory’s README; do not invent numbers.
+- Cross-OS numbers are **not** interchangeable — always cite the OS folder.
 
 ## License
 
