@@ -5,3 +5,18 @@ dist/
 *.bin
 *.o
 .DS_Store
+
+# Framework scaffolds (never vendor Chromium / full toolchains)
+node_modules/
+**/target/
+.cargo/
+bun.lockb
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+*.AppImage
+*.msi
+*.exe
+*.zip
+.tauri/
+src-tauri/target/
