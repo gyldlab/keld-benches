@@ -1,0 +1,7 @@
+# Build products
+dist/
+*.app/
+*.dmg
+*.bin
+*.o
+.DS_Store
