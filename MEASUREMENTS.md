@@ -1,5 +1,25 @@
 # Measurements
 
+## Fixture index
+
+| Fixture path | Stack | Sources in repo? | Notes |
+|---|---|---|---|
+| [`swift/appkit-wk/`](./swift/appkit-wk/) | Native Swift AppKit + WK | yes | Measured 2026-08-13 |
+| [`swift/swiftui-wk/`](./swift/swiftui-wk/) | Native Swift SwiftUI + WK | yes | Measured 2026-08-13 |
+| [`electron/hello/`](./electron/hello/) | Electron (Chromium + Node) | stub | Scaffold official Release; weigh then fill row |
+| [`tauri/hello/`](./tauri/hello/) | Tauri 2 (system webview) | stub | same |
+| [`wails/hello/`](./wails/hello/) | Wails (system webview) | stub | same |
+| [`neutralino/hello/`](./neutralino/hello/) | Neutralino | stub | same |
+| [`nwjs/hello/`](./nwjs/hello/) | NW.js (Chromium + Node) | stub | same |
+| [`electrobun/hello/`](./electrobun/hello/) | Electrobun (system webview + Bun) | stub | same |
+
+Mirror summary numbers (not full recipes) into Keld
+`docs/engineering/budget-scoreboard.md` with a link back to the fixture path here.
+
+---
+
+## Swift (2026-08-13)
+
 Captured from `/tmp/keld-native-swift-hello` on **2026-08-13**.
 
 | Field | Value |
@@ -14,14 +34,14 @@ Captured from `/tmp/keld-native-swift-hello` on **2026-08-13**.
 
 Source of truth for these rows: session `MEASUREMENTS.txt` under `/tmp/keld-native-swift-hello`.
 
-## Disk
+### Disk
 
 | Artifact | `du -sh` | File sum inside `.app` | Executable (`stat`) | UDZO DMG |
 |---|---|---|---|---|
 | HelloSwiftUI | 96K | 92,740 B | 89,696 B | 31,655 B |
 | HelloAppKit | 88K | 80,976 B | 77,936 B | 29,774 B |
 
-## Idle RSS (main process)
+### Idle RSS (main process)
 
 After `WKNavigationDelegate.didFinish` + window title via osascript:
 
@@ -33,3 +53,11 @@ After `WKNavigationDelegate.didFinish` + window title via osascript:
 Window titles: `Native Hello SwiftUI`, `Native Hello AppKit`.
 
 RSS is the main process only; WebKit helper XPCs are not included in these figures.
+
+---
+
+## Electron / Tauri / Wails / Neutralino / NW.js / Electrobun
+
+*No same-protocol Release weigh on this Mac yet.* Scaffold per each
+`*/hello/README.md`, then append a dated table here (disk, RSS, DMG/zip, machine,
+toolchain versions). Do not fill `vs` cells from blog citations alone.
