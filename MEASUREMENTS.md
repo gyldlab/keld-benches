@@ -256,7 +256,11 @@ Node 25.2.1, Bun 1.4.0, MSVC 14.44.35207.
 ## Method (differs from the macOS rows — read before comparing)
 
 * `window-visible` = first moment the process owns a titled `HWND`. It is **not**
-  first paint. Not comparable to the macOS rows, which did not instrument startup.
+  first paint. Not comparable to the macOS rows, which did not instrument startup,
+  and **not comparable across frameworks** — frameworks differ in when they present
+  the window relative to webview construction. Superseded by
+  [Time to first paint](#time-to-first-paint-2026-08-14-median-of-5); kept for
+  continuity only.
 * RSS is `WorkingSet64`, sampled 4 s after the window appears.
 * **Helpers are the recursive descendant process tree of our own PID only.**
   A global `Get-Process msedgewebview2` is wrong on Windows: this machine idles
@@ -303,13 +307,75 @@ Node 25.2.1, Bun 1.4.0, MSVC 14.44.35207.
 | NW.js 0.114.1 | 926 ms | 143,456 KB | 248,940 KB | 392,396 KB | 6 |
 | Electrobun 1.18.1 | **never opened** | 9,396 KB | 553,416 KB | — | 8 |
 
+## Time to first paint (2026-08-14, median of 5)
+
+Same machine, same Release artifacts, one extra session. `window-visible` above
+compares *presentation policy*, not speed: a titled `HWND` can appear before,
+during, or after the engine has anything to show, so it is not comparable across
+frameworks. First paint is the metric Keld's architecture 01 §5 budgets
+(**cold start → first paint ≤ 300 ms**), and this subsection is it.
+
+### Instrumentation — identical for every arm
+
+* Every arm serves **byte-identical** hello HTML (M-01).
+* The page fires an image beacon —
+  `new Image().src = "http://127.0.0.1:45877/painted"` — from inside a **double**
+  `requestAnimationFrame`, i.e. after the first frame has been composited.
+* A single local `HttpListener` timestamps arrival, so **all arms share one
+  clock** and none gets privileged in-process instrumentation the others lack.
+* **Image beacon, not `fetch()`:** the page runs on an opaque origin (wry
+  `with_html` / WebView2 `NavigateToString`), so `fetch()` is CORS-restricted;
+  `<img>` is not.
+* **`document.title` does not work — do not retry it.** Setting the document
+  title and watching for the native window caption is a dead end in an embedded
+  webview: the native window title is owned by the framework, not the document.
+  That attempt failed on **every** arm.
+* The beacon HTML was injected for this session only and **reverted afterwards**.
+  It is not in product code or in the committed fixtures, so no committed SHA
+  reproduces the instrumented binaries. Re-inject it to reproduce.
+
+| Stack | first paint (budgeted metric) | titled `HWND` (weak) | vs ≤ 300 ms budget |
+|---|---|---|---|
+| **Keld** `keld-host --hello` | **906 ms** | 433 ms | **over** — 3.0x |
+| Tauri 2.11.5 | **504 ms** | 32 ms | **over** — 1.7x |
+| Electron 43.4.0 | **not measured** | 125 ms | — |
+
+Raw first-paint runs (ms): Keld 906 / 943 / 867 / 857 / 977 · Tauri 504 / 568 /
+464 / 500 / 510.
+
+### Honest reading of the first-paint rows
+
+* **Both measured arms miss the budget.** Keld 906 ms is 3.0x over ≤ 300 ms;
+  Tauri 504 ms is 1.7x over. Tauri also failing is not a defence.
+* **Keld does not lead on startup.** On the correct metric the gap to Tauri is
+  **1.8x** (906 vs 504 ms) — not the ~10x or ~6.6x that titled-`HWND` timings
+  suggested. Those larger figures were **inflated by a metric artifact**, but a
+  real ~400 ms gap remains. Correcting the metric shrinks the gap; it does not
+  close it.
+* **Electron's first paint is missing, not fast.** `electron-forge package` had
+  already baked `out/` before the fixture HTML was edited, so the packaged app
+  served a **stale copy** of the page with no beacon in it. Anyone reproducing
+  this row **must repackage** (`electron-forge package` again) after editing the
+  fixture HTML.
+* Wails, Neutralino, NW.js and Electrobun were not re-run in this session; they
+  have no first-paint number.
+* Titled-`HWND` medians are not stable across sessions either: Keld's moved
+  205 -> 433 ms between the 2026-08-13 and 2026-08-14 sessions while Tauri's held
+  (31 -> 32 ms). Run count differs (3 vs 5) and the instrumented tree carries the
+  beacon, so read that as session drift, not a regression — and as one more
+  reason not to build a claim on that column.
+
 ## Honest reading
 
 * **Keld leads on disk and on main-process RSS.** 624,128 B is 13.8x smaller
   than Tauri's exe and 16.5x smaller than Wails'. 22,656 KB main RSS is the
   lowest of every arm that actually opened a window.
 * **Keld does not lead on startup.** Tauri reaches a titled window in 61 ms
-  against Keld's 657 ms — ~10x. This is Keld's worst number on Windows.
+  against Keld's 657 ms — ~10x. **Do not cite that ratio:** titled `HWND` is not
+  first paint and is not comparable across frameworks. On the budgeted metric the
+  gap is **1.8x** (906 vs 504 ms) — see
+  [Time to first paint](#time-to-first-paint-2026-08-14-median-of-5). Startup is
+  still Keld's worst number on Windows.
 * **Keld does not lead on total RSS.** Electron's 305,036 KB beats every
   WebView2 arm, because it runs 4 processes where WebView2 spawns 7. Keld's
   ~3% total-RSS edge over Tauri is inside noise; the 330 MB helper tier is
