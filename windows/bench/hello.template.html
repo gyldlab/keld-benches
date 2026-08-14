@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>__TITLE__</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; display: grid;
+           place-items: center; min-height: 100vh; background: #0b0f14; color: #e8eef5; }
+    h1 { font-weight: 600; letter-spacing: -0.02em; }
+    p { opacity: 0.75; max-width: 32rem; text-align: center; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div>
+    <h1>Keld</h1>
+    <p>Hello from __ENGINE__ — same-class hello window as the Keld fixture.</p>
+  </div>
+  <script>
+    // Paint signal. Double requestAnimationFrame fires after the first frame is
+    // actually composited, which is what architecture 01 §5 budgets -- not
+    // load-finished, and not the moment a titled window handle appears.
+    //
+    // An <img> beacon rather than fetch(): these arms render on an opaque origin
+    // (with_html / NavigateToString), where fetch() is CORS-blocked but a
+    // subresource GET is not. document.title was tried first and does NOT work:
+    // in an embedded webview the native caption belongs to the framework, not
+    // the document, so it never leaves the process.
+    //
+    // The nonce is per session, not per launch: every Windows arm bakes this
+    // HTML in at build time, so a per-launch nonce would mean a per-launch
+    // rebuild. It rejects beacons from an earlier session or from a binary that
+    // missed the rebuild -- see the harness header for what it does not cover.
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        new Image().src = "http://127.0.0.1:__PORT__/painted?nonce=__NONCE__";
+      });
+    });
+  </script>
+</body>
+</html>

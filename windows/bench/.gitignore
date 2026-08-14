@@ -1,0 +1,2 @@
+# Ephemeral: per-session beacon nonce and bound port, written by -Prepare.
+.session-state.json

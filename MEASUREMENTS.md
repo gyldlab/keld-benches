@@ -388,3 +388,62 @@ Raw first-paint runs (ms): Keld 906 / 943 / 867 / 857 / 977 · Tauri 504 / 568 /
 * Keld's row is a **host-lane diagnostic**: `keld-host --hello` does not spawn
   Bun, and there is no installer. It is not yet a packaged product, so the disk
   numbers are not installer-to-installer against Tauri MSI or NW.js zip.
+
+
+---
+
+## Time to first paint, reproducible harness (2026-08-14, median of 5)
+
+Supersedes the ad-hoc figures in the previous section. Those were measured with a
+throwaway fixed-port beacon that was reverted afterwards, so nobody could re-run
+them. This run used the committed harness at
+[`windows/bench/Measure-FirstPaint.ps1`](./windows/bench/Measure-FirstPaint.ps1);
+raw per-run samples with SHAs, exe hashes and versions are in
+[`windows/bench/windows-first-paint.json`](./windows/bench/windows-first-paint.json).
+
+| Stack | first paint | main RSS | helper RSS | total RSS | procs |
+|---|---|---|---|---|---|
+| **Electron** 43.4.0 | **444 ms** | 87,088 KB | **217,284 KB** | **304,372 KB** | **4** |
+| Tauri 2.11.5 | 688 ms | 24,584 KB | 336,852 KB | 361,436 KB | 7 |
+| **Keld** `keld-host --hello` | **1,289 ms** | **19,860 KB** | 337,192 KB | 357,052 KB | 7 |
+
+Raw first paint (ms) — first run of each arm is cold, hence the outlier:
+Keld 1629 / 1290 / 1262 / 1289 / 1276 · Tauri 1046 / 685 / 686 / 688 / 701 ·
+Electron 1371 / 458 / 444 / 413 / 439. 5/5 beacons valid on every arm.
+
+### Honest reading
+
+* **Keld is the slowest arm to first paint** — 1.87x Tauri on the identical
+  WebView2 engine, and 2.9x Electron. This is not an engine cost and not a
+  measurement artifact; it is Keld's own startup path. Tracked as KEL-62.
+* **Electron first-paints fastest and uses the least total RSS**, because it runs
+  4 processes where WebView2 spawns 7. The Chromium-bundling tradeoff costs disk,
+  not startup.
+* **Keld's main-process RSS is genuinely the lowest** (19,860 KB vs Tauri 24,584
+  and Electron 87,088) and remains its strongest measured result alongside binary
+  size. Total RSS is dominated by the ~337 MB WebView2 helper tier, which is
+  engine-fixed and near-identical for Keld and Tauri.
+* These absolutes run higher than the 2026-08-13 ad-hoc numbers (Keld 906 ms,
+  Tauri 504 ms) on the same machine. The **ratio** is stable (1.8x both times);
+  the absolutes are not comparable across sessions. Compare within a session only.
+
+### What this harness does and does not guarantee
+
+Satisfied: one external monotonic clock armed before spawn; listener on port 0;
+byte-identical HTML per arm (M-01); paint = image beacon after double
+requestAnimationFrame; `window-visible` demoted to a non-paint diagnostic; stale
+and malformed beacons fail closed; descendant-tree RSS sampled only after paint
+and reported separately from main; machine-readable samples carrying git SHA,
+OS/arch, exe path + SHA-256 + version, and the exact command; negative controls
+in [`windows/bench/Test-Harness.ps1`](./windows/bench/Test-Harness.ps1).
+
+Not satisfied: the nonce is **per session, not per launch**. Every Windows arm
+bakes its HTML in at build time (Keld a `const`, Tauri `frontendDist`, Electron
+`app.asar`), so a per-launch nonce would require a per-launch rebuild. It rejects
+beacons from an earlier session or an un-rebuilt binary, but not a late beacon
+from an earlier run in the same session.
+
+Also note the harness patches product sources to inject the beacon and the
+operator must restore them afterwards; it does not produce a committed binary
+that reproduces these exact numbers. Closing that needs runtime-loaded content,
+a different measurement lane.
