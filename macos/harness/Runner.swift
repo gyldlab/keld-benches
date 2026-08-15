@@ -1,0 +1,3875 @@
+import AppKit
+import Darwin
+import Foundation
+
+private let canonicalBenchesRepositoryIdentifier = "github.com/gyldlab/keld-benches"
+private let canonicalBenchesRemoteURL = "https://github.com/gyldlab/keld-benches.git"
+private let canonicalKeldRepositoryIdentifier = "github.com/gyldlab/keld"
+private let canonicalKeldRemoteURL = "https://github.com/gyldlab/keld.git"
+private let canonicalRemoteProbeDirectory = URL(fileURLWithPath: "/var/empty", isDirectory: true)
+private let requiredTauriSourcePaths = [
+    "build.sh",
+    "package.json",
+    "src/index.html",
+    "src-tauri/Cargo.toml",
+    "src-tauri/build.rs",
+    "src-tauri/capabilities/default.json",
+    "src-tauri/icons/icon.icns",
+    "src-tauri/src/lib.rs",
+    "src-tauri/src/main.rs",
+    "src-tauri/tauri.conf.json",
+]
+
+private func loadedExecutableURL() throws -> URL {
+    var buffer = [CChar](repeating: 0, count: 4_096)
+    let byteCount = proc_pidpath(getpid(), &buffer, UInt32(buffer.count))
+    guard byteCount > 0 else {
+        throw HarnessError.io(
+            "could not resolve the kernel-reported harness executable; rerun on a supported macOS host"
+        )
+    }
+    return URL(fileURLWithPath: String(cString: buffer))
+        .standardizedFileURL
+        .resolvingSymlinksInPath()
+}
+
+struct AppSpec {
+    let label: String
+    let bundleURL: URL
+    let bundleFileIdentity: FileIdentity
+    var argumentTemplates: [String]
+    var buildCommand: String?
+}
+
+struct FileIdentity: Equatable {
+    let device: UInt64
+    let inode: UInt64
+}
+
+private func fileIdentity(at url: URL) throws -> FileIdentity {
+    let descriptor = Darwin.open(url.path, O_RDONLY | O_CLOEXEC)
+    guard descriptor >= 0 else {
+        throw HarnessError.io("open failed for \(url.lastPathComponent): \(String(cString: strerror(errno)))")
+    }
+    defer { Darwin.close(descriptor) }
+    var information = stat()
+    guard Darwin.fstat(descriptor, &information) == 0 else {
+        throw HarnessError.io("fstat failed for \(url.lastPathComponent): \(String(cString: strerror(errno)))")
+    }
+    guard information.st_mode & S_IFMT == S_IFDIR else {
+        throw HarnessError.io("expected an app bundle directory at \(url.lastPathComponent)")
+    }
+    return FileIdentity(device: UInt64(information.st_dev), inode: UInt64(information.st_ino))
+}
+
+struct RunnerOptions {
+    var apps: [AppSpec] = []
+    var argumentTemplatesByLabel: [String: [String]] = [:]
+    var buildCommandsByLabel: [String: String] = [:]
+    var runsPerApp = 11
+    var timeoutSeconds = 30.0
+    var cleanupTimeoutSeconds = 5.0
+    var stableObservations = 3
+    var stableWindowMilliseconds = 500
+    var rssToleranceKiB: UInt64 = 1_024
+    var htmlURL: URL?
+    var outputURL: URL?
+    var publish = false
+    var selfTest = false
+    var showHelp = false
+}
+
+enum GitWorkingTreeState: String, Codable, Equatable {
+    case clean
+    case dirty
+    case unavailable
+}
+
+struct RepositoryMetadata: Codable, Equatable {
+    let identifier: String?
+    let commit: String?
+    let workingTreeState: GitWorkingTreeState
+    let commitAdvertisedAsOriginHead: Bool?
+}
+
+private struct GitSnapshot {
+    let rootURL: URL?
+    let metadata: RepositoryMetadata
+}
+
+struct RepositoryTransitionMetadata: Codable {
+    let before: RepositoryMetadata
+    let after: RepositoryMetadata
+}
+
+struct ArtifactHash: Codable, Equatable {
+    let repositoryRelativePath: String
+    let sha256: String
+    let matchesHeadBlob: Bool
+}
+
+struct ObservedToolchainMetadata: Codable, Equatable {
+    let evidenceKind: String
+    let swiftCompilerVersion: String?
+    let xcodeVersion: String?
+    let macosSdkVersion: String?
+    let bunVersion: String?
+    let tauriCliVersion: String?
+    let rustcVersion: String?
+    let cargoVersion: String?
+}
+
+struct HostMetadata: Codable, Equatable {
+    let operatingSystemVersion: String
+    let architecture: String
+    let hardwareModel: String
+    let processor: String
+    let logicalCpuCount: Int
+    let physicalMemoryBytes: UInt64
+    let lowPowerModeEnabled: Bool
+    let thermalState: String
+}
+
+struct HostConditionEvidence: Codable, Equatable {
+    let lowPowerModeEnabled: Bool
+    let thermalState: String
+
+    var isNominalForPublication: Bool {
+        !lowPowerModeEnabled && thermalState == "nominal"
+    }
+}
+
+struct HarnessRebuildEvidence: Codable, Equatable {
+    let attempted: Bool
+    let rebuiltExecutableSha256: String?
+    let byteForByteMatchesRunningExecutable: Bool
+}
+
+struct HarnessArtifactMetadata: Codable {
+    let executableSizeBytes: UInt64
+    let executableSha256: String
+    let buildInvocationContract: String
+    let reproducibleBuild: HarnessRebuildEvidence
+    let sourceRepository: RepositoryMetadata
+    let sourceFiles: [ArtifactHash]
+    let observedToolchain: ObservedToolchainMetadata
+}
+
+struct FixtureMetadata: Codable, Equatable {
+    let label: String
+    let appBundleName: String
+    let bundleIdentifier: String?
+    let bundleVersion: String?
+    let appBundleTreeSha256: String
+    let executableBundleRelativePath: String?
+    let executableSizeBytes: UInt64?
+    let executableSha256: String?
+    let sourceRepository: RepositoryMetadata?
+    let sourceRepositoryRelativePath: String?
+    let embeddedFixtureKind: String?
+    let embeddedSourceRepositoryIdentifier: String?
+    let embeddedSourceGitCommit: String?
+    let embeddedSourceRepositoryRelativePath: String?
+    let embeddedSourceCommitAdvertisedAsOriginHead: Bool?
+    let embeddedRecipeRepositoryIdentifier: String?
+    let embeddedRecipeGitCommit: String?
+    let embeddedBuildRecipeIdentifier: String?
+    let adapterPatchSha256: String?
+    let buildScriptSha256: String?
+    let infoPlistTemplateSha256: String?
+    let buildCommandSha256: String
+    let argumentTemplateSha256: [String]
+    let sourceFiles: [ArtifactHash]
+    let lockfiles: [ArtifactHash]
+    let toolchain: ObservedToolchainMetadata
+}
+
+struct ProtocolMetadata: Codable {
+    let listener: String
+    let htmlFileName: String
+    let htmlSha256: String
+    let tokenTransports: [String]
+    let completionSignal: String
+    let launchApi: String
+    let coalitionApi: String
+}
+
+struct MeasurementConfiguration: Codable {
+    let runsPerApp: Int
+    let appOrder: String
+    let sampleTimeoutSeconds: Double
+    let cleanupTimeoutSeconds: Double
+    let stableCoalitionObservations: Int
+    let stableCoalitionWindowMilliseconds: Int
+    let rssToleranceKiB: UInt64
+    let observationPollMilliseconds: Int
+    let cacheState: String
+}
+
+struct CleanupRecord: Codable {
+    let gracefulTerminateAccepted: Bool
+    let coalitionHardKillInvoked: Bool
+    let applicationTerminated: Bool
+    let coalitionDrained: Bool?
+    let error: String?
+}
+
+private func hasUnresolvedLaunchOwnership(_ cleanupRecords: [CleanupRecord?]) -> Bool {
+    cleanupRecords.contains { $0?.error == "process_identity_unavailable" }
+}
+
+private struct PublicEvidenceContext {
+    private let salt: String
+    let t0MonotonicNanoseconds: UInt64
+
+    init(t0MonotonicNanoseconds: UInt64, salt: String = UUID().uuidString) {
+        self.salt = salt
+        self.t0MonotonicNanoseconds = t0MonotonicNanoseconds
+    }
+
+    func processPseudonym(_ pid: Int32) -> String {
+        pseudonym(kind: "process", value: String(pid))
+    }
+
+    func coalitionPseudonym(_ coalitionId: UInt64) -> String {
+        pseudonym(kind: "coalition", value: String(coalitionId))
+    }
+
+    func offsetMilliseconds(for monotonicNanoseconds: UInt64) -> Double {
+        if monotonicNanoseconds >= t0MonotonicNanoseconds {
+            return Double(monotonicNanoseconds - t0MonotonicNanoseconds) / 1_000_000
+        }
+        return -Double(t0MonotonicNanoseconds - monotonicNanoseconds) / 1_000_000
+    }
+
+    private func pseudonym(kind: String, value: String) -> String {
+        let digest = sha256Hex(Data("keld-public-evidence-v1\0\(salt)\0\(kind)\0\(value)".utf8))
+        return "\(kind)-\(digest.prefix(24))"
+    }
+}
+
+struct StableProcessEvidence: Codable, Equatable {
+    let processPseudonym: String
+    let parentProcessPseudonym: String?
+    let commandSha256: String?
+
+    fileprivate init(_ identity: StableProcessIdentity, context: PublicEvidenceContext) {
+        processPseudonym = context.processPseudonym(identity.pid)
+        parentProcessPseudonym = identity.parentPid > 0
+            ? context.processPseudonym(identity.parentPid)
+            : nil
+        commandSha256 = identity.commandSha256
+    }
+}
+
+struct BeaconEvidence: Codable {
+    let receivedOffsetMilliseconds: Double
+    let clientNowMilliseconds: Double?
+    let scriptStartMilliseconds: Double?
+    let firstRafMilliseconds: Double?
+    let secondRafMilliseconds: Double?
+    let documentVisibilityState: String?
+    let documentHadFocus: Bool?
+
+    fileprivate init(_ receipt: BeaconReceipt, context: PublicEvidenceContext) {
+        receivedOffsetMilliseconds = context.offsetMilliseconds(
+            for: receipt.receivedMonotonicNanoseconds
+        )
+        clientNowMilliseconds = receipt.clientNowMilliseconds
+        scriptStartMilliseconds = receipt.scriptStartMilliseconds
+        firstRafMilliseconds = receipt.firstRafMilliseconds
+        secondRafMilliseconds = receipt.secondRafMilliseconds
+        documentVisibilityState = receipt.documentVisibilityState
+        documentHadFocus = receipt.documentHadFocus
+    }
+}
+
+struct ProcessMeasurementEvidence: Codable, Equatable {
+    let processPseudonym: String
+    let parentProcessPseudonym: String?
+    let rssKiB: UInt64
+    let classification: String
+    let commandSha256: String
+
+    fileprivate init(_ process: ProcessMeasurement, context: PublicEvidenceContext) {
+        processPseudonym = context.processPseudonym(process.pid)
+        parentProcessPseudonym = process.parentPid > 0
+            ? context.processPseudonym(process.parentPid)
+            : nil
+        rssKiB = process.rssKiB
+        classification = process.classification
+        commandSha256 = process.commandSha256
+    }
+}
+
+struct CoalitionIdentityEvidence: Codable, Equatable {
+    let coalitionPseudonym: String
+    let bundleIdentifier: String?
+    let activeProcessCount: Int?
+
+    fileprivate init(_ identity: CoalitionIdentity, context: PublicEvidenceContext) {
+        coalitionPseudonym = context.coalitionPseudonym(identity.id)
+        bundleIdentifier = identity.bundleIdentifier
+        activeProcessCount = identity.activeCount
+    }
+}
+
+struct CoalitionEvidence: Codable, Equatable {
+    let identity: CoalitionIdentityEvidence
+    let membershipLifecycleStableDuringAcceptedObservation: Bool
+    let processes: [ProcessMeasurementEvidence]
+    let rssByClassificationKiB: [String: UInt64]
+    let totalRssKiB: UInt64
+    let observedOffsetMilliseconds: Double
+
+    fileprivate init(_ snapshot: CoalitionSnapshot, context: PublicEvidenceContext) {
+        identity = CoalitionIdentityEvidence(snapshot.identity, context: context)
+        membershipLifecycleStableDuringAcceptedObservation = true
+        processes = snapshot.processes.map {
+            ProcessMeasurementEvidence($0, context: context)
+        }
+        rssByClassificationKiB = snapshot.rssByClassificationKiB
+        totalRssKiB = snapshot.totalRssKiB
+        observedOffsetMilliseconds = context.offsetMilliseconds(
+            for: snapshot.observedMonotonicNanoseconds
+        )
+    }
+}
+
+struct ServerEventEvidence: Codable {
+    let offsetMilliseconds: Double
+    let kind: String
+    let status: Int
+    let accepted: Bool
+    let reason: String
+
+    fileprivate init(_ event: ServerEvent, context: PublicEvidenceContext) {
+        offsetMilliseconds = context.offsetMilliseconds(for: event.monotonicNanoseconds)
+        kind = event.kind
+        status = event.status
+        accepted = event.accepted
+        reason = event.reason
+    }
+}
+
+struct SampleRecord: Codable {
+    let globalOrdinal: Int
+    let round: Int
+    let appOrdinal: Int
+    let label: String
+    let status: String
+    let error: String?
+    let launchedProcessIdentity: StableProcessEvidence?
+    let launchServicesASNResolved: Bool?
+    let launchServicesOriginalPidPresent: Bool?
+    let originalPidMatchesReturnedPidCoalition: Bool?
+    let launchCallbackOffsetMilliseconds: Double?
+    let applicationWasActiveAtLaunchCallback: Bool?
+    let applicationWasActiveAtBeacon: Bool?
+    let hostConditionBeforeLaunch: HostConditionEvidence
+    let hostConditionAfterCleanup: HostConditionEvidence
+    let beacon: BeaconEvidence?
+    let doubleRafPaintOpportunityProxyMilliseconds: Double?
+    let stableCoalitionObservations: Int?
+    let coalition: CoalitionEvidence?
+    let serverEvents: [ServerEventEvidence]
+    let cleanup: CleanupRecord?
+}
+
+struct PublicationReason: Codable, Equatable {
+    let code: String
+    let label: String?
+}
+
+struct PublicationMetadata: Codable {
+    let policyVersion: Int
+    let requested: Bool
+    let eligible: Bool
+    let reasons: [PublicationReason]
+}
+
+private struct BenchmarkOutcome {
+    let measurementSucceeded: Bool
+    let publicationEligible: Bool
+}
+
+struct MetricSummary: Codable {
+    let sampleCount: Int
+    let median: Double?
+    let p90NearestRank: Double?
+    let minimum: Double?
+    let maximum: Double?
+}
+
+struct AppSummary: Codable {
+    let label: String
+    let successfulSamples: Int
+    let failedSamples: Int
+    let doubleRafPaintOpportunityProxyMilliseconds: MetricSummary
+    let totalCoalitionRssKiB: MetricSummary
+}
+
+struct BenchmarkDocument: Codable {
+    let schemaVersion: Int
+    let harnessVersion: String
+    let startedAtUtc: String
+    let finishedAtUtc: String
+    let repository: RepositoryTransitionMetadata
+    let harnessArtifact: HarnessArtifactMetadata
+    let hostBefore: HostMetadata
+    let hostAfter: HostMetadata
+    let fixtures: [FixtureMetadata]
+    let protocolMetadata: ProtocolMetadata
+    let configuration: MeasurementConfiguration
+    let samples: [SampleRecord]
+    let summaries: [AppSummary]
+    let abortedReason: String?
+    let publication: PublicationMetadata
+}
+
+private struct LaunchOutcome {
+    let application: NSRunningApplication
+    let launchedPid: Int32
+    let kernelOwnership: KernelLaunchOwnership?
+    let t0Nanoseconds: UInt64
+    let callbackNanoseconds: UInt64
+    let wasActiveAtCallback: Bool
+    let callbackError: String?
+}
+
+private final class LaunchOwnershipWatchdog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        lock.unlock()
+    }
+
+    func fire() {
+        lock.lock()
+        let shouldReport = !cancelled
+        lock.unlock()
+        if shouldReport {
+            writeDiagnostic(
+                "launch callback deadline elapsed; quarantining the run until LaunchServices returns ownership"
+            )
+        }
+    }
+}
+
+private func writeDiagnostic(_ message: String) {
+    FileHandle.standardError.write(Data((message + "\n").utf8))
+}
+
+private func publicFailureCode(_ error: Error) -> String {
+    guard let harnessError = error as? HarnessError else { return "unexpected_failure" }
+    switch harnessError {
+    case .invalidArgument: return "invalid_argument"
+    case .io: return "io_failure"
+    case .launch: return "launch_failure"
+    case .protocolViolation: return "protocol_violation"
+    case .timeout: return "timeout"
+    case .measurement: return "measurement_failure"
+    }
+}
+
+@MainActor
+private func launch(
+    app: AppSpec,
+    benchmarkURL: URL,
+    token: String,
+    measurementTimeoutNanoseconds: UInt64
+) async throws -> LaunchOutcome {
+    let configuration = NSWorkspace.OpenConfiguration()
+    configuration.createsNewApplicationInstance = true
+    configuration.promptsUserIfNeeded = false
+    configuration.addsToRecentItems = false
+    configuration.activates = true
+    configuration.hides = false
+    configuration.arguments = app.argumentTemplates.map {
+        $0.replacingOccurrences(of: "{url}", with: benchmarkURL.absoluteString)
+            .replacingOccurrences(of: "{token}", with: token)
+    }
+    configuration.environment = [
+        "KELD_BENCH_URL": benchmarkURL.absoluteString,
+        "KELD_BENCH_TOKEN": token,
+    ]
+    let workspace = NSWorkspace.shared
+
+    return try await withCheckedThrowingContinuation { continuation in
+        let ownershipWatchdog = LaunchOwnershipWatchdog()
+        DispatchQueue.global(qos: .utility).asyncAfter(
+            deadline: .now() + .nanoseconds(Int(clamping: measurementTimeoutNanoseconds))
+        ) { ownershipWatchdog.fire() }
+        // This clock read is intentionally the statement immediately before the
+        // NSWorkspace launch API; setup, URL generation, and environment work are
+        // outside the measured interval.
+        let t0 = monotonicNowNanoseconds()
+        workspace.openApplication(at: app.bundleURL, configuration: configuration) { application, error in
+            ownershipWatchdog.cancel()
+            if let application {
+                let launchedPid = application.processIdentifier
+                let kernelOwnership: KernelLaunchOwnership?
+                do {
+                    kernelOwnership = try kernelLaunchOwnership(for: launchedPid)
+                } catch {
+                    writeDiagnostic("launch ownership capture failed: \(error)")
+                    kernelOwnership = nil
+                }
+                continuation.resume(returning: LaunchOutcome(
+                    application: application,
+                    launchedPid: launchedPid,
+                    kernelOwnership: kernelOwnership,
+                    t0Nanoseconds: t0,
+                    callbackNanoseconds: monotonicNowNanoseconds(),
+                    wasActiveAtCallback: application.isActive,
+                    callbackError: error?.localizedDescription
+                ))
+            } else if let error {
+                continuation.resume(throwing: HarnessError.launch(error.localizedDescription))
+            } else {
+                continuation.resume(throwing: HarnessError.launch("NSWorkspace returned neither an application nor an error"))
+            }
+        }
+    }
+}
+
+private func cleanup(
+    application: NSRunningApplication,
+    launchedProcessIdentity: StableProcessIdentity,
+    expectedBundleFileIdentity: FileIdentity,
+    knownCoalitionId: UInt64?,
+    reader: ResourceCoalitionReader,
+    timeoutNanoseconds: UInt64
+) async -> CleanupRecord {
+    let pid = launchedProcessIdentity.pid
+    var gracefulAccepted = false
+    var coalitionHardKillInvoked = false
+    var cleanupError: String?
+    var coalitionId = knownCoalitionId
+
+    func recordCleanupError(code: String, detail: String) {
+        writeDiagnostic("cleanup PID \(pid) [\(code)]: \(detail)")
+        if let existing = cleanupError {
+            cleanupError = "\(existing);\(code)"
+        } else {
+            cleanupError = code
+        }
+    }
+
+    if coalitionId == nil {
+        do {
+            coalitionId = try reader.identity(for: pid).id
+        } catch {
+            recordCleanupError(code: "coalition_identity_unavailable", detail: String(describing: error))
+        }
+    }
+
+    var mainIsLive: Bool?
+    do {
+        mainIsLive = try reader.processIsSameAndLive(launchedProcessIdentity)
+    } catch {
+        recordCleanupError(code: "main_process_inspection_failed", detail: String(describing: error))
+    }
+    if mainIsLive == true {
+        do {
+            guard let applicationBundleURL = application.bundleURL else {
+                throw HarnessError.measurement("LaunchServices omitted the launched bundle URL")
+            }
+            guard try fileIdentity(at: applicationBundleURL) == expectedBundleFileIdentity else {
+                throw HarnessError.measurement("launched bundle file identity changed before cleanup")
+            }
+            gracefulAccepted = application.terminate()
+        } catch {
+            recordCleanupError(code: "graceful_cleanup_identity_failed", detail: String(describing: error))
+        }
+    }
+
+    let started = monotonicNowNanoseconds()
+    let gracefulDeadline = started + timeoutNanoseconds / 3
+    let finalDeadline = started + timeoutNanoseconds
+    var coalitionDrained: Bool?
+    while monotonicNowNanoseconds() < gracefulDeadline {
+        if let coalitionId {
+            do {
+                if try reader.coalitionIsEmpty(id: coalitionId) {
+                    coalitionDrained = true
+                    break
+                }
+            } catch is CoalitionProcessSetChanged {
+                // A PID-only coalition list cannot represent two generations
+                // during exit churn. Discard it and require a fresh empty-list
+                // observation before cleanup can be proven.
+                await nextObservationTick()
+                continue
+            } catch {
+                recordCleanupError(code: "graceful_coalition_inspection_failed", detail: String(describing: error))
+                break
+            }
+        } else if mainIsLive == false {
+            break
+        }
+        await nextObservationTick()
+        do {
+            mainIsLive = try reader.processIsSameAndLive(launchedProcessIdentity)
+        } catch {
+            mainIsLive = nil
+            recordCleanupError(code: "graceful_cleanup_inspection_failed", detail: String(describing: error))
+        }
+    }
+
+    if let coalitionId, coalitionDrained != true {
+        var hardFailureRecorded = false
+        while monotonicNowNanoseconds() < finalDeadline {
+            do {
+                if try reader.coalitionIsEmpty(id: coalitionId) {
+                    coalitionDrained = true
+                    break
+                }
+                coalitionHardKillInvoked = true
+                _ = try reader.hardTerminateCoalitionMembers(id: coalitionId)
+            } catch is CoalitionProcessSetChanged {
+                // Re-enumerate within the existing hard-cleanup deadline. No
+                // process from an ambiguous PID list is ever signaled.
+            } catch {
+                if !hardFailureRecorded {
+                    recordCleanupError(code: "hard_cleanup_failed", detail: String(describing: error))
+                    hardFailureRecorded = true
+                }
+            }
+            await nextObservationTick()
+        }
+        if coalitionDrained == nil { coalitionDrained = false }
+    } else if coalitionId == nil {
+        coalitionDrained = false
+    }
+
+    let applicationTerminated: Bool
+    do {
+        applicationTerminated = try !reader.processIsSameAndLive(launchedProcessIdentity)
+    } catch {
+        applicationTerminated = false
+        recordCleanupError(code: "termination_proof_failed", detail: String(describing: error))
+    }
+    return CleanupRecord(
+        gracefulTerminateAccepted: gracefulAccepted,
+        coalitionHardKillInvoked: coalitionHardKillInvoked,
+        applicationTerminated: applicationTerminated,
+        coalitionDrained: coalitionDrained,
+        error: cleanupError
+    )
+}
+
+private func launchServicesASN(for launchedPid: Int32) throws -> String {
+    let result = try runCommand(
+        "/usr/bin/lsappinfo",
+        ["info", "-only", "ASN", "-app", "#\(launchedPid)"]
+    )
+    guard result.status == 0 else {
+        throw HarnessError.measurement("lsappinfo could not resolve the launch ASN")
+    }
+    return try parseLaunchServicesASN(result.stdout)
+}
+
+private func parseLaunchServicesASN(_ output: String) throws -> String {
+    let value = output.trimmingCharacters(in: .whitespacesAndNewlines)
+    let prefix = "\"LSASN\"="
+    guard value.hasPrefix(prefix), value.hasSuffix(":"),
+          !value.dropFirst(prefix.count).dropLast().contains(where: { $0.isWhitespace }) else {
+        throw HarnessError.measurement("lsappinfo returned malformed ASN output")
+    }
+    let asn = String(value.dropFirst(prefix.count))
+    let body = asn.dropFirst("ASN:".count).dropLast()
+    let halves = body.split(separator: "-", omittingEmptySubsequences: false)
+    guard asn.hasPrefix("ASN:"), halves.count == 2,
+          halves.allSatisfy({ half in
+              half.hasPrefix("0x")
+                  && half.count > 2
+                  && half.dropFirst(2).allSatisfy(\.isHexDigit)
+          }) else {
+        throw HarnessError.measurement("lsappinfo returned malformed ASN output")
+    }
+    return asn
+}
+
+private func launchServicesOriginalPid(for launchedPid: Int32) throws -> Int32? {
+    let result = try runCommand(
+        "/usr/bin/lsappinfo",
+        ["info", "-only", "originalPid", "-app", "#\(launchedPid)"]
+    )
+    guard result.status == 0 else {
+        throw HarnessError.measurement("lsappinfo could not resolve originalPid for PID \(launchedPid)")
+    }
+    return try parseLaunchServicesOriginalPid(result.stdout)
+}
+
+private func parseLaunchServicesOriginalPid(_ output: String) throws -> Int32? {
+    let lines = output.split(whereSeparator: { $0.isNewline })
+    guard lines.count == 1,
+          let equals = lines[0].firstIndex(of: "=") else {
+        throw HarnessError.measurement("lsappinfo returned malformed originalPid output")
+    }
+    let key = lines[0][..<equals].trimmingCharacters(in: .whitespaces)
+    let value = lines[0][lines[0].index(after: equals)...]
+        .trimmingCharacters(in: .whitespaces)
+    guard key == "\"originalPid\"" else {
+        throw HarnessError.measurement("lsappinfo returned the wrong originalPid key")
+    }
+    if value == "[ NULL ]" { return nil }
+    guard let pid = Int32(value), pid > 0 else {
+        throw HarnessError.measurement("lsappinfo returned an invalid originalPid value")
+    }
+    return pid
+}
+
+private func runOneSample(
+    spec: AppSpec,
+    round: Int,
+    appOrdinal: Int,
+    globalOrdinal: Int,
+    options: RunnerOptions,
+    server: LoopbackBeaconServer,
+    reader: ResourceCoalitionReader
+) async -> SampleRecord {
+    let hostConditionBeforeLaunch = currentHostCondition()
+    let token = UUID().uuidString.lowercased()
+    let benchmarkURL = server.url(for: token)
+    let timeoutNanoseconds = UInt64(options.timeoutSeconds * 1_000_000_000)
+    let cleanupTimeoutNanoseconds = UInt64(options.cleanupTimeoutSeconds * 1_000_000_000)
+    var launchOutcome: LaunchOutcome?
+    var launchedProcessIdentity: StableProcessIdentity?
+    var launchedASN: String?
+    var originalPid: Int32?
+    var originalPidLookupCompleted = false
+    var originalPidMatchesReturnedCoalition: Bool?
+    var initialCoalitionIdentity: CoalitionIdentity?
+    var acceptedBeacon: BeaconReceipt?
+    var snapshot: CoalitionSnapshot?
+    var stableObservationCount: Int?
+    var paintMilliseconds: Double?
+    var wasActiveAtBeacon: Bool?
+    var sampleError: String?
+    var cleanupRecord: CleanupRecord?
+    var cleanupPreparationError: String?
+
+    do {
+        try server.activate(token: token)
+        let outcome = try await launch(
+            app: spec,
+            benchmarkURL: benchmarkURL,
+            token: token,
+            measurementTimeoutNanoseconds: timeoutNanoseconds
+        )
+        launchOutcome = outcome
+        let rootPid = outcome.launchedPid
+        let deadline = outcome.t0Nanoseconds + timeoutNanoseconds
+        if let callbackError = outcome.callbackError {
+            throw HarnessError.launch(callbackError)
+        }
+        guard outcome.callbackNanoseconds <= deadline else {
+            throw HarnessError.timeout("NSWorkspace launch callback arrived after the sample deadline")
+        }
+        let beacon = try await server.awaitBeacon(token: token, deadlineNanoseconds: deadline)
+        guard beacon.token == token,
+              beacon.receivedMonotonicNanoseconds >= outcome.t0Nanoseconds,
+              beacon.receivedMonotonicNanoseconds <= deadline else {
+            throw HarnessError.protocolViolation("beacon token or timestamp falls outside the sample interval")
+        }
+        acceptedBeacon = beacon
+        wasActiveAtBeacon = outcome.application.isActive
+        guard wasActiveAtBeacon == true else {
+            throw HarnessError.measurement("application was not active when the paint-opportunity beacon arrived")
+        }
+        paintMilliseconds = Double(beacon.receivedMonotonicNanoseconds - outcome.t0Nanoseconds) / 1_000_000
+        server.finish(token: token)
+
+        // Process enumeration invokes ps/launchctl/lsappinfo and therefore must
+        // happen only after the externally timestamped beacon. It cannot
+        // perturb the scored launch-to-beacon interval.
+        guard let kernelOwnership = outcome.kernelOwnership else {
+            throw HarnessError.measurement("launch callback could not capture the process generation")
+        }
+        let expectedProcessIdentity = try reader.processIdentity(for: rootPid)
+        guard expectedProcessIdentity.uniqueId == kernelOwnership.uniqueId else {
+            throw HarnessError.measurement("launched process generation changed before measurement")
+        }
+        launchedProcessIdentity = expectedProcessIdentity
+        launchedASN = try launchServicesASN(for: rootPid)
+        guard try reader.processIsSameAndLive(expectedProcessIdentity) else {
+            throw HarnessError.measurement("launched process generation changed during LaunchServices lookup")
+        }
+        let expectedCoalitionIdentity = try reader.identity(for: rootPid)
+        guard expectedCoalitionIdentity.id == kernelOwnership.resourceCoalitionId else {
+            throw HarnessError.measurement("launch callback and LaunchServices reported different resource coalitions")
+        }
+        initialCoalitionIdentity = expectedCoalitionIdentity
+        originalPid = try launchServicesOriginalPid(for: rootPid)
+        originalPidLookupCompleted = true
+        if let originalPid {
+            guard let originalOwnership = try kernelLaunchOwnership(for: originalPid) else {
+                throw HarnessError.measurement(
+                    "LaunchServices originalPid had no generation-bound resource coalition"
+                )
+            }
+            originalPidMatchesReturnedCoalition = originalOwnership.resourceCoalitionId
+                == expectedCoalitionIdentity.id
+            guard originalPidMatchesReturnedCoalition == true else {
+                throw HarnessError.measurement(
+                    "LaunchServices originalPid belongs to a different coalition; launcher handoff is unsupported"
+                )
+            }
+        }
+
+        let stable = try await reader.awaitStableSnapshot(
+            for: rootPid,
+            expectedProcessIdentity: expectedProcessIdentity,
+            expectedCoalitionId: expectedCoalitionIdentity.id,
+            deadlineNanoseconds: deadline,
+            requiredConsecutiveObservations: options.stableObservations,
+            rssToleranceKiB: options.rssToleranceKiB,
+            requiredStableNanoseconds: UInt64(options.stableWindowMilliseconds) * 1_000_000
+        )
+        snapshot = stable.snapshot
+        stableObservationCount = stable.observations
+    } catch {
+        writeDiagnostic("\(spec.label) round \(round) failed: \(error)")
+        sampleError = publicFailureCode(error)
+    }
+
+    // A missing/late beacon still owns a launched application. Resolve its
+    // stable identity after the metric has failed so cleanup can prove both the
+    // host and reparented coalition helpers drained before returning.
+    if let launchOutcome, launchedProcessIdentity == nil {
+        let rootPid = launchOutcome.launchedPid
+        do {
+            guard let kernelOwnership = launchOutcome.kernelOwnership else {
+                throw HarnessError.measurement("launch callback did not capture the process generation")
+            }
+            let identity = try reader.processIdentity(for: rootPid)
+            guard identity.uniqueId == kernelOwnership.uniqueId else {
+                throw HarnessError.measurement("launched process generation changed before cleanup")
+            }
+            launchedProcessIdentity = identity
+            if launchedASN == nil { launchedASN = try launchServicesASN(for: rootPid) }
+            initialCoalitionIdentity = try reader.identity(for: rootPid)
+        } catch {
+            writeDiagnostic("\(spec.label) round \(round) cleanup preparation failed: \(error)")
+            cleanupPreparationError = "process_identity_unavailable"
+            if let kernelOwnership = launchOutcome.kernelOwnership {
+                launchedProcessIdentity = StableProcessIdentity(
+                    pid: kernelOwnership.pid,
+                    parentPid: 0,
+                    startIdentity: "unavailable-at-launch-callback",
+                    uniqueId: kernelOwnership.uniqueId,
+                    commandSha256: nil
+                )
+            }
+        }
+    }
+
+    if let launchOutcome {
+        if let launchedProcessIdentity {
+            cleanupRecord = await cleanup(
+                application: launchOutcome.application,
+                launchedProcessIdentity: launchedProcessIdentity,
+                expectedBundleFileIdentity: spec.bundleFileIdentity,
+                knownCoalitionId: snapshot?.identity.id
+                    ?? initialCoalitionIdentity?.id
+                    ?? launchOutcome.kernelOwnership?.resourceCoalitionId,
+            reader: reader,
+            timeoutNanoseconds: cleanupTimeoutNanoseconds
+            )
+        } else {
+            let gracefulAccepted = launchOutcome.application.terminate()
+            cleanupRecord = CleanupRecord(
+                gracefulTerminateAccepted: gracefulAccepted,
+                coalitionHardKillInvoked: false,
+                applicationTerminated: false,
+                coalitionDrained: false,
+                error: cleanupPreparationError ?? "process_identity_unavailable"
+            )
+        }
+        if cleanupRecord?.applicationTerminated != true
+            || cleanupRecord?.coalitionDrained != true
+            || cleanupRecord?.error != nil {
+            let cleanupFailure = cleanupRecord?.error ?? "cleanup_proof_missing"
+            if sampleError == nil { sampleError = "cleanup_failed:\(cleanupFailure)" }
+        }
+    }
+    server.finish(token: token)
+    do {
+        try await server.quiesceClientHandlers(
+            deadlineNanoseconds: monotonicNowNanoseconds() + 2_000_000_000
+        )
+    } catch {
+        writeDiagnostic("\(spec.label) round \(round) client quiescence failed: \(error)")
+        if sampleError == nil { sampleError = "client_handlers_unfinished" }
+    }
+    let evidenceContext = launchOutcome.map {
+        PublicEvidenceContext(t0MonotonicNanoseconds: $0.t0Nanoseconds)
+    }
+    let serverEvents = evidenceContext.map { context in
+        server.events(for: token).map { ServerEventEvidence($0, context: context) }
+    } ?? []
+    let hostConditionAfterCleanup = currentHostCondition()
+
+    return SampleRecord(
+        globalOrdinal: globalOrdinal,
+        round: round,
+        appOrdinal: appOrdinal,
+        label: spec.label,
+        status: sampleError == nil ? "ok" : "failed",
+        error: sampleError,
+        launchedProcessIdentity: evidenceContext.flatMap { context in
+            launchedProcessIdentity.map { StableProcessEvidence($0, context: context) }
+        },
+        launchServicesASNResolved: launchedASN == nil ? nil : true,
+        launchServicesOriginalPidPresent: originalPidLookupCompleted ? originalPid != nil : nil,
+        originalPidMatchesReturnedPidCoalition: originalPidMatchesReturnedCoalition,
+        launchCallbackOffsetMilliseconds: evidenceContext.flatMap { context in
+            launchOutcome.map { context.offsetMilliseconds(for: $0.callbackNanoseconds) }
+        },
+        applicationWasActiveAtLaunchCallback: launchOutcome?.wasActiveAtCallback,
+        applicationWasActiveAtBeacon: wasActiveAtBeacon,
+        hostConditionBeforeLaunch: hostConditionBeforeLaunch,
+        hostConditionAfterCleanup: hostConditionAfterCleanup,
+        beacon: evidenceContext.flatMap { context in
+            acceptedBeacon.map { BeaconEvidence($0, context: context) }
+        },
+        doubleRafPaintOpportunityProxyMilliseconds: paintMilliseconds,
+        stableCoalitionObservations: stableObservationCount,
+        coalition: evidenceContext.flatMap { context in
+            snapshot.map { CoalitionEvidence($0, context: context) }
+        },
+        serverEvents: serverEvents,
+        cleanup: cleanupRecord
+    )
+}
+
+private func metricSummary(_ values: [Double]) -> MetricSummary {
+    MetricSummary(
+        sampleCount: values.count,
+        median: median(values),
+        p90NearestRank: nearestRankPercentile(values, percentile: 0.9),
+        minimum: values.min(),
+        maximum: values.max()
+    )
+}
+
+private func summarize(apps: [AppSpec], samples: [SampleRecord]) -> [AppSummary] {
+    apps.map { app in
+        let appSamples = samples.filter { $0.label == app.label }
+        let successful = appSamples.filter { $0.status == "ok" }
+        return AppSummary(
+            label: app.label,
+            successfulSamples: successful.count,
+            failedSamples: appSamples.count - successful.count,
+            doubleRafPaintOpportunityProxyMilliseconds: metricSummary(
+                successful.compactMap(\.doubleRafPaintOpportunityProxyMilliseconds)
+            ),
+            totalCoalitionRssKiB: metricSummary(successful.compactMap { $0.coalition.map { Double($0.totalRssKiB) } })
+        )
+    }
+}
+
+private func hostMetadata() -> HostMetadata {
+    let processInfo = ProcessInfo.processInfo
+    return HostMetadata(
+        operatingSystemVersion: processInfo.operatingSystemVersionString,
+        architecture: commandValue("/usr/bin/uname", ["-m"]) ?? "unknown",
+        hardwareModel: commandValue("/usr/sbin/sysctl", ["-n", "hw.model"]) ?? "unknown",
+        processor: commandValue("/usr/sbin/sysctl", ["-n", "machdep.cpu.brand_string"]) ?? "unknown",
+        logicalCpuCount: processInfo.processorCount,
+        physicalMemoryBytes: processInfo.physicalMemory,
+        lowPowerModeEnabled: processInfo.isLowPowerModeEnabled,
+        thermalState: thermalStateName(processInfo.thermalState)
+    )
+}
+
+private func thermalStateName(_ state: ProcessInfo.ThermalState) -> String {
+    switch state {
+    case .nominal: return "nominal"
+    case .fair: return "fair"
+    case .serious: return "serious"
+    case .critical: return "critical"
+    @unknown default: return "unknown"
+    }
+}
+
+private func currentHostCondition() -> HostConditionEvidence {
+    let processInfo = ProcessInfo.processInfo
+    return HostConditionEvidence(
+        lowPowerModeEnabled: processInfo.isLowPowerModeEnabled,
+        thermalState: thermalStateName(processInfo.thermalState)
+    )
+}
+
+private func commandValue(
+    _ executable: String,
+    _ arguments: [String],
+    currentDirectoryURL: URL? = nil
+) -> String? {
+    guard let result = try? runCommand(
+        executable,
+        arguments,
+        currentDirectoryURL: currentDirectoryURL
+    ), result.status == 0 else { return nil }
+    let value = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+    return value.isEmpty ? nil : value
+}
+
+private func workingTreeState(from result: CommandResult?) -> GitWorkingTreeState {
+    guard let result, result.status == 0 else { return .unavailable }
+    return result.stdout.isEmpty ? .clean : .dirty
+}
+
+private func isFullGitCommit(_ value: String?) -> Bool {
+    guard let value, value.count == 40 || value.count == 64 else { return false }
+    return value.unicodeScalars.allSatisfy { scalar in
+        (48...57).contains(scalar.value) || (97...102).contains(scalar.value)
+    }
+}
+
+private func normalizedRepositoryIdentifier(_ rawValue: String?) -> String? {
+    guard var value = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+        return nil
+    }
+    if value.hasPrefix("git@github.com:") {
+        value = "github.com/" + value.dropFirst("git@github.com:".count)
+    } else if let components = URLComponents(string: value),
+              components.host?.lowercased() == "github.com" {
+        value = "github.com" + components.path
+    } else {
+        return nil
+    }
+    if value.hasSuffix(".git") { value.removeLast(4) }
+    while value.hasSuffix("/") { value.removeLast() }
+    let pieces = value.split(separator: "/", omittingEmptySubsequences: true)
+    guard pieces.count == 3, pieces[0].lowercased() == "github.com" else { return nil }
+    return pieces.map(String.init).joined(separator: "/")
+}
+
+private struct CanonicalRemoteProbe: Equatable {
+    let arguments: [String]
+    let currentDirectoryURL: URL
+}
+
+private func canonicalRemoteProbe(repositoryIdentifier: String?) -> CanonicalRemoteProbe? {
+    let remoteURL: String
+    switch repositoryIdentifier {
+    case canonicalBenchesRepositoryIdentifier:
+        remoteURL = canonicalBenchesRemoteURL
+    case canonicalKeldRepositoryIdentifier:
+        remoteURL = canonicalKeldRemoteURL
+    default:
+        return nil
+    }
+    return CanonicalRemoteProbe(
+        arguments: ["-c", "protocol.file.allow=never", "ls-remote", "--heads", remoteURL],
+        currentDirectoryURL: canonicalRemoteProbeDirectory
+    )
+}
+
+private func canonicalRemoteAdvertisesHead(
+    commit: String,
+    repositoryIdentifier: String?
+) -> Bool? {
+    guard let probe = canonicalRemoteProbe(repositoryIdentifier: repositoryIdentifier) else {
+        return nil
+    }
+    let result = try? runCommand(
+        "/usr/bin/git",
+        probe.arguments,
+        currentDirectoryURL: probe.currentDirectoryURL,
+        timeoutSeconds: 30
+    )
+    guard let result, result.status == 0 else { return nil }
+    return result.stdout.split(whereSeparator: \.isNewline).contains { line in
+        let fields = line.split(whereSeparator: \.isWhitespace)
+        return fields.count == 2
+            && fields[0] == commit
+            && fields[1].hasPrefix("refs/heads/")
+    }
+}
+
+private func gitSnapshot(containing directory: URL) -> GitSnapshot {
+    let searchDirectory = directory.standardizedFileURL.resolvingSymlinksInPath()
+    guard let rootResult = try? runCommand(
+        "/usr/bin/git",
+        ["-C", searchDirectory.path, "rev-parse", "--show-toplevel"]
+    ), rootResult.status == 0 else {
+        return GitSnapshot(
+            rootURL: nil,
+            metadata: RepositoryMetadata(
+                identifier: nil,
+                commit: nil,
+                workingTreeState: .unavailable,
+                commitAdvertisedAsOriginHead: nil
+            )
+        )
+    }
+    let rootPath = rootResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !rootPath.isEmpty else {
+        return GitSnapshot(
+            rootURL: nil,
+            metadata: RepositoryMetadata(
+                identifier: nil,
+                commit: nil,
+                workingTreeState: .unavailable,
+                commitAdvertisedAsOriginHead: nil
+            )
+        )
+    }
+    let rootURL = URL(fileURLWithPath: rootPath).standardizedFileURL.resolvingSymlinksInPath()
+    let commitResult = try? runCommand(
+        "/usr/bin/git",
+        ["-C", rootURL.path, "rev-parse", "--verify", "HEAD^{commit}"]
+    )
+    let commit = commitResult.flatMap { result -> String? in
+        guard result.status == 0 else { return nil }
+        let value = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        return isFullGitCommit(value) ? value : nil
+    }
+    let statusResult = try? runCommand(
+        "/usr/bin/git",
+        [
+            "-c", "core.fsmonitor=false",
+            "-c", "core.untrackedCache=false",
+            "-c", "core.fileMode=true",
+            "-C", rootURL.path,
+            "status", "--porcelain=v1", "--untracked-files=all",
+        ]
+    )
+    let indexFlagsResult = try? runCommand(
+        "/usr/bin/git",
+        ["-C", rootURL.path, "ls-files", "-v"]
+    )
+    let indexFlagsAreDefault = indexFlagsResult.map { result in
+        result.status == 0 && result.stdout.split(whereSeparator: \.isNewline).allSatisfy { line in
+            line.first == "H"
+        }
+    } ?? false
+    let remote = commandValue(
+        "/usr/bin/git",
+        ["-C", rootURL.path, "remote", "get-url", "origin"]
+    )
+    let repositoryIdentifier = normalizedRepositoryIdentifier(remote)
+    let advertisedAsOriginHead = commit.flatMap {
+        canonicalRemoteAdvertisesHead(commit: $0, repositoryIdentifier: repositoryIdentifier)
+    }
+    let state = commit == nil || !indexFlagsAreDefault
+        ? GitWorkingTreeState.unavailable
+        : workingTreeState(from: statusResult)
+    return GitSnapshot(
+        rootURL: rootURL,
+        metadata: RepositoryMetadata(
+            identifier: repositoryIdentifier,
+            commit: commit,
+            workingTreeState: state,
+            commitAdvertisedAsOriginHead: advertisedAsOriginHead
+        )
+    )
+}
+
+private func repositoryRelativePath(of url: URL, within root: URL) -> String? {
+    let resolvedURL = url.standardizedFileURL.resolvingSymlinksInPath()
+    let resolvedRoot = root.standardizedFileURL.resolvingSymlinksInPath()
+    if resolvedURL.path == resolvedRoot.path { return "." }
+    let prefix = resolvedRoot.path.hasSuffix("/") ? resolvedRoot.path : resolvedRoot.path + "/"
+    guard resolvedURL.path.hasPrefix(prefix) else { return nil }
+    return String(resolvedURL.path.dropFirst(prefix.count))
+}
+
+private func hashFile(_ url: URL, relativeTo root: URL) throws -> ArtifactHash {
+    guard let relativePath = repositoryRelativePath(of: url, within: root) else {
+        throw HarnessError.io("source file is outside the resolved repository")
+    }
+    let data = try Data(contentsOf: url)
+    let headResult = try? runCommand(
+        "/usr/bin/git",
+        ["-C", root.path, "rev-parse", "--verify", "HEAD:\(relativePath)"]
+    )
+    let headObjectId = headResult.flatMap { result -> String? in
+        guard result.status == 0 else { return nil }
+        let value = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        return isFullGitCommit(value) ? value : nil
+    }
+    let matchesHeadBlob = headObjectId.map {
+        rawGitBlobObjectId(data, hexadecimalLength: $0.count) == $0
+    } ?? false
+    return ArtifactHash(
+        repositoryRelativePath: relativePath,
+        sha256: sha256Hex(data),
+        matchesHeadBlob: matchesHeadBlob
+    )
+}
+
+private func nearestTauriSourceRoot(from appURL: URL, repositoryRoot: URL?) -> URL? {
+    guard let repositoryRoot else { return nil }
+    let resolvedRoot = repositoryRoot.standardizedFileURL.resolvingSymlinksInPath()
+    let rootPrefix = resolvedRoot.path.hasSuffix("/")
+        ? resolvedRoot.path
+        : resolvedRoot.path + "/"
+    var candidate = appURL.deletingLastPathComponent().standardizedFileURL.resolvingSymlinksInPath()
+    while candidate.path == resolvedRoot.path || candidate.path.hasPrefix(rootPrefix) {
+        let package = candidate.appendingPathComponent("package.json")
+        let bunLock = candidate.appendingPathComponent("bun.lock")
+        let cargo = candidate.appendingPathComponent("src-tauri/Cargo.toml")
+        if FileManager.default.fileExists(atPath: package.path),
+           FileManager.default.fileExists(atPath: bunLock.path),
+           FileManager.default.fileExists(atPath: cargo.path) {
+            return candidate
+        }
+        guard candidate.path != resolvedRoot.path else { break }
+        let parent = candidate.deletingLastPathComponent()
+        guard parent.path != candidate.path else { break }
+        candidate = parent
+    }
+    return nil
+}
+
+private func observedHarnessToolchain() -> ObservedToolchainMetadata {
+    ObservedToolchainMetadata(
+        evidenceKind: "observed-at-benchmark",
+        swiftCompilerVersion: commandValue("/usr/bin/xcrun", ["swiftc", "--version"]),
+        xcodeVersion: commandValue("/usr/bin/xcodebuild", ["-version"]),
+        macosSdkVersion: commandValue("/usr/bin/xcrun", ["--sdk", "macosx", "--show-sdk-version"]),
+        bunVersion: nil,
+        tauriCliVersion: nil,
+        rustcVersion: nil,
+        cargoVersion: nil
+    )
+}
+
+private func fixtureToolchain(
+    bundle: Bundle?,
+    tauriSourceRoot: URL?
+) -> ObservedToolchainMetadata {
+    let embeddedBun = bundle?.object(forInfoDictionaryKey: "KeldBenchBunVersion") as? String
+    let embeddedTauri = bundle?.object(forInfoDictionaryKey: "KeldBenchTauriCLIVersion") as? String
+    let embeddedRustc = bundle?.object(forInfoDictionaryKey: "KeldBenchRustcVersion") as? String
+    let embeddedCargo = bundle?.object(forInfoDictionaryKey: "KeldBenchCargoVersion") as? String
+    let embeddedSdk = bundle?.object(forInfoDictionaryKey: "KeldBenchMacOSSDKVersion") as? String
+    let embeddedXcode = bundle?.object(forInfoDictionaryKey: "KeldBenchXcodeVersion") as? String
+    if embeddedBun != nil || embeddedTauri != nil || embeddedRustc != nil
+        || embeddedCargo != nil || embeddedSdk != nil || embeddedXcode != nil {
+        return ObservedToolchainMetadata(
+            evidenceKind: "embedded-build-metadata",
+            swiftCompilerVersion: nil,
+            xcodeVersion: embeddedXcode,
+            macosSdkVersion: embeddedSdk,
+            bunVersion: embeddedBun,
+            tauriCliVersion: embeddedTauri,
+            rustcVersion: embeddedRustc,
+            cargoVersion: embeddedCargo
+        )
+    }
+    let tauriVersion = tauriSourceRoot.flatMap { sourceRoot in
+        commandValue(
+            "/usr/bin/env",
+            ["bun", "run", "tauri", "--version"],
+            currentDirectoryURL: sourceRoot
+        )
+    }
+    return ObservedToolchainMetadata(
+        evidenceKind: "observed-at-benchmark-and-lock-bound",
+        swiftCompilerVersion: nil,
+        xcodeVersion: commandValue("/usr/bin/xcodebuild", ["-version"]),
+        macosSdkVersion: commandValue("/usr/bin/xcrun", ["--sdk", "macosx", "--show-sdk-version"]),
+        bunVersion: commandValue(
+            "/usr/bin/env",
+            ["bun", "--version"],
+            currentDirectoryURL: tauriSourceRoot
+        ),
+        tauriCliVersion: tauriVersion,
+        rustcVersion: commandValue(
+            "/usr/bin/env",
+            ["rustc", "-Vv"],
+            currentDirectoryURL: tauriSourceRoot
+        ),
+        cargoVersion: commandValue(
+            "/usr/bin/env",
+            ["cargo", "-V"],
+            currentDirectoryURL: tauriSourceRoot
+        )
+    )
+}
+
+private func fixtureMetadata(_ spec: AppSpec) throws -> FixtureMetadata {
+    let bundle = Bundle(url: spec.bundleURL)
+    let executableURL = bundle?.executableURL
+    var executableSize: UInt64?
+    var executableSha256: String?
+    if let path = executableURL?.path,
+       let attributes = try? FileManager.default.attributesOfItem(atPath: path),
+       let size = attributes[.size] as? NSNumber {
+        executableSize = size.uint64Value
+        executableSha256 = try? sha256Hex(Data(contentsOf: URL(fileURLWithPath: path), options: .mappedIfSafe))
+    }
+    let sourceSnapshot = gitSnapshot(containing: spec.bundleURL)
+    let tauriSourceRoot = nearestTauriSourceRoot(
+        from: spec.bundleURL,
+        repositoryRoot: sourceSnapshot.rootURL
+    )
+    var sourceFiles: [ArtifactHash] = []
+    var lockfiles: [ArtifactHash] = []
+    if let sourceRoot = sourceSnapshot.rootURL, let tauriSourceRoot {
+        for relativePath in requiredTauriSourcePaths {
+            let sourceFile = tauriSourceRoot.appendingPathComponent(relativePath)
+            if FileManager.default.fileExists(atPath: sourceFile.path) {
+                sourceFiles.append(try hashFile(sourceFile, relativeTo: sourceRoot))
+            }
+        }
+        for lockfile in [
+            tauriSourceRoot.appendingPathComponent("bun.lock"),
+            tauriSourceRoot.appendingPathComponent("src-tauri/Cargo.lock"),
+        ] where FileManager.default.fileExists(atPath: lockfile.path) {
+            lockfiles.append(try hashFile(lockfile, relativeTo: sourceRoot))
+        }
+    }
+    let embeddedSourceCommit = bundle?.object(forInfoDictionaryKey: "KeldBenchSourceCommit") as? String
+    let embeddedSourceRepository = bundle?.object(forInfoDictionaryKey: "KeldBenchSourceRepository") as? String
+    let embeddedFixtureKind = bundle?.object(forInfoDictionaryKey: "KeldBenchFixtureKind") as? String
+    let embeddedSourceRelativePath = bundle?
+        .object(forInfoDictionaryKey: "KeldBenchSourceRelativePath") as? String
+    let embeddedRecipeRepository = bundle?.object(forInfoDictionaryKey: "KeldBenchRecipeRepository") as? String
+    let embeddedRecipeCommit = bundle?.object(forInfoDictionaryKey: "KeldBenchRecipeCommit") as? String
+    let embeddedBuildRecipe = bundle?.object(forInfoDictionaryKey: "KeldBenchBuildRecipe") as? String
+    let sourceDirectory = tauriSourceRoot ?? spec.bundleURL
+    let sourceRelativePath = sourceSnapshot.rootURL.flatMap {
+        repositoryRelativePath(of: sourceDirectory, within: $0)
+    }
+    let executableRelativePath = executableURL.flatMap {
+        repositoryRelativePath(of: $0, within: spec.bundleURL)
+    }
+    let buildCommand = spec.buildCommand ?? ""
+    return FixtureMetadata(
+        label: spec.label,
+        appBundleName: spec.bundleURL.lastPathComponent,
+        bundleIdentifier: bundle?.bundleIdentifier,
+        bundleVersion: bundle?.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+        appBundleTreeSha256: try bundleTreeSha256(spec.bundleURL),
+        executableBundleRelativePath: executableRelativePath,
+        executableSizeBytes: executableSize,
+        executableSha256: executableSha256,
+        sourceRepository: sourceSnapshot.metadata,
+        sourceRepositoryRelativePath: sourceRelativePath,
+        embeddedFixtureKind: embeddedFixtureKind
+            ?? (embeddedSourceRepository == canonicalKeldRepositoryIdentifier
+                ? "keld-adapter"
+                : nil),
+        embeddedSourceRepositoryIdentifier: embeddedSourceRepository,
+        embeddedSourceGitCommit: embeddedSourceCommit,
+        embeddedSourceRepositoryRelativePath: embeddedSourceRelativePath,
+        embeddedSourceCommitAdvertisedAsOriginHead: embeddedSourceCommit.flatMap {
+            canonicalRemoteAdvertisesHead(
+                commit: $0,
+                repositoryIdentifier: embeddedSourceRepository
+            )
+        },
+        embeddedRecipeRepositoryIdentifier: embeddedRecipeRepository,
+        embeddedRecipeGitCommit: embeddedRecipeCommit,
+        embeddedBuildRecipeIdentifier: embeddedBuildRecipe,
+        adapterPatchSha256: bundle?.object(forInfoDictionaryKey: "KeldBenchAdapterPatchSHA256") as? String,
+        buildScriptSha256: bundle?.object(forInfoDictionaryKey: "KeldBenchBuildScriptSHA256") as? String,
+        infoPlistTemplateSha256: bundle?.object(forInfoDictionaryKey: "KeldBenchInfoPlistTemplateSHA256") as? String,
+        buildCommandSha256: sha256Hex(Data(buildCommand.utf8)),
+        argumentTemplateSha256: spec.argumentTemplates.map { sha256Hex(Data($0.utf8)) },
+        sourceFiles: sourceFiles.sorted { $0.repositoryRelativePath < $1.repositoryRelativePath },
+        lockfiles: lockfiles.sorted { $0.repositoryRelativePath < $1.repositoryRelativePath },
+        toolchain: fixtureToolchain(bundle: bundle, tauriSourceRoot: tauriSourceRoot)
+    )
+}
+
+private let harnessBuildInvocationContract = "xcrun swiftc -O -parse-as-library -strict-concurrency=complete -warn-concurrency -warnings-as-errors -o macos/harness/.build/keld-macos-bench macos/harness/HarnessCore.swift macos/harness/Runner.swift"
+
+private let harnessCompiledSourcePaths = [
+    "macos/harness/HarnessCore.swift",
+    "macos/harness/Runner.swift",
+]
+
+private let harnessProvenanceSourcePaths = harnessCompiledSourcePaths + [
+    "macos/harness/hello.html",
+    "macos/harness/test-fixtures/stubborn/Info.plist",
+    "macos/harness/test-fixtures/stubborn/main.swift",
+    "macos/keld/hello/Info.plist",
+    "macos/keld/hello/build.sh",
+    "macos/keld/hello/keld-bench-url.patch",
+    "macos/tauri/hello/build.sh",
+]
+
+private func reproducibleHarnessBuildEvidence(
+    executable: URL,
+    repositoryRoot: URL?
+) throws -> HarnessRebuildEvidence {
+    guard let repositoryRoot else {
+        return HarnessRebuildEvidence(
+            attempted: false,
+            rebuiltExecutableSha256: nil,
+            byteForByteMatchesRunningExecutable: false
+        )
+    }
+
+    let temporaryRoot = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keld-harness-rebuild-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(
+        at: temporaryRoot,
+        withIntermediateDirectories: false
+    )
+    defer {
+        do {
+            try FileManager.default.removeItem(at: temporaryRoot)
+        } catch {
+            writeDiagnostic("harness reproducible-build temporary cleanup failed")
+        }
+    }
+
+    let rebuiltExecutable = temporaryRoot.appendingPathComponent(executable.lastPathComponent)
+    let arguments = [
+        "swiftc", "-O", "-parse-as-library",
+        "-strict-concurrency=complete", "-warn-concurrency", "-warnings-as-errors",
+        "-o", rebuiltExecutable.path,
+    ] + harnessCompiledSourcePaths
+    let compile = try runCommand(
+        "/usr/bin/xcrun",
+        arguments,
+        currentDirectoryURL: repositoryRoot,
+        timeoutSeconds: 120
+    )
+    guard compile.status == 0 else {
+        writeDiagnostic("harness reproducible build exited with status \(compile.status)")
+        return HarnessRebuildEvidence(
+            attempted: true,
+            rebuiltExecutableSha256: nil,
+            byteForByteMatchesRunningExecutable: false
+        )
+    }
+
+    let rebuiltData = try Data(contentsOf: rebuiltExecutable, options: .mappedIfSafe)
+    let runningData = try Data(contentsOf: executable, options: .mappedIfSafe)
+    return HarnessRebuildEvidence(
+        attempted: true,
+        rebuiltExecutableSha256: sha256Hex(rebuiltData),
+        byteForByteMatchesRunningExecutable: rebuiltData == runningData
+    )
+}
+
+private func harnessArtifactMetadata(
+    executable: URL,
+    repository: GitSnapshot
+) throws -> HarnessArtifactMetadata {
+    let attributes = try FileManager.default.attributesOfItem(atPath: executable.path)
+    guard let size = attributes[.size] as? NSNumber else {
+        throw HarnessError.io("could not read harness executable size")
+    }
+    var sourceFiles: [ArtifactHash] = []
+    if let root = repository.rootURL {
+        for relativePath in harnessProvenanceSourcePaths {
+            sourceFiles.append(try hashFile(root.appendingPathComponent(relativePath), relativeTo: root))
+        }
+    }
+    let executableData = try Data(contentsOf: executable, options: .mappedIfSafe)
+    let reproducibleBuild = try reproducibleHarnessBuildEvidence(
+        executable: executable,
+        repositoryRoot: repository.rootURL
+    )
+    return HarnessArtifactMetadata(
+        executableSizeBytes: size.uint64Value,
+        executableSha256: sha256Hex(executableData),
+        buildInvocationContract: harnessBuildInvocationContract,
+        reproducibleBuild: reproducibleBuild,
+        sourceRepository: repository.metadata,
+        sourceFiles: sourceFiles,
+        observedToolchain: observedHarnessToolchain()
+    )
+}
+
+private func parseOptions(_ arguments: [String]) throws -> RunnerOptions {
+    var options = RunnerOptions()
+    var index = 0
+    while index < arguments.count {
+        let argument = arguments[index]
+        switch argument {
+        case "--app":
+            index += 1
+            guard index < arguments.count else { throw HarnessError.invalidArgument("--app requires LABEL=/path/App.app") }
+            let value = arguments[index]
+            guard let separator = value.firstIndex(of: "="), separator != value.startIndex else {
+                throw HarnessError.invalidArgument("--app requires LABEL=/path/App.app")
+            }
+            let label = String(value[..<separator])
+            let path = String(value[value.index(after: separator)...])
+            guard isPublicLabel(label) else {
+                throw HarnessError.invalidArgument("app labels must use 1-64 ASCII letters, digits, spaces, periods, underscores, or hyphens")
+            }
+            let url = URL(fileURLWithPath: path).standardizedFileURL
+            guard url.pathExtension == "app", FileManager.default.fileExists(atPath: url.path) else {
+                throw HarnessError.invalidArgument("\(url.path) is not an existing .app bundle")
+            }
+            guard Bundle(url: url)?.executableURL != nil else {
+                throw HarnessError.invalidArgument("\(url.path) has no bundle executable")
+            }
+            guard !options.apps.contains(where: { $0.label == label }) else {
+                throw HarnessError.invalidArgument("duplicate app label \(label)")
+            }
+            options.apps.append(AppSpec(
+                label: label,
+                bundleURL: url,
+                bundleFileIdentity: try fileIdentity(at: url),
+                argumentTemplates: [],
+                buildCommand: nil
+            ))
+        case "--app-arg":
+            index += 1
+            guard index < arguments.count else { throw HarnessError.invalidArgument("--app-arg requires LABEL=ARGUMENT_TEMPLATE") }
+            let value = arguments[index]
+            guard let separator = value.firstIndex(of: "="), separator != value.startIndex else {
+                throw HarnessError.invalidArgument("--app-arg requires LABEL=ARGUMENT_TEMPLATE")
+            }
+            let label = String(value[..<separator])
+            let template = String(value[value.index(after: separator)...])
+            guard !template.isEmpty else { throw HarnessError.invalidArgument("--app-arg template must not be empty") }
+            options.argumentTemplatesByLabel[label, default: []].append(template)
+        case "--app-build-command":
+            index += 1
+            guard index < arguments.count else { throw HarnessError.invalidArgument("--app-build-command requires LABEL=COMMAND") }
+            let value = arguments[index]
+            guard let separator = value.firstIndex(of: "="), separator != value.startIndex else {
+                throw HarnessError.invalidArgument("--app-build-command requires LABEL=COMMAND")
+            }
+            let label = String(value[..<separator])
+            let command = String(value[value.index(after: separator)...])
+            guard !command.isEmpty else { throw HarnessError.invalidArgument("build command must not be empty") }
+            options.buildCommandsByLabel[label] = command
+        case "--runs":
+            index += 1
+            guard index < arguments.count, let value = Int(arguments[index]), (1...1_000).contains(value) else {
+                throw HarnessError.invalidArgument("--runs must be an integer from 1 through 1000")
+            }
+            options.runsPerApp = value
+        case "--timeout-seconds":
+            index += 1
+            guard index < arguments.count,
+                  let value = Double(arguments[index]),
+                  value.isFinite,
+                  value > 0,
+                  value <= 600 else {
+                throw HarnessError.invalidArgument("--timeout-seconds must be finite and in (0, 600]")
+            }
+            options.timeoutSeconds = value
+        case "--cleanup-timeout-seconds":
+            index += 1
+            guard index < arguments.count,
+                  let value = Double(arguments[index]),
+                  value.isFinite,
+                  value > 0,
+                  value <= 60 else {
+                throw HarnessError.invalidArgument("--cleanup-timeout-seconds must be finite and in (0, 60]")
+            }
+            options.cleanupTimeoutSeconds = value
+        case "--stable-observations":
+            index += 1
+            guard index < arguments.count, let value = Int(arguments[index]), (2...100).contains(value) else {
+                throw HarnessError.invalidArgument("--stable-observations must be an integer from 2 through 100")
+            }
+            options.stableObservations = value
+        case "--stable-window-ms":
+            index += 1
+            guard index < arguments.count, let value = Int(arguments[index]), (100...60_000).contains(value) else {
+                throw HarnessError.invalidArgument("--stable-window-ms must be an integer from 100 through 60000")
+            }
+            options.stableWindowMilliseconds = value
+        case "--rss-tolerance-kib":
+            index += 1
+            guard index < arguments.count, let value = UInt64(arguments[index]) else {
+                throw HarnessError.invalidArgument("--rss-tolerance-kib must be an unsigned integer")
+            }
+            options.rssToleranceKiB = value
+        case "--html":
+            index += 1
+            guard index < arguments.count else { throw HarnessError.invalidArgument("--html requires a path") }
+            options.htmlURL = URL(fileURLWithPath: arguments[index]).standardizedFileURL
+        case "--output":
+            index += 1
+            guard index < arguments.count else { throw HarnessError.invalidArgument("--output requires a path") }
+            options.outputURL = URL(fileURLWithPath: arguments[index]).standardizedFileURL
+        case "--publish":
+            options.publish = true
+        case "--self-test":
+            options.selfTest = true
+        case "--help", "-h":
+            options.showHelp = true
+        default:
+            throw HarnessError.invalidArgument("unknown option \(argument)")
+        }
+        index += 1
+    }
+    for (label, templates) in options.argumentTemplatesByLabel {
+        guard let appIndex = options.apps.firstIndex(where: { $0.label == label }) else {
+            throw HarnessError.invalidArgument("--app-arg refers to unknown app label \(label)")
+        }
+        options.apps[appIndex].argumentTemplates = templates
+    }
+    for appIndex in options.apps.indices {
+        let label = options.apps[appIndex].label
+        let embeddedCommand = Bundle(url: options.apps[appIndex].bundleURL)?
+            .object(forInfoDictionaryKey: "KeldBenchBuildRecipe") as? String
+        guard let command = options.buildCommandsByLabel[label] ?? embeddedCommand else {
+            throw HarnessError.invalidArgument("--app-build-command is required for \(label)")
+        }
+        options.apps[appIndex].buildCommand = command
+    }
+    let unknownBuildLabels = Set(options.buildCommandsByLabel.keys).subtracting(options.apps.map(\.label))
+    guard unknownBuildLabels.isEmpty else {
+        throw HarnessError.invalidArgument("--app-build-command refers to unknown labels: \(unknownBuildLabels.sorted().joined(separator: ", "))")
+    }
+    return options
+}
+
+private func resolveHTMLURL(_ explicit: URL?) throws -> URL {
+    if let explicit {
+        guard FileManager.default.fileExists(atPath: explicit.path) else {
+            throw HarnessError.invalidArgument("canonical HTML does not exist at \(explicit.path)")
+        }
+        return explicit
+    }
+
+    let executable = try loadedExecutableURL()
+    let candidates = [
+        URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("macos/harness/hello.html"),
+        executable.deletingLastPathComponent().appendingPathComponent("hello.html"),
+        executable.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("hello.html"),
+    ]
+    guard let match = candidates.first(where: { FileManager.default.fileExists(atPath: $0.path) }) else {
+        throw HarnessError.invalidArgument("could not find macos/harness/hello.html; pass --html")
+    }
+    return match.standardizedFileURL
+}
+
+private func printUsage() {
+    let usage = """
+    Usage:
+      keld-macos-bench --app LABEL=/absolute/App.app [--app LABEL=/absolute/Other.app] [options]
+      keld-macos-bench --self-test [--html /path/to/hello.html]
+
+    Options:
+      --runs N                       Samples per app (default: 11)
+      --app-arg LABEL=TEMPLATE        Replace that app's launch arguments; {url} and {token} expand per run
+      --app-build-command LABEL=TEXT   Required exact build-command provenance for that app
+      --timeout-seconds N             Measurement deadline; launch ownership is never abandoned (default: 30)
+      --cleanup-timeout-seconds N     Cleanup kill-switch deadline (default: 5)
+      --stable-observations N         Consecutive stable coalition reads (default: 3)
+      --stable-window-ms N            Sustained member/RSS stability window (default: 500)
+      --rss-tolerance-kib N           Allowed RSS drift between stable reads (default: 1024)
+      --html PATH                     Canonical hello.html (auto-discovered by default)
+      --output PATH                   Also atomically write raw JSON to PATH
+      --publish                       Enforce the machine-readable publication policy
+      --self-test                     Run protocol/parser negative controls
+      --help                          Show this text
+    """
+    print(usage)
+}
+
+private struct PublicationArmFacts {
+    let label: String
+    let sampleCount: Int
+    let successfulSampleCount: Int
+    let completeCleanupCount: Int
+    let completeMetricCount: Int
+    let fixtureUnchanged: Bool
+    let provenanceComplete: Bool
+    let adapterRecipeMatches: Bool
+    let toolchainComplete: Bool
+    let publicArgumentsSafe: Bool
+    let sampleHostConditionsAcceptable: Bool
+}
+
+private struct PublicationFacts {
+    let runsPerApp: Int
+    let stableCoalitionObservations: Int
+    let stableCoalitionWindowMilliseconds: Int
+    let rssToleranceKiB: UInt64
+    let repositoryBefore: RepositoryMetadata
+    let repositoryAfter: RepositoryMetadata
+    let harnessProvenanceComplete: Bool
+    let canonicalHTML: Bool
+    let publicationOutputProvided: Bool
+    let outputWillPreserveCleanTree: Bool
+    let hostBefore: HostMetadata
+    let hostAfter: HostMetadata
+    let aborted: Bool
+    let arms: [PublicationArmFacts]
+}
+
+private func hostMetadataIsComplete(_ host: HostMetadata) -> Bool {
+    let requiredStrings = [
+        host.operatingSystemVersion,
+        host.architecture,
+        host.hardwareModel,
+        host.processor,
+    ]
+    return requiredStrings.allSatisfy {
+        !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && $0.lowercased() != "unknown"
+    }
+        && host.logicalCpuCount > 0
+        && host.physicalMemoryBytes > 0
+        && ["nominal", "fair", "serious", "critical"].contains(host.thermalState)
+}
+
+private func publicationAssessment(
+    requested: Bool,
+    facts: PublicationFacts
+) -> PublicationMetadata {
+    var reasons: [PublicationReason] = []
+    func append(_ code: String, label: String? = nil) {
+        reasons.append(PublicationReason(code: code, label: label))
+    }
+
+    if facts.runsPerApp != 11 { append("runs_per_arm_not_11") }
+    if facts.stableCoalitionObservations < 3
+        || facts.stableCoalitionWindowMilliseconds < 500
+        || facts.rssToleranceKiB > 1_024 {
+        append("rss_stability_policy_weakened")
+    }
+    let before = facts.repositoryBefore
+    let after = facts.repositoryAfter
+    if before.workingTreeState == .unavailable || after.workingTreeState == .unavailable
+        || !isFullGitCommit(before.commit) || !isFullGitCommit(after.commit)
+        || before.identifier == nil || after.identifier == nil {
+        append("repository_unavailable")
+    } else {
+        if before.identifier != canonicalBenchesRepositoryIdentifier
+            || after.identifier != canonicalBenchesRepositoryIdentifier {
+            append("repository_not_canonical")
+        }
+        if before.commitAdvertisedAsOriginHead != true || after.commitAdvertisedAsOriginHead != true {
+            append("repository_commit_not_advertised_as_origin_head")
+        }
+        if before.workingTreeState == .dirty || after.workingTreeState == .dirty {
+            append("repository_dirty")
+        }
+        if before.commit != after.commit || before.identifier != after.identifier {
+            append("repository_changed")
+        }
+    }
+    if !facts.harnessProvenanceComplete { append("harness_provenance_missing") }
+    if !facts.canonicalHTML { append("canonical_html_mismatch") }
+    if !facts.publicationOutputProvided {
+        append("publication_output_missing")
+    } else if !facts.outputWillPreserveCleanTree {
+        append("output_would_dirty_repository")
+    }
+    if !hostMetadataIsComplete(facts.hostBefore) || !hostMetadataIsComplete(facts.hostAfter) {
+        append("host_metadata_unavailable")
+    }
+    if facts.hostBefore.lowPowerModeEnabled || facts.hostAfter.lowPowerModeEnabled {
+        append("low_power_mode_enabled")
+    }
+    if facts.hostBefore.thermalState != "nominal" || facts.hostAfter.thermalState != "nominal" {
+        append("thermal_state_not_nominal")
+    }
+    if facts.hostBefore != facts.hostAfter { append("host_state_changed") }
+    if facts.aborted { append("aborted") }
+    for arm in facts.arms {
+        if arm.sampleCount != 11 { append("sample_count_mismatch", label: arm.label) }
+        if arm.successfulSampleCount != arm.sampleCount { append("sample_failed", label: arm.label) }
+        if arm.completeCleanupCount != arm.sampleCount { append("cleanup_unproven", label: arm.label) }
+        if arm.completeMetricCount != arm.sampleCount { append("metric_missing", label: arm.label) }
+        if !arm.fixtureUnchanged { append("fixture_changed", label: arm.label) }
+        if !arm.provenanceComplete { append("fixture_provenance_missing", label: arm.label) }
+        if !arm.adapterRecipeMatches { append("fixture_adapter_recipe_mismatch", label: arm.label) }
+        if !arm.toolchainComplete { append("toolchain_evidence_missing", label: arm.label) }
+        if !arm.publicArgumentsSafe { append("unsafe_public_argument", label: arm.label) }
+        if !arm.sampleHostConditionsAcceptable {
+            append("sample_host_state_not_nominal", label: arm.label)
+        }
+    }
+    return PublicationMetadata(
+        policyVersion: 3,
+        requested: requested,
+        eligible: reasons.isEmpty,
+        reasons: reasons
+    )
+}
+
+private func isSha256(_ value: String?) -> Bool {
+    guard let value, value.count == 64 else { return false }
+    return value.unicodeScalars.allSatisfy { scalar in
+        (48...57).contains(scalar.value) || (97...102).contains(scalar.value)
+    }
+}
+
+private func isNonemptyMetadataValue(_ value: String?) -> Bool {
+    guard let value else { return false }
+    return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+}
+
+private func isPublicArgumentTemplate(_ value: String) -> Bool {
+    guard !value.isEmpty, value.utf8.count <= 256, !value.contains("/"), !value.contains("\\") else {
+        return false
+    }
+    let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_=.:{}")
+    return value.unicodeScalars.allSatisfy(allowed.contains)
+}
+
+private func isPublicLabel(_ value: String) -> Bool {
+    guard !value.isEmpty, value.utf8.count <= 64 else { return false }
+    let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ._-")
+    return value.unicodeScalars.allSatisfy(allowed.contains)
+}
+
+private func isPublicBundleName(_ value: String) -> Bool {
+    isPublicLabel(String(value.dropLast(value.hasSuffix(".app") ? 4 : 0)))
+        && value.hasSuffix(".app")
+}
+
+private func repositoryMetadataIsPublishable(_ metadata: RepositoryMetadata?) -> Bool {
+    guard let metadata else { return false }
+    return metadata.identifier == canonicalBenchesRepositoryIdentifier
+        && isFullGitCommit(metadata.commit)
+        && metadata.workingTreeState == .clean
+        && metadata.commitAdvertisedAsOriginHead == true
+}
+
+private func fixtureProvenanceIsComplete(_ fixture: FixtureMetadata) -> Bool {
+    guard isSha256(fixture.appBundleTreeSha256),
+          isPublicLabel(fixture.label),
+          isPublicBundleName(fixture.appBundleName),
+          isSha256(fixture.executableSha256),
+          fixture.executableSizeBytes != nil,
+          fixture.executableBundleRelativePath != nil,
+          isSha256(fixture.buildCommandSha256) else {
+        return false
+    }
+    switch fixture.embeddedFixtureKind {
+    case "keld-adapter":
+        guard let embeddedCommit = fixture.embeddedSourceGitCommit else { return false }
+        return isFullGitCommit(embeddedCommit)
+            && fixture.embeddedSourceRepositoryIdentifier == canonicalKeldRepositoryIdentifier
+            && fixture.embeddedSourceCommitAdvertisedAsOriginHead == true
+            && fixture.embeddedRecipeRepositoryIdentifier == canonicalBenchesRepositoryIdentifier
+            && isFullGitCommit(fixture.embeddedRecipeGitCommit)
+            && fixture.embeddedBuildRecipeIdentifier == "macos/keld/hello/build.sh SOURCE SHA OUTPUT_APP"
+            && isSha256(fixture.adapterPatchSha256)
+            && isSha256(fixture.buildScriptSha256)
+            && isSha256(fixture.infoPlistTemplateSha256)
+    case "tauri":
+        guard let sourceRoot = fixture.sourceRepositoryRelativePath,
+              sourceRoot == "macos/tauri/hello",
+              fixture.embeddedSourceRepositoryRelativePath == sourceRoot,
+              let sourceCommit = fixture.sourceRepository?.commit else {
+            return false
+        }
+        let sourcePrefix = sourceRoot + "/"
+        let expectedSourcePaths = Set(requiredTauriSourcePaths.map { sourcePrefix + $0 })
+        let observedSourcePaths = Set(fixture.sourceFiles.map(\.repositoryRelativePath))
+        let lockfileNames = Set(fixture.lockfiles.map(\.repositoryRelativePath))
+        return repositoryMetadataIsPublishable(fixture.sourceRepository)
+            && fixture.embeddedSourceRepositoryIdentifier == canonicalBenchesRepositoryIdentifier
+            && fixture.embeddedSourceGitCommit == sourceCommit
+            && fixture.embeddedSourceCommitAdvertisedAsOriginHead == true
+            && fixture.embeddedRecipeRepositoryIdentifier == canonicalBenchesRepositoryIdentifier
+            && fixture.embeddedRecipeGitCommit == sourceCommit
+            && fixture.embeddedBuildRecipeIdentifier == "macos/tauri/hello/build.sh"
+            && isSha256(fixture.buildScriptSha256)
+            && observedSourcePaths == expectedSourcePaths
+            && fixture.sourceFiles.allSatisfy { isSha256($0.sha256) && $0.matchesHeadBlob }
+            && lockfileNames == Set([
+                "macos/tauri/hello/bun.lock",
+                "macos/tauri/hello/src-tauri/Cargo.lock",
+            ])
+            && fixture.lockfiles.allSatisfy { isSha256($0.sha256) && $0.matchesHeadBlob }
+    default:
+        return false
+    }
+}
+
+private func embeddedAdapterRecipeMatches(
+    fixture: FixtureMetadata,
+    harness: HarnessArtifactMetadata
+) -> Bool {
+    switch fixture.embeddedFixtureKind {
+    case "keld-adapter":
+        return embeddedAdapterRecipeFieldsMatch(
+            recipeRepository: fixture.embeddedRecipeRepositoryIdentifier,
+            recipeCommit: fixture.embeddedRecipeGitCommit,
+            buildRecipe: fixture.embeddedBuildRecipeIdentifier,
+            patchSha256: fixture.adapterPatchSha256,
+            buildScriptSha256: fixture.buildScriptSha256,
+            infoPlistSha256: fixture.infoPlistTemplateSha256,
+            harnessCommit: harness.sourceRepository.commit,
+            sourceFiles: harness.sourceFiles
+        ) && fixture.buildCommandSha256 == sha256Hex(
+            Data("macos/keld/hello/build.sh SOURCE SHA OUTPUT_APP".utf8)
+        )
+    case "tauri":
+        return embeddedTauriRecipeFieldsMatch(
+            sourceRepository: fixture.embeddedSourceRepositoryIdentifier,
+            sourceCommit: fixture.embeddedSourceGitCommit,
+            sourceRelativePath: fixture.embeddedSourceRepositoryRelativePath,
+            recipeRepository: fixture.embeddedRecipeRepositoryIdentifier,
+            recipeCommit: fixture.embeddedRecipeGitCommit,
+            buildRecipe: fixture.embeddedBuildRecipeIdentifier,
+            buildScriptSha256: fixture.buildScriptSha256,
+            buildCommandSha256: fixture.buildCommandSha256,
+            harnessCommit: harness.sourceRepository.commit,
+            sourceFiles: harness.sourceFiles
+        )
+    default:
+        return false
+    }
+}
+
+private func embeddedAdapterRecipeFieldsMatch(
+    recipeRepository: String?,
+    recipeCommit: String?,
+    buildRecipe: String?,
+    patchSha256: String?,
+    buildScriptSha256: String?,
+    infoPlistSha256: String?,
+    harnessCommit: String?,
+    sourceFiles: [ArtifactHash]
+) -> Bool {
+    let sourceHashes = Dictionary(
+        uniqueKeysWithValues: sourceFiles.map { ($0.repositoryRelativePath, $0.sha256) }
+    )
+    return recipeRepository == canonicalBenchesRepositoryIdentifier
+        && recipeCommit == harnessCommit
+        && buildRecipe == "macos/keld/hello/build.sh SOURCE SHA OUTPUT_APP"
+        && patchSha256 == sourceHashes["macos/keld/hello/keld-bench-url.patch"]
+        && buildScriptSha256 == sourceHashes["macos/keld/hello/build.sh"]
+        && infoPlistSha256 == sourceHashes["macos/keld/hello/Info.plist"]
+}
+
+private func embeddedTauriRecipeFieldsMatch(
+    sourceRepository: String?,
+    sourceCommit: String?,
+    sourceRelativePath: String?,
+    recipeRepository: String?,
+    recipeCommit: String?,
+    buildRecipe: String?,
+    buildScriptSha256: String?,
+    buildCommandSha256: String,
+    harnessCommit: String?,
+    sourceFiles: [ArtifactHash]
+) -> Bool {
+    let sourceHashes = Dictionary(
+        uniqueKeysWithValues: sourceFiles.map { ($0.repositoryRelativePath, $0.sha256) }
+    )
+    return sourceRepository == canonicalBenchesRepositoryIdentifier
+        && sourceCommit == harnessCommit
+        && sourceRelativePath == "macos/tauri/hello"
+        && recipeRepository == canonicalBenchesRepositoryIdentifier
+        && recipeCommit == harnessCommit
+        && buildRecipe == "macos/tauri/hello/build.sh"
+        && buildScriptSha256 == sourceHashes["macos/tauri/hello/build.sh"]
+        && buildCommandSha256 == sha256Hex(Data("macos/tauri/hello/build.sh".utf8))
+}
+
+private func fixtureToolchainIsComplete(_ fixture: FixtureMetadata) -> Bool {
+    let toolchain = fixture.toolchain
+    switch fixture.embeddedFixtureKind {
+    case "keld-adapter":
+        return toolchain.evidenceKind == "embedded-build-metadata"
+            && isNonemptyMetadataValue(toolchain.rustcVersion)
+            && isNonemptyMetadataValue(toolchain.cargoVersion)
+            && isNonemptyMetadataValue(toolchain.macosSdkVersion)
+            && isNonemptyMetadataValue(toolchain.xcodeVersion)
+    case "tauri":
+        return toolchain.evidenceKind == "embedded-build-metadata"
+            && isNonemptyMetadataValue(toolchain.bunVersion)
+            && isNonemptyMetadataValue(toolchain.tauriCliVersion)
+            && isNonemptyMetadataValue(toolchain.rustcVersion)
+            && isNonemptyMetadataValue(toolchain.cargoVersion)
+            && isNonemptyMetadataValue(toolchain.macosSdkVersion)
+            && isNonemptyMetadataValue(toolchain.xcodeVersion)
+    default:
+        return false
+    }
+}
+
+private func harnessRebuildEvidenceIsValid(
+    _ evidence: HarnessRebuildEvidence,
+    executableSha256: String
+) -> Bool {
+    evidence.attempted
+        && evidence.byteForByteMatchesRunningExecutable
+        && evidence.rebuiltExecutableSha256 == executableSha256
+}
+
+private func harnessProvenanceIsComplete(_ harness: HarnessArtifactMetadata) -> Bool {
+    let paths = Set(harness.sourceFiles.map(\.repositoryRelativePath))
+    return repositoryMetadataIsPublishable(harness.sourceRepository)
+        && isSha256(harness.executableSha256)
+        && harness.executableSizeBytes > 0
+        && harness.buildInvocationContract == harnessBuildInvocationContract
+        && harnessRebuildEvidenceIsValid(
+            harness.reproducibleBuild,
+            executableSha256: harness.executableSha256
+        )
+        && paths == Set(harnessProvenanceSourcePaths)
+        && harness.sourceFiles.allSatisfy { isSha256($0.sha256) && $0.matchesHeadBlob }
+        && isNonemptyMetadataValue(harness.observedToolchain.swiftCompilerVersion)
+        && isNonemptyMetadataValue(harness.observedToolchain.xcodeVersion)
+        && isNonemptyMetadataValue(harness.observedToolchain.macosSdkVersion)
+}
+
+private func path(_ candidate: URL, isWithinOrEqualTo root: URL) -> Bool {
+    let candidatePath = candidate.standardizedFileURL.resolvingSymlinksInPath().path
+    let rootPath = root.standardizedFileURL.resolvingSymlinksInPath().path
+    if candidatePath == rootPath { return true }
+    let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+    return candidatePath.hasPrefix(prefix)
+}
+
+private final class ValidatedOutputDestination: @unchecked Sendable {
+    let url: URL
+    private let directoryURL: URL
+    private let directoryFileIdentity: FileIdentity
+    private let directoryDescriptor: Int32
+    private let fileName: String
+
+    init(
+        url: URL,
+        directoryURL: URL,
+        directoryFileIdentity: FileIdentity,
+        directoryDescriptor: Int32,
+        fileName: String
+    ) {
+        self.url = url
+        self.directoryURL = directoryURL
+        self.directoryFileIdentity = directoryFileIdentity
+        self.directoryDescriptor = directoryDescriptor
+        self.fileName = fileName
+    }
+
+    deinit {
+        Darwin.close(directoryDescriptor)
+    }
+
+    func write(_ data: Data) throws {
+        guard try fileIdentity(at: directoryURL) == directoryFileIdentity else {
+            throw HarnessError.io("--output parent changed during the benchmark")
+        }
+        try requireDirectoryOutsideGitWorkingTree(directoryURL)
+
+        let temporaryName = ".\(fileName).tmp.\(UUID().uuidString.lowercased())"
+        let descriptor = Darwin.openat(
+            directoryDescriptor,
+            temporaryName,
+            O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW,
+            S_IRUSR | S_IWUSR
+        )
+        guard descriptor >= 0 else {
+            throw HarnessError.io("could not exclusively create the publication output")
+        }
+        var descriptorIsOpen = true
+        defer {
+            if descriptorIsOpen { Darwin.close(descriptor) }
+            _ = Darwin.unlinkat(directoryDescriptor, temporaryName, 0)
+        }
+        try data.withUnsafeBytes { buffer in
+            guard let baseAddress = buffer.baseAddress else { return }
+            var offset = 0
+            while offset < buffer.count {
+                let written = Darwin.write(
+                    descriptor,
+                    baseAddress.advanced(by: offset),
+                    buffer.count - offset
+                )
+                if written < 0, errno == EINTR { continue }
+                guard written > 0 else {
+                    throw HarnessError.io("could not write the publication output")
+                }
+                offset += written
+            }
+        }
+        guard Darwin.fsync(descriptor) == 0 else {
+            throw HarnessError.io("could not sync the publication output")
+        }
+        guard Darwin.close(descriptor) == 0 else {
+            descriptorIsOpen = false
+            throw HarnessError.io("could not close the publication output")
+        }
+        descriptorIsOpen = false
+        guard Darwin.renameatx_np(
+            directoryDescriptor,
+            temporaryName,
+            directoryDescriptor,
+            fileName,
+            UInt32(RENAME_EXCL)
+        ) == 0 else {
+            throw HarnessError.io("could not atomically install the publication output without overwriting")
+        }
+        guard Darwin.fsync(directoryDescriptor) == 0 else {
+            throw HarnessError.io("could not sync the publication output directory")
+        }
+    }
+}
+
+private func emitBenchmarkJSON(
+    _ json: Data,
+    outputDestination: ValidatedOutputDestination?,
+    standardOutput: FileHandle = .standardOutput,
+    standardError: FileHandle = .standardError
+) throws {
+    if let outputDestination {
+        try outputDestination.write(json)
+        standardError.write(Data("raw JSON: \(outputDestination.url.path)\n".utf8))
+    }
+    standardOutput.write(json)
+    standardOutput.write(Data("\n".utf8))
+}
+
+private func requireDirectoryOutsideGitWorkingTree(_ directory: URL) throws {
+    var candidatePath = directory.standardizedFileURL.resolvingSymlinksInPath().path
+    while true {
+        let markerPath = (candidatePath as NSString).appendingPathComponent(".git")
+        var markerInformation = stat()
+        errno = 0
+        if Darwin.lstat(markerPath, &markerInformation) == 0 {
+            throw HarnessError.invalidArgument("--output must be outside every Git working tree")
+        }
+        guard errno == ENOENT else {
+            throw HarnessError.io(
+                "could not prove --output is outside a Git working tree (Git marker errno \(errno))"
+            )
+        }
+        let parentPath = (candidatePath as NSString).deletingLastPathComponent
+        if parentPath.isEmpty || parentPath == candidatePath { return }
+        candidatePath = parentPath
+    }
+}
+
+private func validatedOutputURL(
+    _ requested: URL?,
+    repositoryRoot: URL?,
+    harnessExecutable: URL,
+    htmlURL: URL,
+    apps: [AppSpec]
+) throws -> ValidatedOutputDestination? {
+    guard let requested else { return nil }
+    let parent = requested.deletingLastPathComponent()
+        .standardizedFileURL
+        .resolvingSymlinksInPath()
+    let parentDescriptor = Darwin.open(parent.path, O_RDONLY | O_CLOEXEC)
+    guard parentDescriptor >= 0 else {
+        throw HarnessError.invalidArgument("--output parent must be an existing directory")
+    }
+    var parentInformation = stat()
+    guard Darwin.fstat(parentDescriptor, &parentInformation) == 0,
+          parentInformation.st_mode & S_IFMT == S_IFDIR else {
+        Darwin.close(parentDescriptor)
+        throw HarnessError.invalidArgument("--output parent must be an existing directory")
+    }
+    let parentIdentity = FileIdentity(
+        device: UInt64(parentInformation.st_dev),
+        inode: UInt64(parentInformation.st_ino)
+    )
+    let output = parent.appendingPathComponent(requested.lastPathComponent).standardizedFileURL
+    var outputInformation = stat()
+    errno = 0
+    if Darwin.fstatat(parentDescriptor, requested.lastPathComponent, &outputInformation, AT_SYMLINK_NOFOLLOW) == 0 {
+        Darwin.close(parentDescriptor)
+        throw HarnessError.invalidArgument("--output must not already exist")
+    }
+    guard errno == ENOENT else {
+        Darwin.close(parentDescriptor)
+        throw HarnessError.io("could not inspect --output destination")
+    }
+    guard output.path != harnessExecutable.standardizedFileURL.resolvingSymlinksInPath().path,
+          output.path != htmlURL.standardizedFileURL.resolvingSymlinksInPath().path else {
+        Darwin.close(parentDescriptor)
+        throw HarnessError.invalidArgument("--output must not replace a benchmark input")
+    }
+    guard !apps.contains(where: { path(output, isWithinOrEqualTo: $0.bundleURL) }) else {
+        Darwin.close(parentDescriptor)
+        throw HarnessError.invalidArgument("--output must be outside every measured app bundle")
+    }
+    if let repositoryRoot, path(output, isWithinOrEqualTo: repositoryRoot) {
+        Darwin.close(parentDescriptor)
+        throw HarnessError.invalidArgument("--output must be outside the benchmark repository")
+    }
+    do {
+        try requireDirectoryOutsideGitWorkingTree(parent)
+    } catch {
+        Darwin.close(parentDescriptor)
+        throw error
+    }
+    return ValidatedOutputDestination(
+        url: output,
+        directoryURL: parent,
+        directoryFileIdentity: parentIdentity,
+        directoryDescriptor: parentDescriptor,
+        fileName: requested.lastPathComponent
+    )
+}
+
+private func connectedLoopbackSocket(port: UInt16) throws -> Int32 {
+    let descriptor = Darwin.socket(AF_INET, SOCK_STREAM, 0)
+    guard descriptor >= 0 else { throw HarnessError.io("self-test socket failed") }
+
+    var noSignal: Int32 = 1
+    guard setsockopt(
+        descriptor,
+        SOL_SOCKET,
+        SO_NOSIGPIPE,
+        &noSignal,
+        socklen_t(MemoryLayout<Int32>.size)
+    ) == 0 else {
+        Darwin.close(descriptor)
+        throw HarnessError.io("self-test socket configuration failed")
+    }
+    var address = sockaddr_in()
+    address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+    address.sin_family = sa_family_t(AF_INET)
+    address.sin_port = port.bigEndian
+    address.sin_addr = in_addr(s_addr: inet_addr("127.0.0.1"))
+    let result = withUnsafePointer(to: &address) { pointer in
+        pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { socketAddress in
+            Darwin.connect(descriptor, socketAddress, socklen_t(MemoryLayout<sockaddr_in>.size))
+        }
+    }
+    guard result == 0 else {
+        Darwin.close(descriptor)
+        throw HarnessError.io("self-test connect failed")
+    }
+    return descriptor
+}
+
+private func rawHTTPStatus(port: UInt16, request: String) throws -> Int {
+    let descriptor = try connectedLoopbackSocket(port: port)
+    defer { Darwin.close(descriptor) }
+
+    let requestData = Data(request.utf8)
+    requestData.withUnsafeBytes { buffer in
+        if let base = buffer.baseAddress { _ = Darwin.send(descriptor, base, buffer.count, 0) }
+    }
+    var buffer = [UInt8](repeating: 0, count: 256)
+    let count = Darwin.recv(descriptor, &buffer, buffer.count, 0)
+    guard count > 0,
+          let line = String(bytes: buffer.prefix(Int(count)), encoding: .utf8)?
+          .components(separatedBy: "\r\n").first else {
+        throw HarnessError.io("self-test received no HTTP status")
+    }
+    let fields = line.split(separator: " ")
+    guard fields.count >= 2, let status = Int(fields[1]) else {
+        throw HarnessError.io("self-test received malformed HTTP status")
+    }
+    return status
+}
+
+private func rawHTTPStatus(port: UInt16, target: String) throws -> Int {
+    try rawHTTPStatus(
+        port: port,
+        request: "GET \(target) HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
+    )
+}
+
+private func require(_ condition: @autoclosure () throws -> Bool, _ message: String) throws {
+    if try !condition() { throw HarnessError.measurement("self-test failed: \(message)") }
+}
+
+private func validatePublicEvidenceRedaction() throws {
+    let rawToken = "raw-token-public-evidence-negative-control"
+    let rawAbsolutePath = "/private/tmp/keld-public-evidence-negative-control/secret.app"
+    let rawPeerAddress = "127.0.0.1:61991"
+    let rawStartIdentity = "raw-start-identity-public-evidence-negative-control"
+    let rawCoalitionName = "application.raw-coalition-name-public-evidence-negative-control"
+    let rawPid: Int32 = 2_000_000_011
+    let rawParentPid: Int32 = 2_000_000_033
+    let rawUniqueId: UInt64 = 18_000_000_000_000_071
+    let rawCoalitionId: UInt64 = 18_000_000_000_000_133
+    let rawTasksStarted: UInt64 = 18_000_000_000_000_177
+    let rawTasksExited: UInt64 = 18_000_000_000_000_199
+    let rawT0: UInt64 = 18_000_000_000_000_211
+    let rawObserved: UInt64 = rawT0 + 81_000_000
+    let context = PublicEvidenceContext(
+        t0MonotonicNanoseconds: rawT0,
+        salt: "public-evidence-self-test-run-a"
+    )
+    let secondRunContext = PublicEvidenceContext(
+        t0MonotonicNanoseconds: rawT0,
+        salt: "public-evidence-self-test-run-b"
+    )
+    let stableIdentity = StableProcessIdentity(
+        pid: rawPid,
+        parentPid: rawParentPid,
+        startIdentity: rawStartIdentity,
+        uniqueId: rawUniqueId,
+        commandSha256: sha256Hex(Data(rawAbsolutePath.utf8))
+    )
+    let process = ProcessMeasurement(
+        pid: rawPid,
+        parentPid: rawParentPid,
+        startIdentity: rawStartIdentity,
+        uniqueId: rawUniqueId,
+        rssKiB: 12_345,
+        classification: "host",
+        commandSha256: sha256Hex(Data(rawAbsolutePath.utf8))
+    )
+    let snapshot = CoalitionSnapshot(
+        identity: CoalitionIdentity(
+            id: rawCoalitionId,
+            name: rawCoalitionName,
+            bundleIdentifier: "com.example.PublicEvidenceProbe",
+            activeCount: 1
+        ),
+        lifecycleCounters: CoalitionLifecycleCounters(
+            tasksStarted: rawTasksStarted,
+            tasksExited: rawTasksExited
+        ),
+        processes: [process],
+        rssByClassificationKiB: ["host": 12_345],
+        totalRssKiB: 12_345,
+        observedMonotonicNanoseconds: rawObserved
+    )
+    let receipt = BeaconReceipt(
+        token: rawToken,
+        receivedMonotonicNanoseconds: rawT0 + 42_000_000,
+        clientNowMilliseconds: 42,
+        scriptStartMilliseconds: 1,
+        firstRafMilliseconds: 20,
+        secondRafMilliseconds: 40,
+        documentVisibilityState: "visible",
+        documentHadFocus: true,
+        peerAddress: rawPeerAddress
+    )
+    let event = ServerEvent(
+        monotonicNanoseconds: rawT0 + 10_000_000,
+        requestTarget: "/run/\(rawToken)/hello.html?source=\(rawAbsolutePath)",
+        kind: "html",
+        status: 200,
+        accepted: true,
+        reason: "canonical document served",
+        presentedToken: rawToken
+    )
+    let stableEvidence = StableProcessEvidence(stableIdentity, context: context)
+    let processEvidence = ProcessMeasurementEvidence(process, context: context)
+    let coalitionEvidence = CoalitionEvidence(snapshot, context: context)
+
+    try require(
+        stableEvidence.processPseudonym == processEvidence.processPseudonym,
+        "the same process must have one pseudonym throughout a sample"
+    )
+    try require(
+        stableEvidence.parentProcessPseudonym == processEvidence.parentProcessPseudonym,
+        "the same parent process must have one pseudonym throughout a sample"
+    )
+    try require(
+        stableEvidence.processPseudonym
+            != secondRunContext.processPseudonym(rawPid),
+        "process pseudonyms must be salted independently for every sample"
+    )
+    try require(
+        coalitionEvidence.identity.coalitionPseudonym
+            == context.coalitionPseudonym(rawCoalitionId),
+        "the same coalition must have one pseudonym throughout a sample"
+    )
+    try require(
+        coalitionEvidence.identity.coalitionPseudonym
+            != secondRunContext.coalitionPseudonym(rawCoalitionId),
+        "coalition pseudonyms must be salted independently for every sample"
+    )
+    try require(
+        coalitionEvidence.observedOffsetMilliseconds == 81,
+        "coalition timestamps must be encoded relative to sample t0"
+    )
+
+    let sample = SampleRecord(
+        globalOrdinal: 1,
+        round: 1,
+        appOrdinal: 1,
+        label: "public-evidence-probe",
+        status: "ok",
+        error: nil,
+        launchedProcessIdentity: stableEvidence,
+        launchServicesASNResolved: true,
+        launchServicesOriginalPidPresent: true,
+        originalPidMatchesReturnedPidCoalition: true,
+        launchCallbackOffsetMilliseconds: context.offsetMilliseconds(for: rawT0 + 5_000_000),
+        applicationWasActiveAtLaunchCallback: true,
+        applicationWasActiveAtBeacon: true,
+        hostConditionBeforeLaunch: HostConditionEvidence(
+            lowPowerModeEnabled: false,
+            thermalState: "nominal"
+        ),
+        hostConditionAfterCleanup: HostConditionEvidence(
+            lowPowerModeEnabled: false,
+            thermalState: "nominal"
+        ),
+        beacon: BeaconEvidence(receipt, context: context),
+        doubleRafPaintOpportunityProxyMilliseconds: 42,
+        stableCoalitionObservations: 3,
+        coalition: coalitionEvidence,
+        serverEvents: [ServerEventEvidence(event, context: context)],
+        cleanup: CleanupRecord(
+            gracefulTerminateAccepted: true,
+            coalitionHardKillInvoked: false,
+            applicationTerminated: true,
+            coalitionDrained: true,
+            error: nil
+        )
+    )
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    let encodedSample = String(decoding: try encoder.encode(sample), as: UTF8.self)
+    let encodedProtocol = String(decoding: try encoder.encode(ProtocolMetadata(
+        listener: "127.0.0.1:ephemeral",
+        htmlFileName: "hello.html",
+        htmlSha256: String(repeating: "a", count: 64),
+        tokenTransports: ["URL path/query"],
+        completionSignal: "double-rAF paint-opportunity proxy",
+        launchApi: "NSWorkspace.openApplication",
+        coalitionApi: "resource coalition"
+    )), as: UTF8.self)
+    let encodedEvidence = encodedSample + encodedProtocol
+    let forbiddenRawValues = [
+        rawToken,
+        sha256Hex(Data(rawToken.utf8)),
+        rawAbsolutePath,
+        rawPeerAddress,
+        rawStartIdentity,
+        rawCoalitionName,
+        String(rawPid),
+        String(rawParentPid),
+        String(rawUniqueId),
+        String(rawCoalitionId),
+        String(rawTasksStarted),
+        String(rawTasksExited),
+        String(rawT0),
+        String(rawObserved),
+        "127.0.0.1:61991",
+    ]
+    for rawValue in forbiddenRawValues {
+        try require(
+            !encodedEvidence.contains(rawValue),
+            "public evidence must omit raw value \(rawValue)"
+        )
+    }
+    let forbiddenRawKeys = [
+        "\"tokenSha256\"",
+        "\"pid\"",
+        "\"parentPid\"",
+        "\"startIdentity\"",
+        "\"uniqueId\"",
+        "\"lifecycleCounters\"",
+        "\"tasksStarted\"",
+        "\"tasksExited\"",
+        "\"peerAddress\"",
+        "\"t0MonotonicNanoseconds\"",
+        "\"launchCallbackMonotonicNanoseconds\"",
+        "\"receivedMonotonicNanoseconds\"",
+        "\"observedMonotonicNanoseconds\"",
+        "\"monotonicNanoseconds\"",
+    ]
+    for rawKey in forbiddenRawKeys {
+        try require(
+            !encodedEvidence.contains(rawKey),
+            "public evidence must omit raw key \(rawKey)"
+        )
+    }
+    try require(
+        encodedProtocol.contains("127.0.0.1:ephemeral"),
+        "protocol evidence must describe the listener without publishing its port"
+    )
+}
+
+private func buildStubbornCleanupSelfTestApp(temporaryRoot: URL) throws -> URL {
+    let executableParent = try loadedExecutableURL().deletingLastPathComponent()
+    let rootResult = try runCommand(
+        "/usr/bin/git",
+        ["-C", executableParent.path, "rev-parse", "--show-toplevel"]
+    )
+    guard rootResult.status == 0 else {
+        throw HarnessError.measurement("self-test requires the harness executable to remain inside its source repository")
+    }
+    let repositoryRoot = URL(
+        fileURLWithPath: rootResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines),
+        isDirectory: true
+    )
+    let fixtureRoot = repositoryRoot
+        .appendingPathComponent("macos/harness/test-fixtures/stubborn", isDirectory: true)
+    let source = fixtureRoot.appendingPathComponent("main.swift")
+    let plist = fixtureRoot.appendingPathComponent("Info.plist")
+    guard FileManager.default.fileExists(atPath: source.path),
+          FileManager.default.fileExists(atPath: plist.path) else {
+        throw HarnessError.measurement("self-test stubborn cleanup fixture is missing")
+    }
+
+    let app = temporaryRoot.appendingPathComponent("Stubborn Probe.app", isDirectory: true)
+    let contents = app.appendingPathComponent("Contents", isDirectory: true)
+    let macOS = contents.appendingPathComponent("MacOS", isDirectory: true)
+    try FileManager.default.createDirectory(at: macOS, withIntermediateDirectories: true)
+    let executable = macOS.appendingPathComponent("StubbornProbe")
+    let compile = try runCommand(
+        "/usr/bin/xcrun",
+        [
+            "swiftc", "-O",
+            "-framework", "AppKit",
+            "-framework", "WebKit",
+            "-o", executable.path,
+            source.path,
+        ],
+        timeoutSeconds: 60
+    )
+    guard compile.status == 0 else {
+        throw HarnessError.measurement("self-test stubborn cleanup fixture did not compile")
+    }
+    try FileManager.default.copyItem(
+        at: plist,
+        to: contents.appendingPathComponent("Info.plist")
+    )
+    let signing = try runCommand(
+        "/usr/bin/codesign",
+        ["--force", "--sign", "-", app.path]
+    )
+    guard signing.status == 0 else {
+        throw HarnessError.measurement("self-test stubborn cleanup fixture could not be ad-hoc signed")
+    }
+    return app
+}
+
+private func validateKernelGenerationSignalContract() throws {
+    let probe = Process()
+    probe.executableURL = URL(fileURLWithPath: "/bin/sleep")
+    probe.arguments = ["30"]
+    try probe.run()
+    defer {
+        if probe.isRunning {
+            probe.terminate()
+            probe.waitUntilExit()
+        }
+    }
+    guard let identity = try kernelProcessUniqueIdentity(for: probe.processIdentifier) else {
+        throw HarnessError.measurement("process-generation ABI probe identity was unavailable")
+    }
+    let staleIdentity = KernelProcessUniqueIdentity(
+        uniqueId: identity.uniqueId,
+        pidVersion: identity.pidVersion &+ 1
+    )
+    guard try !signalProcessGeneration(
+        pid: probe.processIdentifier,
+        identity: staleIdentity,
+        signal: SIGKILL
+    ), probe.isRunning else {
+        throw HarnessError.measurement("stale process generation unexpectedly accepted a signal")
+    }
+    guard try signalProcessGeneration(
+        pid: probe.processIdentifier,
+        identity: identity,
+        signal: SIGKILL
+    ) else {
+        throw HarnessError.measurement("exact process generation did not accept a signal")
+    }
+    probe.waitUntilExit()
+    guard !probe.isRunning,
+          try kernelProcessUniqueIdentity(for: probe.processIdentifier) != identity else {
+        throw HarnessError.measurement("process-generation ABI probe did not terminate")
+    }
+}
+
+private func validateStubbornCleanupContract(
+    appURL: URL,
+    server: LoopbackBeaconServer,
+    reader: ResourceCoalitionReader,
+    injectFailureAfterChildCapture: Bool
+) async throws {
+    let spec = AppSpec(
+        label: "Stubborn cleanup probe",
+        bundleURL: appURL,
+        bundleFileIdentity: try fileIdentity(at: appURL),
+        argumentTemplates: [],
+        buildCommand: "self-test fixture"
+    )
+    let token = UUID().uuidString.lowercased()
+    try server.activate(token: token)
+
+    let outcome: LaunchOutcome
+    do {
+        outcome = try await launch(
+            app: spec,
+            benchmarkURL: server.url(for: token),
+            token: token,
+            measurementTimeoutNanoseconds: 10_000_000_000
+        )
+    } catch {
+        server.finish(token: token)
+        do {
+            try await server.quiesceClientHandlers(
+                deadlineNanoseconds: monotonicNowNanoseconds() + 2_000_000_000
+            )
+        } catch let quiescenceError {
+            writeDiagnostic("stubborn self-test launch failed and client quiescence also failed: \(quiescenceError)")
+        }
+        throw error
+    }
+
+    var ownership = outcome.kernelOwnership
+    var preparationError: Error?
+    if ownership == nil {
+        do {
+            ownership = try kernelLaunchOwnership(for: outcome.launchedPid)
+        } catch {
+            preparationError = error
+        }
+    }
+    var cleanupIdentity: StableProcessIdentity?
+    var coalitionId = ownership?.resourceCoalitionId
+    var spawnedChild: (pid: Int32, identity: KernelProcessUniqueIdentity)?
+    var injectedFailureObserved = false
+    let injectedFailureMessage = "injected stubborn cleanup preparation failure"
+    if let ownership {
+        cleanupIdentity = StableProcessIdentity(
+            pid: ownership.pid,
+            parentPid: 0,
+            startIdentity: "unavailable-at-launch-callback",
+            uniqueId: ownership.uniqueId,
+            commandSha256: nil
+        )
+        do {
+            let observedIdentity = try reader.processIdentity(for: outcome.launchedPid)
+            let observedCoalition = try reader.identity(for: outcome.launchedPid)
+            try require(
+                observedIdentity.uniqueId == ownership.uniqueId
+                    && observedCoalition.id == ownership.resourceCoalitionId,
+                "stubborn cleanup fixture must retain its callback process generation and coalition"
+            )
+            cleanupIdentity = observedIdentity
+            coalitionId = observedCoalition.id
+
+            let childDeadline = monotonicNowNanoseconds() + 5_000_000_000
+            while spawnedChild == nil, monotonicNowNanoseconds() < childDeadline {
+                let members = try reader.coalitionMemberPids(id: observedCoalition.id)
+                for memberPid in members where memberPid != outcome.launchedPid {
+                    let command = try runCommand(
+                        "/bin/ps",
+                        ["-p", String(memberPid), "-o", "command="]
+                    )
+                    guard command.status == 0,
+                          command.stdout.contains("/bin/sleep 120"),
+                          let childIdentity = try kernelProcessUniqueIdentity(for: memberPid) else {
+                        continue
+                    }
+                    spawnedChild = (memberPid, childIdentity)
+                    break
+                }
+                if spawnedChild == nil { await nextObservationTick(nanoseconds: 10_000_000) }
+            }
+            try require(
+                spawnedChild != nil,
+                "self-test failed: stubborn fixture did not spawn its expected child"
+            )
+            if injectFailureAfterChildCapture {
+                throw HarnessError.measurement(injectedFailureMessage)
+            }
+        } catch {
+            if case HarnessError.measurement(let message) = error,
+               message == injectedFailureMessage {
+                injectedFailureObserved = true
+            }
+            preparationError = error
+        }
+    } else if preparationError == nil {
+        preparationError = HarnessError.measurement(
+            "self-test failed: stubborn fixture launch ownership was unavailable"
+        )
+    }
+
+    let cleanupRecord: CleanupRecord
+    if let cleanupIdentity, let coalitionId {
+        cleanupRecord = await cleanup(
+            application: outcome.application,
+            launchedProcessIdentity: cleanupIdentity,
+            expectedBundleFileIdentity: spec.bundleFileIdentity,
+            knownCoalitionId: coalitionId,
+            reader: reader,
+            timeoutNanoseconds: 3_000_000_000
+        )
+    } else {
+        let forceTerminateAccepted = outcome.application.forceTerminate()
+        writeDiagnostic(
+            "self-test launch ownership unresolved; exact coalition containment could not be proven and manual remediation may be required"
+        )
+        cleanupRecord = CleanupRecord(
+            gracefulTerminateAccepted: forceTerminateAccepted,
+            coalitionHardKillInvoked: false,
+            applicationTerminated: false,
+            coalitionDrained: false,
+            error: "launch_ownership_unresolved"
+        )
+    }
+    server.finish(token: token)
+    var quiescenceError: Error?
+    do {
+        try await server.quiesceClientHandlers(
+            deadlineNanoseconds: monotonicNowNanoseconds() + 2_000_000_000
+        )
+    } catch {
+        quiescenceError = error
+    }
+
+    var containmentFailures: [String] = []
+    if quiescenceError != nil { containmentFailures.append("client_handlers_unfinished") }
+    if !cleanupRecord.gracefulTerminateAccepted {
+        containmentFailures.append("graceful_termination_not_accepted")
+    }
+    if !cleanupRecord.coalitionHardKillInvoked {
+        containmentFailures.append("hard_coalition_cleanup_not_invoked")
+    }
+    if !cleanupRecord.applicationTerminated {
+        containmentFailures.append("application_generation_not_terminated")
+    }
+    if cleanupRecord.coalitionDrained != true {
+        containmentFailures.append("coalition_not_drained")
+    }
+    if cleanupRecord.error != nil { containmentFailures.append("cleanup_error") }
+    if let spawnedChild {
+        do {
+            if try kernelProcessUniqueIdentity(for: spawnedChild.pid) == spawnedChild.identity {
+                containmentFailures.append("exact_child_generation_survived")
+            }
+        } catch {
+            containmentFailures.append("exact_child_generation_unverifiable")
+        }
+    }
+    if !containmentFailures.isEmpty {
+        if let preparationError {
+            writeDiagnostic("stubborn self-test preparation also failed: \(preparationError)")
+        }
+        throw HarnessError.measurement(
+            "stubborn self-test containment proof failed: \(containmentFailures.joined(separator: ","))"
+        )
+    }
+    if let preparationError, !injectedFailureObserved { throw preparationError }
+    try require(
+        injectedFailureObserved == injectFailureAfterChildCapture,
+        "stubborn cleanup negative control must reach the injected exceptional path"
+    )
+    try require(
+        spawnedChild != nil,
+        "self-test failed: stubborn child identity was not retained"
+    )
+    try require(
+        cleanupRecord.gracefulTerminateAccepted
+            && cleanupRecord.coalitionHardKillInvoked,
+        "stubborn cleanup fixture must exercise hard coalition cleanup"
+    )
+    try require(
+        !hasUnresolvedLaunchOwnership([cleanupRecord]),
+        "proven cleanup must not trigger output quarantine"
+    )
+}
+
+private func runSelfTests(html: Data) async throws {
+    try validatePublicEvidenceRedaction()
+    let loadedExecutable = try loadedExecutableURL()
+    let selfTestRepository = gitSnapshot(
+        containing: loadedExecutable.deletingLastPathComponent()
+    )
+    let selfTestHarnessArtifact = try harnessArtifactMetadata(
+        executable: loadedExecutable,
+        repository: selfTestRepository
+    )
+    try require(
+        selfTestHarnessArtifact.reproducibleBuild.attempted
+            && selfTestHarnessArtifact.reproducibleBuild.byteForByteMatchesRunningExecutable
+            && selfTestHarnessArtifact.reproducibleBuild.rebuiltExecutableSha256
+                == selfTestHarnessArtifact.executableSha256,
+        "running harness bytes must reproduce exactly from the recorded source and build command"
+    )
+    try require(
+        !harnessRebuildEvidenceIsValid(
+            HarnessRebuildEvidence(
+                attempted: true,
+                rebuiltExecutableSha256: selfTestHarnessArtifact.executableSha256,
+                byteForByteMatchesRunningExecutable: false
+            ),
+            executableSha256: selfTestHarnessArtifact.executableSha256
+        ),
+        "publication provenance must reject a stale or substituted harness executable"
+    )
+    let server = try LoopbackBeaconServer(html: html)
+    defer { server.stop() }
+
+    let first = UUID().uuidString.lowercased()
+    let wrong = UUID().uuidString.lowercased()
+    try server.activate(token: first)
+    try require(
+        try rawHTTPStatus(port: server.port, request: "GET /beacon.gif?token=\(first)&phase=double-raf\r\n\r\n") == 400,
+        "malformed request line must be rejected"
+    )
+    try require(
+        try rawHTTPStatus(port: server.port, request: "GET /beacon.gif?token=\(first)&phase=double-raf HTTP/1.0\r\n\r\n") == 400,
+        "unsupported HTTP version must be rejected"
+    )
+    try require(
+        try rawHTTPStatus(port: server.port, request: "GET /beacon.gif?token=\(first)&phase=double-raf HTTP/1.1\r\n") == 400,
+        "truncated headers must be rejected"
+    )
+    try require(try rawHTTPStatus(port: server.port, target: "/beacon.gif?phase=double-raf") == 400, "missing token must be rejected")
+    let wrongTokenStatus = try rawHTTPStatus(port: server.port, target: "/beacon.gif?token=\(wrong)&phase=double-raf")
+    try require(
+        wrongTokenStatus == 403,
+        "wrong token must be rejected with 403, got \(wrongTokenStatus); events=\(server.events(for: first))"
+    )
+    try require(try rawHTTPStatus(port: server.port, target: "/run/\(first)/hello.html?token=\(first)") == 200, "active canonical HTML must be served")
+    try require(try rawHTTPStatus(port: server.port, target: "/beacon.gif?token=\(first)&phase=single-raf") == 422, "single-rAF negative control must be rejected")
+
+    let second = UUID().uuidString.lowercased()
+    try server.activate(token: second)
+    try require(try rawHTTPStatus(port: server.port, target: "/beacon.gif?token=\(first)&phase=double-raf") == 410, "stale token must be rejected")
+    try require(try rawHTTPStatus(port: server.port, target: "/run/\(second)/hello.html?token=\(second)") == 200, "second canonical HTML must be served")
+    try require(try rawHTTPStatus(port: server.port, target: "/run/\(second)/hello.html?token=\(second)") == 409, "duplicate HTML request must be rejected")
+    let beaconPrefix = "/beacon.gif?token=\(second)&phase=double-raf&"
+    try require(try rawHTTPStatus(port: server.port, target: beaconPrefix + "client_now_ms=12&client_now_ms=13&script_start_ms=1&raf1_ms=8&raf2_ms=10&visibility=visible&focus=true") == 422, "duplicate diagnostic key must be rejected")
+    try require(try rawHTTPStatus(port: server.port, target: beaconPrefix + "client_now_ms=nan&script_start_ms=1&raf1_ms=8&raf2_ms=10&visibility=visible&focus=true") == 422, "non-finite diagnostic must be rejected")
+    try require(try rawHTTPStatus(port: server.port, target: beaconPrefix + "client_now_ms=12&script_start_ms=1&raf1_ms=10&raf2_ms=8&visibility=visible&focus=true") == 422, "unordered rAF diagnostic must be rejected")
+    try require(try rawHTTPStatus(port: server.port, target: beaconPrefix + "client_now_ms=12&script_start_ms=1&raf1_ms=8&raf2_ms=10&visibility=hidden&focus=false") == 422, "hidden document must be rejected")
+    try require(try rawHTTPStatus(port: server.port, target: beaconPrefix + "client_now_ms=12&script_start_ms=1&raf1_ms=8&raf2_ms=10&visibility=visible&focus=false") == 422, "unfocused document must be rejected")
+    let diagnostics = "client_now_ms=12.5&script_start_ms=1.0&raf1_ms=8.0&raf2_ms=12.0&visibility=visible&focus=true"
+    try require(try rawHTTPStatus(port: server.port, target: "/beacon.gif?token=\(second)&phase=double-raf&\(diagnostics)") == 204, "valid beacon must be accepted")
+    try require(try rawHTTPStatus(port: server.port, target: beaconPrefix + diagnostics) == 409, "duplicate beacon must be rejected")
+    let receipt = try await server.awaitBeacon(token: second, deadlineNanoseconds: monotonicNowNanoseconds() + 1_000_000_000)
+    try require(receipt.token == second && receipt.clientNowMilliseconds == 12.5, "accepted receipt must retain authenticated metadata")
+    server.finish(token: second)
+
+    let noBeacon = UUID().uuidString.lowercased()
+    try server.activate(token: noBeacon)
+    try require(try rawHTTPStatus(port: server.port, target: "/run/\(noBeacon)/hello.html?token=\(noBeacon)") == 200, "timeout control HTML must load")
+    do {
+        _ = try await server.awaitBeacon(token: noBeacon, deadlineNanoseconds: monotonicNowNanoseconds() + 20_000_000)
+        throw HarnessError.measurement("self-test failed: missing beacon unexpectedly completed")
+    } catch HarnessError.timeout {
+        // Expected timeout is the negative control; elapsed time is never success.
+    } catch {
+        throw HarnessError.measurement("self-test missing-beacon control returned the wrong error: \(error)")
+    }
+    try require(
+        try rawHTTPStatus(
+            port: server.port,
+            target: "/beacon.gif?token=\(noBeacon)&phase=double-raf&client_now_ms=12&script_start_ms=1&raf1_ms=8&raf2_ms=10&visibility=visible&focus=true"
+        ) == 408,
+        "post-timeout beacon must remain rejected"
+    )
+    server.finish(token: noBeacon)
+
+    var partialClient = try connectedLoopbackSocket(port: server.port)
+    defer {
+        if partialClient >= 0 { Darwin.close(partialClient) }
+    }
+    let partialRequest = Data("GET /incomplete HTTP/1.1\r\n".utf8)
+    let partialBytesSent = partialRequest.withUnsafeBytes { buffer -> Int in
+        guard let base = buffer.baseAddress else { return 0 }
+        return Darwin.send(partialClient, base, buffer.count, 0)
+    }
+    try require(
+        partialBytesSent == partialRequest.count,
+        "partial-request quiescence control must reach the server"
+    )
+    let handlerStartDeadline = monotonicNowNanoseconds() + 1_000_000_000
+    while server.activeClientHandlerCount() == 0,
+          monotonicNowNanoseconds() < handlerStartDeadline {
+        await nextObservationTick(nanoseconds: 1_000_000)
+    }
+    try require(
+        server.activeClientHandlerCount() > 0,
+        "partial-request control must hold a client handler open"
+    )
+    do {
+        try await server.quiesceClientHandlers(
+            deadlineNanoseconds: monotonicNowNanoseconds() + 20_000_000
+        )
+        throw HarnessError.measurement("self-test failed: active client handler quiesced before its deadline")
+    } catch HarnessError.timeout(let message) {
+        try require(
+            message.contains("loopback client handler(s) remained active"),
+            "client-handler timeout must report the unfinished count"
+        )
+    }
+    Darwin.close(partialClient)
+    partialClient = -1
+    try await server.quiesceClientHandlers(
+        deadlineNanoseconds: monotonicNowNanoseconds() + 2_000_000_000
+    )
+
+    let launchctlFixture = """
+    pid/123 = {
+      resource coalition = {
+        ID = 456
+        type = resource
+        active count = 4
+        name = application.com.example.Hello.123
+        bundle ID = com.example.Hello
+      }
+    }
+    """
+    let identity = try ResourceCoalitionReader.parseLaunchctlIdentity(launchctlFixture)
+    try require(identity.id == 456, "coalition ID parser")
+    try require(identity.activeCount == 4, "coalition active-count parser")
+    try require(identity.bundleIdentifier == "com.example.Hello", "coalition bundle parser")
+    try require(try parseLaunchServicesOriginalPid("\"originalPid\"=731\n") == 731, "LaunchServices originalPid parser")
+    try require(try parseLaunchServicesOriginalPid("\"originalPid\"=[ NULL ]\n") == nil, "LaunchServices NULL originalPid parser")
+    try require(
+        try parseLaunchServicesASN("\"LSASN\"=ASN:0x0-0x142142:\n") == "ASN:0x0-0x142142:",
+        "LaunchServices ASN parser"
+    )
+    do {
+        _ = try parseLaunchServicesASN("\"LSASN\"=#731\n")
+        throw HarnessError.measurement("self-test failed: malformed ASN was accepted")
+    } catch HarnessError.measurement(let message) where message == "lsappinfo returned malformed ASN output" {
+        // Expected malformed-ASN rejection.
+    }
+    do {
+        _ = try parseLaunchServicesOriginalPid("\"originalPid\"=garbage\n")
+        throw HarnessError.measurement("self-test failed: malformed originalPid was accepted")
+    } catch HarnessError.measurement(let message) where message == "lsappinfo returned an invalid originalPid value" {
+        // Expected malformed-value rejection.
+    }
+    do {
+        _ = try parseLaunchServicesOriginalPid("\"otherPid\"=731\n")
+        throw HarnessError.measurement("self-test failed: wrong originalPid key was accepted")
+    } catch HarnessError.measurement(let message) where message == "lsappinfo returned the wrong originalPid key" {
+        // Expected wrong-key rejection.
+    }
+    try require(median([9, 1, 5, 3, 7]) == 5, "median calculation")
+    try require(nearestRankPercentile(Array(1...11).map(Double.init), percentile: 0.9) == 10, "nearest-rank p90 calculation")
+    try require(
+        workingTreeState(from: CommandResult(status: 0, stdout: "", stderr: "")) == .clean,
+        "zero-status empty git status must be clean"
+    )
+    try require(
+        workingTreeState(from: CommandResult(status: 0, stdout: "?? file\n", stderr: "")) == .dirty,
+        "zero-status nonempty git status must be dirty"
+    )
+    try require(
+        workingTreeState(from: CommandResult(status: 128, stdout: "", stderr: "fatal")) == .unavailable,
+        "nonzero git status must never be treated as clean"
+    )
+    let commandEnvironment = try runCommand("/usr/bin/env", [])
+    try require(
+        commandEnvironment.status == 0
+            && commandEnvironment.stdout.split(whereSeparator: \.isNewline).contains("LC_ALL=C")
+            && commandEnvironment.stdout.split(whereSeparator: \.isNewline).contains("LANG=C"),
+        "measurement subprocesses must use a locale-independent environment"
+    )
+    try require(
+        normalizedRepositoryIdentifier("git@github.com:gyldlab/keld-benches.git") == "github.com/gyldlab/keld-benches",
+        "SSH repository identifiers must be credential-free"
+    )
+    guard let remoteProbe = canonicalRemoteProbe(
+        repositoryIdentifier: canonicalBenchesRepositoryIdentifier
+    ) else {
+        throw HarnessError.measurement("self-test failed: canonical remote probe was unavailable")
+    }
+    try require(
+        remoteProbe.arguments == [
+            "-c", "protocol.file.allow=never",
+            "ls-remote", "--heads", canonicalBenchesRemoteURL,
+        ],
+        "remote reachability must use the literal canonical URL"
+    )
+    try require(
+        canonicalRemoteProbe(repositoryIdentifier: canonicalKeldRepositoryIdentifier)?.arguments == [
+            "-c", "protocol.file.allow=never",
+            "ls-remote", "--heads", canonicalKeldRemoteURL,
+        ],
+        "Keld source reachability must use its literal canonical URL"
+    )
+    try require(
+        remoteProbe.currentDirectoryURL.path == "/var/empty",
+        "remote reachability must run from the known non-repository directory"
+    )
+    let probeDirectoryStatus = try runCommand(
+        "/usr/bin/git",
+        ["rev-parse", "--show-toplevel"],
+        currentDirectoryURL: remoteProbe.currentDirectoryURL
+    )
+    try require(
+        probeDirectoryStatus.status == 128,
+        "canonical remote probe directory must not be inside a Git working tree"
+    )
+    try require(
+        canonicalRemoteProbe(repositoryIdentifier: "github.com/example/keld-benches") == nil,
+        "remote reachability must reject a noncanonical repository identifier"
+    )
+    try require(isPublicArgumentTemplate("--title=Hello"), "safe public launch argument")
+    try require(!isPublicArgumentTemplate("--config=/Users/example/private"), "absolute launch argument must be unsafe")
+    try require(thermalStateName(.nominal) == "nominal", "nominal thermal state must use a stable publication value")
+    let recipeCommit = String(repeating: "a", count: 40)
+    let recipeSourceFiles = [
+        ArtifactHash(
+            repositoryRelativePath: "macos/keld/hello/keld-bench-url.patch",
+            sha256: String(repeating: "b", count: 64),
+            matchesHeadBlob: true
+        ),
+        ArtifactHash(
+            repositoryRelativePath: "macos/keld/hello/build.sh",
+            sha256: String(repeating: "c", count: 64),
+            matchesHeadBlob: true
+        ),
+        ArtifactHash(
+            repositoryRelativePath: "macos/keld/hello/Info.plist",
+            sha256: String(repeating: "d", count: 64),
+            matchesHeadBlob: true
+        ),
+    ]
+    try require(
+        embeddedAdapterRecipeFieldsMatch(
+            recipeRepository: canonicalBenchesRepositoryIdentifier,
+            recipeCommit: recipeCommit,
+            buildRecipe: "macos/keld/hello/build.sh SOURCE SHA OUTPUT_APP",
+            patchSha256: String(repeating: "b", count: 64),
+            buildScriptSha256: String(repeating: "c", count: 64),
+            infoPlistSha256: String(repeating: "d", count: 64),
+            harnessCommit: recipeCommit,
+            sourceFiles: recipeSourceFiles
+        ),
+        "embedded adapter provenance must match committed recipe files"
+    )
+    try require(
+        !embeddedAdapterRecipeFieldsMatch(
+            recipeRepository: canonicalBenchesRepositoryIdentifier,
+            recipeCommit: recipeCommit,
+            buildRecipe: "macos/keld/hello/build.sh SOURCE SHA OUTPUT_APP",
+            patchSha256: String(repeating: "e", count: 64),
+            buildScriptSha256: String(repeating: "c", count: 64),
+            infoPlistSha256: String(repeating: "d", count: 64),
+            harnessCommit: recipeCommit,
+            sourceFiles: recipeSourceFiles
+        ),
+        "embedded adapter provenance must reject a mismatched patch"
+    )
+    try require(
+        !embeddedAdapterRecipeFieldsMatch(
+            recipeRepository: canonicalBenchesRepositoryIdentifier,
+            recipeCommit: recipeCommit,
+            buildRecipe: "macos/keld/hello/build.sh SOURCE SHA OUTPUT_APP",
+            patchSha256: String(repeating: "b", count: 64),
+            buildScriptSha256: String(repeating: "c", count: 64),
+            infoPlistSha256: String(repeating: "e", count: 64),
+            harnessCommit: recipeCommit,
+            sourceFiles: recipeSourceFiles
+        ),
+        "embedded adapter provenance must reject a mismatched Info.plist template"
+    )
+    let tauriRecipeSourceFiles = [
+        ArtifactHash(
+            repositoryRelativePath: "macos/tauri/hello/build.sh",
+            sha256: String(repeating: "f", count: 64),
+            matchesHeadBlob: true
+        ),
+    ]
+    let tauriBuildCommandSha256 = sha256Hex(Data("macos/tauri/hello/build.sh".utf8))
+    try require(
+        embeddedTauriRecipeFieldsMatch(
+            sourceRepository: canonicalBenchesRepositoryIdentifier,
+            sourceCommit: recipeCommit,
+            sourceRelativePath: "macos/tauri/hello",
+            recipeRepository: canonicalBenchesRepositoryIdentifier,
+            recipeCommit: recipeCommit,
+            buildRecipe: "macos/tauri/hello/build.sh",
+            buildScriptSha256: String(repeating: "f", count: 64),
+            buildCommandSha256: tauriBuildCommandSha256,
+            harnessCommit: recipeCommit,
+            sourceFiles: tauriRecipeSourceFiles
+        ),
+        "embedded Tauri provenance must bind the app to the current committed build recipe"
+    )
+    try require(
+        !embeddedTauriRecipeFieldsMatch(
+            sourceRepository: canonicalBenchesRepositoryIdentifier,
+            sourceCommit: String(repeating: "b", count: 40),
+            sourceRelativePath: "macos/tauri/hello",
+            recipeRepository: canonicalBenchesRepositoryIdentifier,
+            recipeCommit: recipeCommit,
+            buildRecipe: "macos/tauri/hello/build.sh",
+            buildScriptSha256: String(repeating: "f", count: 64),
+            buildCommandSha256: tauriBuildCommandSha256,
+            harnessCommit: recipeCommit,
+            sourceFiles: tauriRecipeSourceFiles
+        ),
+        "embedded Tauri provenance must reject an app from a stale source commit"
+    )
+    try require(
+        !embeddedTauriRecipeFieldsMatch(
+            sourceRepository: canonicalBenchesRepositoryIdentifier,
+            sourceCommit: recipeCommit,
+            sourceRelativePath: "macos/tauri/hello",
+            recipeRepository: canonicalBenchesRepositoryIdentifier,
+            recipeCommit: recipeCommit,
+            buildRecipe: "macos/tauri/hello/build.sh",
+            buildScriptSha256: String(repeating: "0", count: 64),
+            buildCommandSha256: tauriBuildCommandSha256,
+            harnessCommit: recipeCommit,
+            sourceFiles: tauriRecipeSourceFiles
+        ),
+        "embedded Tauri provenance must reject a mismatched build script"
+    )
+
+    let temporaryRoot = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keld-macos-harness-self-test-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+
+    let boundaryRepository = temporaryRoot.appendingPathComponent("repository", isDirectory: true)
+    let prefixSibling = temporaryRoot.appendingPathComponent("repository-sibling", isDirectory: true)
+    let siblingCargo = prefixSibling.appendingPathComponent("src-tauri", isDirectory: true)
+    let siblingApp = prefixSibling
+        .appendingPathComponent("target", isDirectory: true)
+        .appendingPathComponent("Sibling.app", isDirectory: true)
+    try FileManager.default.createDirectory(at: boundaryRepository, withIntermediateDirectories: false)
+    try FileManager.default.createDirectory(at: siblingCargo, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: siblingApp, withIntermediateDirectories: true)
+    try Data("{}\n".utf8).write(to: prefixSibling.appendingPathComponent("package.json"))
+    try Data("lock\n".utf8).write(to: prefixSibling.appendingPathComponent("bun.lock"))
+    try Data("[package]\nname='sibling'\n".utf8).write(
+        to: siblingCargo.appendingPathComponent("Cargo.toml")
+    )
+    try require(
+        nearestTauriSourceRoot(from: siblingApp, repositoryRoot: boundaryRepository) == nil,
+        "Tauri source discovery must reject a same-prefix sibling repository"
+    )
+
+    let unreadableRepository = temporaryRoot.appendingPathComponent("unreadable-repository", isDirectory: true)
+    let unreadableGitMarker = unreadableRepository.appendingPathComponent(".git", isDirectory: true)
+    let unreadableOutputParent = unreadableRepository.appendingPathComponent("results", isDirectory: true)
+    try FileManager.default.createDirectory(at: unreadableGitMarker, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: unreadableOutputParent, withIntermediateDirectories: true)
+    guard Darwin.chmod(unreadableGitMarker.path, 0) == 0 else {
+        throw HarnessError.io("self-test could not make the Git marker unreadable")
+    }
+    defer { _ = Darwin.chmod(unreadableGitMarker.path, S_IRWXU) }
+    do {
+        try requireDirectoryOutsideGitWorkingTree(unreadableOutputParent)
+        throw HarnessError.measurement("self-test failed: unreadable Git working tree was accepted")
+    } catch HarnessError.invalidArgument(let message)
+        where message == "--output must be outside every Git working tree" {
+        // The marker is detected directly; Git exit status cannot hide it.
+    }
+    guard Darwin.chmod(unreadableGitMarker.path, S_IRWXU) == 0 else {
+        throw HarnessError.io("self-test could not restore Git marker permissions")
+    }
+
+    func runSelfTestGit(_ arguments: [String]) throws -> CommandResult {
+        let result = try runCommand("/usr/bin/git", arguments)
+        guard result.status == 0 else {
+            throw HarnessError.io("self-test Git command failed: \(result.stderr)")
+        }
+        return result
+    }
+
+    let maskedRepository = temporaryRoot.appendingPathComponent("masked-repository", isDirectory: true)
+    try FileManager.default.createDirectory(at: maskedRepository, withIntermediateDirectories: false)
+    _ = try runSelfTestGit(["-C", maskedRepository.path, "init", "--quiet"])
+    _ = try runSelfTestGit(["-C", maskedRepository.path, "config", "user.name", "Keld Harness Self Test"])
+    _ = try runSelfTestGit(["-C", maskedRepository.path, "config", "user.email", "self-test@example.invalid"])
+    _ = try runSelfTestGit([
+        "-C", maskedRepository.path,
+        "config", "filter.mask.clean", "/usr/bin/sed 's/bravo/alpha/'",
+    ])
+    _ = try runSelfTestGit(["-C", maskedRepository.path, "config", "filter.mask.smudge", "cat"])
+    let attributesFile = maskedRepository.appendingPathComponent(".gitattributes")
+    let maskedFile = maskedRepository.appendingPathComponent("tracked.txt")
+    try Data("tracked.txt filter=mask\n".utf8).write(to: attributesFile)
+    try Data("alpha\n".utf8).write(to: maskedFile)
+    _ = try runSelfTestGit(["-C", maskedRepository.path, "add", ".gitattributes", "tracked.txt"])
+    _ = try runSelfTestGit(["-C", maskedRepository.path, "commit", "--quiet", "-m", "fixture"])
+    try require(
+        try hashFile(maskedFile, relativeTo: maskedRepository).matchesHeadBlob,
+        "unchanged raw working-tree bytes must match the HEAD blob"
+    )
+    try Data("bravo\n".utf8).write(to: maskedFile)
+    let cleanFilterStatus = try runSelfTestGit([
+        "-C", maskedRepository.path,
+        "status", "--porcelain=v1", "--untracked-files=all",
+    ])
+    try require(
+        cleanFilterStatus.stdout.isEmpty,
+        "clean-filter negative control must actually mask the changed file from Git status"
+    )
+    try require(
+        try !hashFile(maskedFile, relativeTo: maskedRepository).matchesHeadBlob,
+        "raw HEAD-blob comparison must reject bytes hidden by a clean filter"
+    )
+    try Data("alpha\n".utf8).write(to: maskedFile)
+    _ = try runSelfTestGit(["-C", maskedRepository.path, "update-index", "--assume-unchanged", "tracked.txt"])
+    try Data("charlie\n".utf8).write(to: maskedFile)
+    let assumeUnchangedStatus = try runSelfTestGit([
+        "-C", maskedRepository.path,
+        "status", "--porcelain=v1", "--untracked-files=all",
+    ])
+    try require(
+        assumeUnchangedStatus.stdout.isEmpty,
+        "assume-unchanged negative control must actually mask the changed file from Git status"
+    )
+    try require(
+        try !hashFile(maskedFile, relativeTo: maskedRepository).matchesHeadBlob,
+        "raw HEAD-blob comparison must reject bytes hidden by assume-unchanged"
+    )
+
+    let originalDirectory = temporaryRoot.appendingPathComponent("original", isDirectory: true)
+    let retainedDirectory = temporaryRoot.appendingPathComponent("retained", isDirectory: true)
+    let alias = temporaryRoot.appendingPathComponent("alias", isDirectory: true)
+    try FileManager.default.createDirectory(at: originalDirectory, withIntermediateDirectories: false)
+    try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: originalDirectory)
+    let originalIdentity = try fileIdentity(at: originalDirectory)
+    try require(try fileIdentity(at: alias) == originalIdentity, "bundle file identity must follow path aliases")
+    try FileManager.default.moveItem(at: originalDirectory, to: retainedDirectory)
+    try FileManager.default.createDirectory(at: originalDirectory, withIntermediateDirectories: false)
+    try require(try fileIdentity(at: originalDirectory) != originalIdentity, "bundle replacement at the same path must change identity")
+
+    let bundleRoot = temporaryRoot.appendingPathComponent("Fixture.app", isDirectory: true)
+    try FileManager.default.createDirectory(at: bundleRoot, withIntermediateDirectories: false)
+    let payload = bundleRoot.appendingPathComponent("payload")
+    try Data("alpha".utf8).write(to: payload)
+    let safeDiagnosticOutput = temporaryRoot.appendingPathComponent("diagnostic.json")
+    try require(
+        try validatedOutputURL(
+            safeDiagnosticOutput,
+            repositoryRoot: nil,
+            harnessExecutable: payload,
+            htmlURL: payload,
+            apps: []
+        )?.url == safeDiagnosticOutput,
+        "nonexisting diagnostic output must be accepted"
+    )
+    do {
+        _ = try validatedOutputURL(
+            bundleRoot.appendingPathComponent("result.json"),
+            repositoryRoot: temporaryRoot,
+            harnessExecutable: payload,
+            htmlURL: payload,
+            apps: [AppSpec(
+                label: "fixture",
+                bundleURL: bundleRoot,
+                bundleFileIdentity: try fileIdentity(at: bundleRoot),
+                argumentTemplates: [],
+                buildCommand: "test"
+            )]
+        )
+        throw HarnessError.measurement("self-test failed: output inside a measured bundle was accepted")
+    } catch HarnessError.invalidArgument(let message)
+        where message == "--output must be outside every measured app bundle" {
+        // Expected measured-bundle protection.
+    }
+    do {
+        _ = try validatedOutputURL(
+            safeDiagnosticOutput,
+            repositoryRoot: temporaryRoot,
+            harnessExecutable: payload,
+            htmlURL: payload,
+            apps: []
+        )
+        throw HarnessError.measurement("self-test failed: publication output inside the source repository was accepted")
+    } catch HarnessError.invalidArgument(let message)
+        where message == "--output must be outside the benchmark repository" {
+        // Expected publication-path isolation.
+    }
+    guard let collisionDestination = try validatedOutputURL(
+        safeDiagnosticOutput,
+        repositoryRoot: nil,
+        harnessExecutable: payload,
+        htmlURL: payload,
+        apps: []
+    ) else {
+        throw HarnessError.measurement("self-test failed: collision destination was unavailable")
+    }
+    try Data("occupied".utf8).write(to: safeDiagnosticOutput)
+    let capturedStandardOutput = temporaryRoot.appendingPathComponent("captured-stdout")
+    guard FileManager.default.createFile(atPath: capturedStandardOutput.path, contents: nil) else {
+        throw HarnessError.io("self-test could not create the stdout capture")
+    }
+    let capturedStandardOutputHandle = try FileHandle(forWritingTo: capturedStandardOutput)
+    var outputFailureObserved = false
+    do {
+        try emitBenchmarkJSON(
+            Data("{\"publication\":{\"eligible\":true}}".utf8),
+            outputDestination: collisionDestination,
+            standardOutput: capturedStandardOutputHandle
+        )
+    } catch HarnessError.io {
+        outputFailureObserved = true
+    }
+    try capturedStandardOutputHandle.close()
+    try require(outputFailureObserved, "exclusive output collision must fail publication emission")
+    try require(
+        try Data(contentsOf: capturedStandardOutput).isEmpty,
+        "failed atomic output must not emit an eligibility claim to stdout"
+    )
+    try require(
+        try Data(contentsOf: safeDiagnosticOutput) == Data("occupied".utf8),
+        "atomic output must not overwrite an existing destination"
+    )
+    let baselineBundleHash = try bundleTreeSha256(bundleRoot)
+    try Data("bravo".utf8).write(to: payload)
+    try require(try bundleTreeSha256(bundleRoot) != baselineBundleHash, "bundle hash must include file bytes")
+    try Data("alpha".utf8).write(to: payload)
+    let emptyDirectory = bundleRoot.appendingPathComponent("empty", isDirectory: true)
+    try FileManager.default.createDirectory(at: emptyDirectory, withIntermediateDirectories: false)
+    try require(try bundleTreeSha256(bundleRoot) != baselineBundleHash, "bundle hash must include empty directories")
+    try FileManager.default.removeItem(at: emptyDirectory)
+    let payloadLink = bundleRoot.appendingPathComponent("payload-link")
+    try FileManager.default.createSymbolicLink(atPath: payloadLink.path, withDestinationPath: "payload")
+    try require(try bundleTreeSha256(bundleRoot) != baselineBundleHash, "bundle hash must include symbolic-link targets")
+    try FileManager.default.removeItem(at: payloadLink)
+    let payloadAttributes = try FileManager.default.attributesOfItem(atPath: payload.path)
+    guard let originalMode = (payloadAttributes[.posixPermissions] as? NSNumber)?.uint16Value else {
+        throw HarnessError.measurement("self-test failed: could not read payload permissions")
+    }
+    let changedMode = mode_t(originalMode ^ UInt16(S_IXUSR))
+    guard Darwin.chmod(payload.path, changedMode) == 0 else {
+        throw HarnessError.io("self-test chmod failed: \(String(cString: strerror(errno)))")
+    }
+    try require(try bundleTreeSha256(bundleRoot) != baselineBundleHash, "bundle hash must include POSIX mode")
+    guard Darwin.chmod(payload.path, mode_t(originalMode)) == 0 else {
+        throw HarnessError.io("self-test chmod restore failed: \(String(cString: strerror(errno)))")
+    }
+
+    let processRows = try ResourceCoalitionReader.parseProcessRows(
+        "731 1 2048 Fri Aug 15 10:11:12 2026 /Applications/Hello App.app/Contents/MacOS/hello --flag\n"
+    )
+    try require(
+        processRows.count == 1
+            && processRows[0].pid == 731
+            && processRows[0].rssKiB == 2_048
+            && processRows[0].command.hasSuffix("hello --flag"),
+        "ps parser must preserve commands containing spaces"
+    )
+    try require(
+        try ResourceCoalitionReader.validatedCoalitionPids(
+            [733, 731, 732],
+            id: 456,
+            byteCount: 3 * MemoryLayout<Int32>.size
+        ) == [731, 732, 733],
+        "coalition PID validation must return a canonical ordering"
+    )
+    do {
+        _ = try ResourceCoalitionReader.validatedCoalitionPids(
+            [731, 732, 732],
+            id: 456,
+            byteCount: 3 * MemoryLayout<Int32>.size
+        )
+        throw HarnessError.measurement("self-test failed: duplicate coalition PID was accepted")
+    } catch is CoalitionProcessSetChanged {
+        // Expected: a PID-only duplicate cannot identify both generations, so
+        // the complete observation must be discarded as membership churn.
+    }
+    do {
+        _ = try ResourceCoalitionReader.validatedCoalitionPids(
+            [731, 0],
+            id: 456,
+            byteCount: 2 * MemoryLayout<Int32>.size
+        )
+        throw HarnessError.measurement("self-test failed: nonpositive coalition PID was accepted")
+    } catch HarnessError.measurement(let message)
+        where message.hasPrefix("coalition_info_pid_list(456) returned a nonpositive PID") {
+        // Expected malformed-ABI hard failure; this must not be retried as churn.
+    }
+    let selfReader = ResourceCoalitionReader()
+    let ownCoalition = try selfReader.identity(for: getpid())
+    try require(
+        try selfReader.coalitionMemberPids(id: ownCoalition.id).contains(getpid()),
+        "runtime coalition enumeration must include the calling process"
+    )
+    let ownLifecycle = try selfReader.coalitionLifecycleCounters(id: ownCoalition.id)
+    try require(
+        ownLifecycle.tasksStarted >= ownLifecycle.tasksExited,
+        "runtime coalition lifecycle counters must be internally consistent"
+    )
+    guard let ownUniqueIdentity = try kernelProcessUniqueIdentity(for: getpid()),
+          let ownLaunchOwnership = try kernelLaunchOwnership(for: getpid()) else {
+        throw HarnessError.measurement("self-test failed: kernel process ownership was unavailable")
+    }
+    try require(
+        ownLaunchOwnership.uniqueId == ownUniqueIdentity.uniqueId
+            && ownLaunchOwnership.resourceCoalitionId == ownCoalition.id,
+        "generation-bound launch ownership must match the live process and coalition"
+    )
+    try validateKernelGenerationSignalContract()
+
+    let stubbornApp = try buildStubbornCleanupSelfTestApp(temporaryRoot: temporaryRoot)
+    try await validateStubbornCleanupContract(
+        appURL: stubbornApp,
+        server: server,
+        reader: selfReader,
+        injectFailureAfterChildCapture: false
+    )
+    try await validateStubbornCleanupContract(
+        appURL: stubbornApp,
+        server: server,
+        reader: selfReader,
+        injectFailureAfterChildCapture: true
+    )
+    try require(
+        hasUnresolvedLaunchOwnership([
+            CleanupRecord(
+                gracefulTerminateAccepted: false,
+                coalitionHardKillInvoked: false,
+                applicationTerminated: false,
+                coalitionDrained: false,
+                error: "process_identity_unavailable"
+            ),
+        ]),
+        "unresolved launch ownership must trigger output quarantine"
+    )
+
+    let cleanRepository = RepositoryMetadata(
+        identifier: "github.com/gyldlab/keld-benches",
+        commit: String(repeating: "a", count: 40),
+        workingTreeState: .clean,
+        commitAdvertisedAsOriginHead: true
+    )
+    let nominalHost = HostMetadata(
+        operatingSystemVersion: "test",
+        architecture: "arm64",
+        hardwareModel: "test",
+        processor: "test",
+        logicalCpuCount: 1,
+        physicalMemoryBytes: 1,
+        lowPowerModeEnabled: false,
+        thermalState: "nominal"
+    )
+    let completeArm = PublicationArmFacts(
+        label: "fixture",
+        sampleCount: 11,
+        successfulSampleCount: 11,
+        completeCleanupCount: 11,
+        completeMetricCount: 11,
+        fixtureUnchanged: true,
+        provenanceComplete: true,
+        adapterRecipeMatches: true,
+        toolchainComplete: true,
+        publicArgumentsSafe: true,
+        sampleHostConditionsAcceptable: true
+    )
+    let publishableFacts = PublicationFacts(
+        runsPerApp: 11,
+        stableCoalitionObservations: 3,
+        stableCoalitionWindowMilliseconds: 500,
+        rssToleranceKiB: 1_024,
+        repositoryBefore: cleanRepository,
+        repositoryAfter: cleanRepository,
+        harnessProvenanceComplete: true,
+        canonicalHTML: true,
+        publicationOutputProvided: true,
+        outputWillPreserveCleanTree: true,
+        hostBefore: nominalHost,
+        hostAfter: nominalHost,
+        aborted: false,
+        arms: [completeArm]
+    )
+    try require(
+        publicationAssessment(requested: true, facts: publishableFacts).eligible,
+        "complete clean 11-sample arm must pass publication policy"
+    )
+    let nonNominalSampleArm = PublicationArmFacts(
+        label: "fixture",
+        sampleCount: 11,
+        successfulSampleCount: 11,
+        completeCleanupCount: 11,
+        completeMetricCount: 11,
+        fixtureUnchanged: true,
+        provenanceComplete: true,
+        adapterRecipeMatches: true,
+        toolchainComplete: true,
+        publicArgumentsSafe: true,
+        sampleHostConditionsAcceptable: false
+    )
+    let nonNominalSampleFacts = PublicationFacts(
+        runsPerApp: 11,
+        stableCoalitionObservations: 3,
+        stableCoalitionWindowMilliseconds: 500,
+        rssToleranceKiB: 1_024,
+        repositoryBefore: cleanRepository,
+        repositoryAfter: cleanRepository,
+        harnessProvenanceComplete: true,
+        canonicalHTML: true,
+        publicationOutputProvided: true,
+        outputWillPreserveCleanTree: true,
+        hostBefore: nominalHost,
+        hostAfter: nominalHost,
+        aborted: false,
+        arms: [nonNominalSampleArm]
+    )
+    try require(
+        publicationAssessment(requested: true, facts: nonNominalSampleFacts).reasons.contains {
+            $0.code == "sample_host_state_not_nominal"
+        },
+        "publication policy must reject transient per-sample thermal or Low Power Mode state"
+    )
+    let shortRun = PublicationFacts(
+        runsPerApp: 10,
+        stableCoalitionObservations: 3,
+        stableCoalitionWindowMilliseconds: 500,
+        rssToleranceKiB: 1_024,
+        repositoryBefore: cleanRepository,
+        repositoryAfter: cleanRepository,
+        harnessProvenanceComplete: true,
+        canonicalHTML: true,
+        publicationOutputProvided: true,
+        outputWillPreserveCleanTree: true,
+        hostBefore: nominalHost,
+        hostAfter: nominalHost,
+        aborted: false,
+        arms: [PublicationArmFacts(
+            label: "fixture",
+            sampleCount: 10,
+            successfulSampleCount: 10,
+            completeCleanupCount: 10,
+            completeMetricCount: 10,
+            fixtureUnchanged: true,
+            provenanceComplete: true,
+            adapterRecipeMatches: true,
+            toolchainComplete: true,
+            publicArgumentsSafe: true,
+            sampleHostConditionsAcceptable: true
+        )]
+    )
+    let shortAssessment = publicationAssessment(requested: true, facts: shortRun)
+    try require(
+        !shortAssessment.eligible
+            && shortAssessment.reasons.contains { $0.code == "runs_per_arm_not_11" }
+            && shortAssessment.reasons.contains { $0.code == "sample_count_mismatch" },
+        "publication policy must reject a non-11-sample arm with stable reason codes"
+    )
+    let weakenedStability = PublicationFacts(
+        runsPerApp: 11,
+        stableCoalitionObservations: 3,
+        stableCoalitionWindowMilliseconds: 499,
+        rssToleranceKiB: 1_024,
+        repositoryBefore: cleanRepository,
+        repositoryAfter: cleanRepository,
+        harnessProvenanceComplete: true,
+        canonicalHTML: true,
+        publicationOutputProvided: true,
+        outputWillPreserveCleanTree: true,
+        hostBefore: nominalHost,
+        hostAfter: nominalHost,
+        aborted: false,
+        arms: [completeArm]
+    )
+    try require(
+        publicationAssessment(requested: true, facts: weakenedStability).reasons.contains {
+            $0.code == "rss_stability_policy_weakened"
+        },
+        "publication policy must reject a weakened RSS stability window"
+    )
+    let incompleteHost = HostMetadata(
+        operatingSystemVersion: "test",
+        architecture: "arm64",
+        hardwareModel: "test",
+        processor: "unknown",
+        logicalCpuCount: 1,
+        physicalMemoryBytes: 1,
+        lowPowerModeEnabled: false,
+        thermalState: "nominal"
+    )
+    let incompleteHostFacts = PublicationFacts(
+        runsPerApp: 11,
+        stableCoalitionObservations: 3,
+        stableCoalitionWindowMilliseconds: 500,
+        rssToleranceKiB: 1_024,
+        repositoryBefore: cleanRepository,
+        repositoryAfter: cleanRepository,
+        harnessProvenanceComplete: true,
+        canonicalHTML: true,
+        publicationOutputProvided: true,
+        outputWillPreserveCleanTree: true,
+        hostBefore: incompleteHost,
+        hostAfter: incompleteHost,
+        aborted: false,
+        arms: [completeArm]
+    )
+    try require(
+        publicationAssessment(requested: true, facts: incompleteHostFacts).reasons.contains {
+            $0.code == "host_metadata_unavailable"
+        },
+        "publication policy must reject incomplete host metadata"
+    )
+    let unpublishedRepository = RepositoryMetadata(
+        identifier: canonicalBenchesRepositoryIdentifier,
+        commit: String(repeating: "a", count: 40),
+        workingTreeState: .clean,
+        commitAdvertisedAsOriginHead: false
+    )
+    let unpublishedFacts = PublicationFacts(
+        runsPerApp: 11,
+        stableCoalitionObservations: 3,
+        stableCoalitionWindowMilliseconds: 500,
+        rssToleranceKiB: 1_024,
+        repositoryBefore: unpublishedRepository,
+        repositoryAfter: unpublishedRepository,
+        harnessProvenanceComplete: true,
+        canonicalHTML: true,
+        publicationOutputProvided: true,
+        outputWillPreserveCleanTree: true,
+        hostBefore: nominalHost,
+        hostAfter: nominalHost,
+        aborted: false,
+        arms: [completeArm]
+    )
+    try require(
+        publicationAssessment(requested: true, facts: unpublishedFacts).reasons.contains {
+            $0.code == "repository_commit_not_advertised_as_origin_head"
+        },
+        "publication policy must reject a commit absent from current origin branch heads"
+    )
+    let mismatchedAdapterArm = PublicationArmFacts(
+        label: "fixture",
+        sampleCount: 11,
+        successfulSampleCount: 11,
+        completeCleanupCount: 11,
+        completeMetricCount: 11,
+        fixtureUnchanged: true,
+        provenanceComplete: true,
+        adapterRecipeMatches: false,
+        toolchainComplete: true,
+        publicArgumentsSafe: true,
+        sampleHostConditionsAcceptable: true
+    )
+    let mismatchedAdapterFacts = PublicationFacts(
+        runsPerApp: 11,
+        stableCoalitionObservations: 3,
+        stableCoalitionWindowMilliseconds: 500,
+        rssToleranceKiB: 1_024,
+        repositoryBefore: cleanRepository,
+        repositoryAfter: cleanRepository,
+        harnessProvenanceComplete: true,
+        canonicalHTML: true,
+        publicationOutputProvided: true,
+        outputWillPreserveCleanTree: true,
+        hostBefore: nominalHost,
+        hostAfter: nominalHost,
+        aborted: false,
+        arms: [mismatchedAdapterArm]
+    )
+    try require(
+        publicationAssessment(requested: true, facts: mismatchedAdapterFacts).reasons.contains {
+            $0.code == "fixture_adapter_recipe_mismatch"
+        },
+        "publication policy must reject a mismatched adapter recipe"
+    )
+
+    FileHandle.standardError.write(Data("self-test: all protocol, parser, and negative controls passed\n".utf8))
+}
+
+private func runBenchmark(options: RunnerOptions, htmlURL: URL, html: Data) async throws -> BenchmarkOutcome {
+    guard !options.apps.isEmpty else {
+        throw HarnessError.invalidArgument("at least one --app is required")
+    }
+    guard try kernelLaunchOwnership(for: getpid()) != nil else {
+        throw HarnessError.measurement(
+            "generation-bound process and coalition ownership is unavailable on this macOS build"
+        )
+    }
+    try validateKernelGenerationSignalContract()
+    let harnessExecutable = try loadedExecutableURL()
+    let repositoryBefore = gitSnapshot(containing: harnessExecutable.deletingLastPathComponent())
+    let outputURL = try validatedOutputURL(
+        options.outputURL,
+        repositoryRoot: repositoryBefore.rootURL,
+        harnessExecutable: harnessExecutable,
+        htmlURL: htmlURL,
+        apps: options.apps
+    )
+    let hostBefore = hostMetadata()
+    let fixtureMetadataBefore = try options.apps.map(fixtureMetadata)
+    let server = try LoopbackBeaconServer(html: html)
+    defer { server.stop() }
+    let reader = ResourceCoalitionReader()
+
+    let started = Date()
+    var samples: [SampleRecord] = []
+    var globalOrdinal = 0
+    var abortedReason: String?
+    benchmarkRounds: for round in 0..<options.runsPerApp {
+        // Rotate the first app each round. Every app receives one sample per
+        // round, but persistent thermal/order bias is not assigned to one label.
+        for offset in 0..<options.apps.count {
+            let appIndex = (round + offset) % options.apps.count
+            let spec = options.apps[appIndex]
+            globalOrdinal += 1
+            FileHandle.standardError.write(Data("[\(globalOrdinal)/\(options.runsPerApp * options.apps.count)] \(spec.label), round \(round + 1)\n".utf8))
+            let sample = await runOneSample(
+                spec: spec,
+                round: round + 1,
+                appOrdinal: appIndex + 1,
+                globalOrdinal: globalOrdinal,
+                options: options,
+                server: server,
+                reader: reader
+            )
+            samples.append(sample)
+            if sample.status != "ok" {
+                abortedReason = "sample failed after \(spec.label) round \(round + 1); later arms were not launched"
+                break benchmarkRounds
+            }
+            if sample.cleanup?.applicationTerminated != true
+                || sample.cleanup?.coalitionDrained != true
+                || sample.cleanup?.error != nil {
+                abortedReason = "cleanup proof failed after \(spec.label) round \(round + 1); later arms were not launched"
+                break benchmarkRounds
+            }
+        }
+    }
+
+    if hasUnresolvedLaunchOwnership(samples.map(\.cleanup)) {
+        throw HarnessError.measurement(
+            "launch ownership unresolved; no JSON was emitted because pre-callback descendants cannot be contained—terminate any new fixture descendants before rerunning"
+        )
+    }
+
+    let fixtureMetadataAfter = try options.apps.map(fixtureMetadata)
+    let hostAfter = hostMetadata()
+    // Rebuild verification is intentionally after every scored sample and host
+    // observation so compiler work cannot perturb launch timing or RSS.
+    let harnessArtifact = try harnessArtifactMetadata(
+        executable: harnessExecutable,
+        repository: repositoryBefore
+    )
+    let repositoryAfter = gitSnapshot(containing: harnessExecutable.deletingLastPathComponent())
+    let canonicalHTML: Bool
+    if let repositoryRoot = repositoryBefore.rootURL {
+        let committedHTML = repositoryRoot.appendingPathComponent("macos/harness/hello.html")
+        canonicalHTML = (try? Data(contentsOf: committedHTML)) == html
+    } else {
+        canonicalHTML = false
+    }
+    let changedFixtureLabels = zip(fixtureMetadataBefore, fixtureMetadataAfter).compactMap { before, after in
+        before == after ? nil : before.label
+    }
+    if !changedFixtureLabels.isEmpty, abortedReason == nil {
+        abortedReason = "fixture provenance changed during the benchmark: \(changedFixtureLabels.joined(separator: ", "))"
+    }
+    let armFacts = options.apps.enumerated().map { index, app in
+        let appSamples = samples.filter { $0.label == app.label }
+        let fixtureBefore = fixtureMetadataBefore[index]
+        let fixtureAfter = fixtureMetadataAfter[index]
+        return PublicationArmFacts(
+            label: app.label,
+            sampleCount: appSamples.count,
+            successfulSampleCount: appSamples.filter { $0.status == "ok" }.count,
+            completeCleanupCount: appSamples.filter {
+                $0.cleanup?.applicationTerminated == true
+                    && $0.cleanup?.coalitionDrained == true
+                    && $0.cleanup?.error == nil
+            }.count,
+            completeMetricCount: appSamples.filter {
+                $0.doubleRafPaintOpportunityProxyMilliseconds != nil
+                    && $0.coalition != nil
+            }.count,
+            fixtureUnchanged: fixtureBefore == fixtureAfter,
+            provenanceComplete: fixtureProvenanceIsComplete(fixtureBefore)
+                && fixtureProvenanceIsComplete(fixtureAfter),
+            adapterRecipeMatches: embeddedAdapterRecipeMatches(
+                fixture: fixtureBefore,
+                harness: harnessArtifact
+            ) && embeddedAdapterRecipeMatches(
+                fixture: fixtureAfter,
+                harness: harnessArtifact
+            ),
+            toolchainComplete: fixtureToolchainIsComplete(fixtureBefore)
+                && fixtureToolchainIsComplete(fixtureAfter),
+            publicArgumentsSafe: app.argumentTemplates.allSatisfy(isPublicArgumentTemplate),
+            sampleHostConditionsAcceptable: appSamples.allSatisfy {
+                $0.hostConditionBeforeLaunch.isNominalForPublication
+                    && $0.hostConditionAfterCleanup.isNominalForPublication
+            }
+        )
+    }
+    let publication = publicationAssessment(
+        requested: options.publish,
+        facts: PublicationFacts(
+            runsPerApp: options.runsPerApp,
+            stableCoalitionObservations: options.stableObservations,
+            stableCoalitionWindowMilliseconds: options.stableWindowMilliseconds,
+            rssToleranceKiB: options.rssToleranceKiB,
+            repositoryBefore: repositoryBefore.metadata,
+            repositoryAfter: repositoryAfter.metadata,
+            harnessProvenanceComplete: harnessProvenanceIsComplete(harnessArtifact),
+            canonicalHTML: canonicalHTML,
+            publicationOutputProvided: outputURL != nil,
+            outputWillPreserveCleanTree: outputURL != nil,
+            hostBefore: hostBefore,
+            hostAfter: hostAfter,
+            aborted: abortedReason != nil,
+            arms: armFacts
+        )
+    )
+    let document = BenchmarkDocument(
+        schemaVersion: harnessSchemaVersion,
+        harnessVersion: harnessVersion,
+        startedAtUtc: ISO8601DateFormatter().string(from: started),
+        finishedAtUtc: ISO8601DateFormatter().string(from: Date()),
+        repository: RepositoryTransitionMetadata(
+            before: repositoryBefore.metadata,
+            after: repositoryAfter.metadata
+        ),
+        harnessArtifact: harnessArtifact,
+        hostBefore: hostBefore,
+        hostAfter: hostAfter,
+        fixtures: fixtureMetadataBefore,
+        protocolMetadata: ProtocolMetadata(
+            listener: "127.0.0.1:ephemeral",
+            htmlFileName: "hello.html",
+            htmlSha256: sha256Hex(html),
+            tokenTransports: ["URL path/query", "KELD_BENCH_TOKEN environment"],
+            completionSignal: "double-rAF paint-opportunity proxy: GET /beacon.gif after nested requestAnimationFrame (not compositor completion or display scanout)",
+            launchApi: "NSWorkspace.openApplication + createsNewApplicationInstance",
+            coalitionApi: "generation-bound proc info launch ownership; launchctl resource-coalition verification; coalition_info_pid_list plus resource-usage lifecycle counters bracketing one ps RSS observation; process unique-ID revalidation; audit-token generation-bound cleanup"
+        ),
+        configuration: MeasurementConfiguration(
+            runsPerApp: options.runsPerApp,
+            appOrder: "round-robin with rotating first app",
+            sampleTimeoutSeconds: options.timeoutSeconds,
+            cleanupTimeoutSeconds: options.cleanupTimeoutSeconds,
+            stableCoalitionObservations: options.stableObservations,
+            stableCoalitionWindowMilliseconds: options.stableWindowMilliseconds,
+            rssToleranceKiB: options.rssToleranceKiB,
+            observationPollMilliseconds: 50,
+            cacheState: "fresh application process; OS and WebKit caches uncontrolled (not a cold-cache claim)"
+        ),
+        samples: samples,
+        summaries: summarize(apps: options.apps, samples: samples),
+        abortedReason: abortedReason,
+        publication: publication
+    )
+
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    let json = try encoder.encode(document)
+    try emitBenchmarkJSON(json, outputDestination: outputURL)
+    return BenchmarkOutcome(
+        measurementSucceeded: abortedReason == nil && !samples.contains(where: { $0.status != "ok" }),
+        publicationEligible: publication.eligible
+    )
+}
+
+@main
+struct HarnessMain {
+    static func main() async {
+        do {
+            let options = try parseOptions(Array(CommandLine.arguments.dropFirst()))
+            if options.showHelp {
+                printUsage()
+                return
+            }
+            let htmlURL = try resolveHTMLURL(options.htmlURL)
+            let html = try Data(contentsOf: htmlURL)
+            if options.selfTest {
+                try await runSelfTests(html: html)
+                return
+            }
+            let outcome = try await runBenchmark(options: options, htmlURL: htmlURL, html: html)
+            if !outcome.measurementSucceeded { Darwin.exit(2) }
+            if options.publish, !outcome.publicationEligible { Darwin.exit(3) }
+        } catch {
+            FileHandle.standardError.write(Data("error: \(error)\n".utf8))
+            Darwin.exit(1)
+        }
+    }
+}

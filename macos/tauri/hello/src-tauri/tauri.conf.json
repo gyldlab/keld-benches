@@ -9,7 +9,7 @@
   "app": {
     "windows": [
       {
-        "title": "Tauri Hello",
+        "title": "Hello",
         "width": 960,
         "height": 640
       }

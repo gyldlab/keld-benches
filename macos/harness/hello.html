@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <link rel="icon" href="data:,">
+  <title>macOS benchmark hello</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+    body {
+      display: grid;
+      place-items: center;
+      background: #0b0f14;
+      color: #e8eef5;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    }
+    main { text-align: center; }
+    h1 { margin: 0; font-size: 42px; font-weight: 650; letter-spacing: -0.03em; }
+    p { margin: 12px 0 0; color: #9ca8b7; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Hello</h1>
+    <p>Canonical desktop benchmark fixture</p>
+  </main>
+  <script>
+    "use strict";
+
+    const query = new URLSearchParams(window.location.search);
+    const token = query.get("token");
+    const scriptStart = performance.now();
+    let firstRaf;
+
+    // A nested requestAnimationFrame observes two rendering opportunities. It
+    // is not proof of compositor completion or physical display scanout.
+    requestAnimationFrame((firstTimestamp) => {
+      firstRaf = firstTimestamp;
+      requestAnimationFrame((secondRaf) => {
+        const beacon = new Image();
+        const target = new URL("/beacon.gif", window.location.origin);
+        if (token !== null) {
+          target.searchParams.set("token", token);
+        }
+        target.searchParams.set("phase", "double-raf");
+        target.searchParams.set("client_now_ms", performance.now().toFixed(3));
+        target.searchParams.set("script_start_ms", scriptStart.toFixed(3));
+        target.searchParams.set("raf1_ms", firstRaf.toFixed(3));
+        target.searchParams.set("raf2_ms", secondRaf.toFixed(3));
+        target.searchParams.set("visibility", document.visibilityState);
+        target.searchParams.set("focus", String(document.hasFocus()));
+        beacon.src = target.href;
+      });
+    });
+  </script>
+</body>
+</html>

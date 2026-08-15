@@ -31,6 +31,8 @@ Fixtures are organized **by operating system first**, then framework:
 | [`macos/neutralino/hello/`](./macos/neutralino/hello/) | **sources + measured** | Neutralino 6.9.0 embedded arm64 + wrapped `.app` (2026-08-14) |
 | [`macos/nwjs/hello/`](./macos/nwjs/hello/) | **app sources + measured** | NW.js 0.114.1 normal flavor; runtime zip not committed (2026-08-14) |
 | [`macos/electrobun/hello/`](./macos/electrobun/hello/) | **sources + measured** | Electrobun 1.18.1 stable zstd / extracted `.app` (2026-08-14) |
+| [`macos/harness/`](./macos/harness/) | **source + self-tests** | External port-zero double-rAF and resource-coalition RSS oracle |
+| [`macos/keld/hello/`](./macos/keld/hello/) | **adapter recipe** | Immutable-source Keld benchmark `.app`; no product URL seam |
 | [`windows/*/hello/`](./windows/) | stub READMEs | Windows packs (Electron / WebView2 / Win installers) |
 | [`linux/*/hello/`](./linux/) | stub READMEs | Linux packs (AppImage / deb / etc.) |
 
@@ -79,9 +81,9 @@ hdiutil create -volname HelloSwiftUI -srcfolder dist/HelloSwiftUI.app \
   -ov -format UDZO dist/HelloSwiftUI.dmg
 ```
 
-First paint writes `/tmp/keld-native-hello-appkit-painted` or
-`/tmp/keld-native-hello-swiftui-painted` when `WKNavigationDelegate.didFinish`
-fires.
+The native fixtures' `/tmp/keld-native-hello-*-painted` files are legacy
+`WKNavigationDelegate.didFinish` navigation markers, **not paint timestamps**.
+Use [`macos/harness/`](./macos/harness/) for the shared-clock double-rAF proxy.
 
 ## Fair comparison
 

@@ -1,8 +1,12 @@
 # Tauri 2 hello — macOS
 
-Official `npm create tauri-app@latest -- --yes --manager npm --template vanilla`
-scaffold, slimmed to one 960×640 window + local HTML (system WKWebView).
-**Release weigh is `npm run tauri build`**, not `--debug` / `tauri dev`.
+Without `KELD_BENCH_URL`, the fixture loads its bundled HTML normally. The
+external macOS oracle sets a validated IPv4-loopback URL in the generated
+context before Tauri creates its configured single webview.
+
+Official vanilla Tauri scaffold, slimmed to one 960×640 window + local HTML
+(system WKWebView). **Release weight uses `bun run tauri build`**, not `--debug` /
+`tauri dev`.
 
 Same engine class as Keld / Swift (system webview) — fair for WK `vs` cells
 when measured same-day Release.
@@ -10,21 +14,32 @@ when measured same-day Release.
 ## Requires
 
 - Rust (this machine: rustc 1.93.0, host `aarch64-apple-darwin`)
-- Node.js + npm
+- Bun
 - Xcode / CLT (this machine: Xcode 26.5)
 
 ## Build (Release)
 
 ```bash
-cd macos/tauri/hello
-npm install
-npm run tauri build
+./macos/tauri/hello/build.sh
 ```
 
-Ad-hoc codesign is set (`signingIdentity: "-"`). Artifacts (gitignored):
+The canonical recipe refuses a dirty or non-canonical checkout, non-default
+Git index flags, a commit that is not an exact live branch head at
+`gyldlab/keld-benches`, and an existing output app. It runs the frozen Bun
+install and Release Tauri app build from a fresh archive of the committed
+fixture bytes in a validated source tree physically outside the repository,
+with ambient build flags removed. Ignored checkout state such as
+`node_modules/` or `.cargo/config.toml` cannot select tools or alter the build.
+The recipe invokes the freshly installed local Tauri CLI by its exact path and embeds the
+source/recipe commit, build-script hash, and actual Bun, Tauri CLI, Rust, Cargo,
+Xcode, and macOS SDK versions in the app's `Info.plist`, then re-signs and
+verifies the bundle. The app is installed with an exclusive atomic rename, so
+a path created during the build cannot be overwritten.
+
+Remove an old ignored app explicitly before rebuilding. Ad-hoc codesign is set
+(`signingIdentity: "-"`). Artifact (gitignored):
 
 - `.app`: `src-tauri/target/release/bundle/macos/Tauri Hello.app`
-- DMG: `src-tauri/target/release/bundle/dmg/`
 
 Do not commit `node_modules/` or `src-tauri/target/`.
 
@@ -32,6 +47,7 @@ Do not commit `node_modules/` or `src-tauri/target/`.
 
 1. `du -sh "src-tauri/target/release/bundle/macos/Tauri Hello.app"`
 2. Executable `stat` under `Contents/MacOS`
-3. Idle RSS: `open` the `.app`, then `ps -o rss=` on the main process. WebKit
-   helper XPCs are extra — note them separately.
+3. Use [`../../harness/`](../../harness/) for exact resource-coalition RSS.
+   Main-process `ps` output is diagnostic only because WebKit XPC helpers are
+   reparented and must be included in the budget.
 4. Record in [`../../../MEASUREMENTS.md`](../../../MEASUREMENTS.md).

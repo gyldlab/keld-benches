@@ -13,6 +13,7 @@ node_modules/
 .cargo/
 bun.lockb
 bun.lock
+!macos/tauri/hello/bun.lock
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
