@@ -447,3 +447,54 @@ Also note the harness patches product sources to inject the beacon and the
 operator must restore them afterwards; it does not produce a committed binary
 that reproduces these exact numbers. Closing that needs runtime-loaded content,
 a different measurement lane.
+
+## Windows first paint — KEL-65 direct-COM A/B (2026-08-15, median of 7)
+
+Keld replaced wry with direct `webview2-com` COM calls on Windows (KEL-65).
+Phase instrumentation had shown wry spending 96–109 ms of UI-thread time in an
+unconditional blocking `window.ipc` bridge injection, predicting ~100 ms of
+first-paint win. **The controlled A/B refuted that prediction** — both backends
+were measured in the same session, same harness, same arms:
+
+Run A — new backend (`keld` branch `agent/kel-65-webview2-direct-com` @ `39be9cc`):
+
+| Stack | first paint | main RSS | procs |
+|---|---|---|---|
+| Electron 43.4.0 | 278 ms | 91,412 KB | 4 |
+| **Keld (direct COM)** | **472 ms** | **21,688 KB** | 7 |
+| Tauri 2.11.5 | 483 ms | 26,800 KB | 7 |
+
+Run B — baseline backend (`keld` main @ `137633f`, wry):
+
+| Stack | first paint | main RSS | procs |
+|---|---|---|---|
+| Electron 43.4.0 | 294 ms | 89,012 KB | 4 |
+| **Keld (wry)** | **467 ms** | **21,992 KB** | 7 |
+| Tauri 2.11.5 | 506 ms | 26,776 KB | 7 |
+
+Raw samples: [`windows/bench/windows-first-paint-kel65-direct-com.json`](./windows/bench/windows-first-paint-kel65-direct-com.json),
+[`windows/bench/windows-first-paint-kel65-baseline.json`](./windows/bench/windows-first-paint-kel65-baseline.json),
+[`windows/bench/windows-first-paint-kel66-smartscreen-off.json`](./windows/bench/windows-first-paint-kel66-smartscreen-off.json).
+
+### Honest reading
+
+* **First paint is unchanged by the rewrite** (472 vs 467 ms — inside run noise).
+  The ~100 ms wry spent blocking the UI thread overlapped renderer boot, so it
+  was never on the paint critical path. The floor is `CreateCoreWebView2Controller`
+  — per Microsoft (WebView2Feedback #1536) "the bulk of starting a WebView2
+  control", not reducible from app code, and environment creation is only
+  runtime resolution (3–6 ms measured).
+* **Keld led Tauri in both runs** (472 vs 483; 467 vs 506). The margin (11–39 ms)
+  is small against run noise; claim it as "consistently ahead this session", not
+  as a fixed ratio.
+* **Enabling SmartScreen costs nothing measurable.** wry's default browser args
+  disable `msSmartScreenProtection`; the direct-COM backend passes no args.
+  Same-session isolation: SmartScreen ON 472 ms vs OFF 466 ms (noise). Verified
+  on the live browser process command line: wry baseline shows
+  `--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection`, the new
+  backend shows no `--disable-features` at all.
+* **Binary shrank 24%**: `keld-host.exe` 625,152 B (wry) → 484,864 B (direct
+  COM) — wry is no longer linked on Windows.
+* Every arm's absolutes sit ~110–120 ms below the 2026-08-14 session (Electron
+  included), which is exactly why cross-session absolutes are banned in this
+  file. Within-session ordering is the signal.
