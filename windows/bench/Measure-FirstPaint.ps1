@@ -245,12 +245,20 @@ try {
 
             # Exactly one accept, armed before spawn.
             $ctxTask = $listener.GetContextAsync()
+            # .NET Process.Start, not the Start-Process cmdlet. The cmdlet costs
+            # 450-700 ms between the call and the child's main() on this machine
+            # (measured via a wall-clock printed at child entry), which inflated
+            # every arm's published first-paint absolutes by roughly half a
+            # second. The spawn offset cannot be assumed zero either way, so it
+            # is measured per run below and recorded in the sample.
+            $psi = [System.Diagnostics.ProcessStartInfo]::new()
+            $psi.FileName = $cfg.Exe
+            if ($cfg.Args) { $psi.Arguments = $cfg.Args }
+            $psi.WorkingDirectory = (Split-Path $cfg.Exe)
+            $psi.UseShellExecute = $false
+            $spawnWall = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
             $sw = [Diagnostics.Stopwatch]::StartNew()
-            $p = if ($cfg.Args) {
-                Start-Process -FilePath $cfg.Exe -ArgumentList $cfg.Args -PassThru -WorkingDirectory (Split-Path $cfg.Exe)
-            } else {
-                Start-Process -FilePath $cfg.Exe -PassThru -WorkingDirectory (Split-Path $cfg.Exe)
-            }
+            $p = [System.Diagnostics.Process]::Start($psi)
 
             $hwndMs = $null; $paintMs = $null; $reject = $null
             while ($sw.ElapsedMilliseconds -lt $TimeoutMs) {
@@ -301,6 +309,7 @@ try {
                 helper_rss_kb = $helperKb
                 processes    = $procs
                 rejected     = $reject
+                spawn_wall_utc_ms = $spawnWall
                 exe          = $cfg.Exe
                 exe_sha256   = $hash
                 exe_version  = $ver
