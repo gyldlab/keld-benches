@@ -31,6 +31,34 @@ Before packaging, verify the KEL-64 launch seam remains focus-first:
 ./test-keld-bench-focus.sh
 ```
 
+## macOS focus patch proof (KEL-64)
+
+Stock Neutralino **v6.9.0** reaches the KEL-64 canonical page on this macOS
+host but its document reports `hasFocus=false`, even when the harness observes
+the native application becoming foreground. This is not a loopback-server or
+fixture-navigation issue: the canonical HTML returns 200 and its focus-aware
+beacon is rejected with HTTP 422.
+
+[`patches/v6.9.0-macos-window-focus-webview.patch`](./patches/v6.9.0-macos-window-focus-webview.patch)
+contains the smallest validated runtime change. After Neutralino's existing
+`makeKeyAndOrderFront:`, its documented `window.focus()` API also makes the
+runtime's `WKWebView` the `NSWindow` first responder. It does not synthesize
+input or change the benchmark oracle.
+
+Build an arm64 patched runtime from a clean checkout at exact v6.9.0 commit
+`2cec764ac5e3ccc5b1b44d046d6e6d6c85c3099e`:
+
+```bash
+./build-macos-focus-runtime.sh /absolute/path/to/neutralinojs \
+  "$PWD/bin/neutralino-mac_arm64"
+npx --yes @neutralinojs/neu build --release --macos-bundle --embed-resources
+```
+
+The builder refuses a dirty or non-v6.9.0 source checkout and refuses to
+overwrite a runtime. Its temporary source copy is retained so that the exact
+build is inspectable. This is a **patched-runtime proof**, not a stock
+Neutralino v6.9.0 score or an upstream release claim.
+
 Official output (gitignored `dist/`):
 
 - `dist/neutralino-hello/neutralino-hello-mac_arm64.app` — Mach-O (embedded resources)

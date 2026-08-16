@@ -1,0 +1,16 @@
+diff --git a/api/window/window.cpp b/api/window/window.cpp
+index 3946f04..7f85014 100644
+--- a/api/window/window.cpp
++++ b/api/window/window.cpp
+@@ -895,6 +895,11 @@ void focus() {
+         ((void (*)(id, SEL, id))objc_msgSend)((id) windowHandle,
+                 "makeKeyAndOrderFront:"_sel, NULL);
+     }
++    id webview = (id) nativeWindow->wv();
++    if(webview) {
++        ((BOOL (*)(id, SEL, id))objc_msgSend)((id) windowHandle,
++                "makeFirstResponder:"_sel, webview);
++    }
+     #elif defined(_WIN32)
+     SetForegroundWindow(windowHandle);
+     #endif
