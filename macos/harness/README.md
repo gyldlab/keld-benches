@@ -72,8 +72,9 @@ The self-test exercises the real port-zero server and proves missing, wrong,
 stale, duplicate, and wrong-phase requests cannot complete a run. It also tests
 the missing-beacon timeout, parsers/statistics, fail-closed Git-status mapping,
 raw-blob rejection of changes hidden by clean filters or `assume-unchanged`,
-output-collision isolation, a byte-for-byte source rebuild of the running
-kernel-resolved harness executable, public-evidence redaction, and the
+output-collision isolation, a byte-for-byte rebuild from a pinned immutable
+`HEAD:path` source tree of the running kernel-mapped harness executable,
+retained-descriptor path-replacement controls, public-evidence redaction, and the
 machine-readable publication policy. The redaction control constructs evidence with known raw
 tokens, paths, network coordinates, process generations, coalition values, and
 monotonic timestamps; encoding must omit them while preserving consistent
@@ -115,8 +116,8 @@ An adapter-built Keld bundle carries its normalized source and recipe
 repositories, immutable commits, patch/template/script SHA-256 values, build
 recipe identifier, and build toolchain in `Info.plist`. The build script accepts
 only canonical `gyldlab/keld` and `gyldlab/keld-benches` origins. Publication
-compares those recipe hashes and commit with the clean harness checkout. Other
-The canonical Tauri recipe likewise embeds its source/recipe commit, recipe
+compares those recipe hashes and commit with the clean harness checkout. The
+canonical Tauri recipe likewise embeds its source/recipe commit, recipe
 path, script hash, and actual build toolchain; publication binds all of them to
 the clean fixture source and harness commit. Other arms must provide their exact
 build command and a separately defined artifact-binding contract. This is a trusted-operator
@@ -137,20 +138,30 @@ across samples. Event, launch-callback, beacon, and coalition observation times
 are milliseconds relative to that sample's launch `t0`; boot-relative monotonic
 timestamps are never encoded.
 Repository provenance uses a credential-free repository identifier, immutable
-commit, clean/dirty/unavailable state, and repository-relative source hashes.
+commit snapshot, clean/dirty/unavailable state, and repository-relative source
+hashes. Required fixture and harness source hashes are checked against that
+captured commit; the runner never substitutes a moving `HEAD` while a run is
+being assembled.
 Remote-head evidence is queried from the literal canonical HTTPS URL, from
 `/var/empty`, with Git's global/system configuration, replacements, credential
 prompts, and ambient working directory removed. Publish-required harness and
-fixture source files and lockfiles are also hashed from their live bytes and
-compared with raw `HEAD:path` Git blob object IDs. Clean/smudge filters and index
+fixture source files and lockfiles are also checked against raw `commit:path`
+Git blob object IDs from the captured commit. Clean/smudge filters and index
 assume-state therefore cannot turn different required bytes into publishable
 provenance.
 
 The runner resolves its own loaded executable through the kernel rather than
-caller-controlled `argv[0]`, rebuilds `HarnessCore.swift` and `Runner.swift`
-with the recorded strict invocation, and requires byte-for-byte equality for
-publication. Together with the raw `HEAD` source checks, this binds the running
-harness to the reviewed commit and the compiler observed at benchmark time.
+caller-controlled `argv[0]`, retains a no-follow read-only descriptor, and
+proves its device/inode matches the offset-zero executable mapping reported by
+the kernel. It reads and hashes only through that descriptor, with metadata
+snapshots before and after each read. It rebuilds `HarnessCore.swift` and
+`Runner.swift` from exact raw blobs of the captured commit in a private external
+tree, compiles the exact `keld-macos-bench` basename with the recorded strict
+invocation, and requires byte-for-byte equality for publication. A negative
+control compiles a transient substituted source path and must fail while the
+immutable-source compile succeeds. Together with the pinned raw source checks,
+this binds the running harness to the reviewed commit and the compiler observed
+at benchmark time.
 Tauri Bun/Tauri/Rust/Cargo/Xcode/SDK values and Keld Rust/Cargo/Xcode/SDK values
 are metadata captured by their canonical build recipes, not benchmark-time
 guesses about a pre-existing app. Tauri evidence is also bound to the clean

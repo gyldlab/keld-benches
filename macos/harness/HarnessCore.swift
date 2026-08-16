@@ -44,6 +44,24 @@ struct CommandResult {
     let status: Int32
     let stdout: String
     let stderr: String
+    let stdoutData: Data
+    let stderrData: Data
+
+    init(status: Int32, stdout: String, stderr: String) {
+        self.status = status
+        self.stdout = stdout
+        self.stderr = stderr
+        stdoutData = Data(stdout.utf8)
+        stderrData = Data(stderr.utf8)
+    }
+
+    init(status: Int32, stdoutData: Data, stderrData: Data) {
+        self.status = status
+        stdout = String(decoding: stdoutData, as: UTF8.self)
+        stderr = String(decoding: stderrData, as: UTF8.self)
+        self.stdoutData = stdoutData
+        self.stderrData = stderrData
+    }
 }
 
 private final class CommandDataBox: @unchecked Sendable {
@@ -146,8 +164,8 @@ func runCommand(
     let stderrData = stderrBox.load()
     return CommandResult(
         status: process.terminationStatus,
-        stdout: String(decoding: stdoutData, as: UTF8.self),
-        stderr: String(decoding: stderrData, as: UTF8.self)
+        stdoutData: stdoutData,
+        stderrData: stderrData
     )
 }
 

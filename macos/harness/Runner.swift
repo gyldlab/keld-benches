@@ -46,6 +46,213 @@ struct FileIdentity: Equatable {
     let inode: UInt64
 }
 
+private struct DescriptorSnapshot: Equatable {
+    let identity: FileIdentity
+    let size: UInt64
+    let mode: UInt16
+    let modificationSeconds: Int64
+    let modificationNanoseconds: Int64
+    let changeSeconds: Int64
+    let changeNanoseconds: Int64
+
+    init(_ information: stat) {
+        identity = FileIdentity(
+            device: UInt64(UInt32(bitPattern: information.st_dev)),
+            inode: UInt64(information.st_ino)
+        )
+        size = UInt64(information.st_size)
+        mode = information.st_mode
+        modificationSeconds = Int64(information.st_mtimespec.tv_sec)
+        modificationNanoseconds = Int64(information.st_mtimespec.tv_nsec)
+        changeSeconds = Int64(information.st_ctimespec.tv_sec)
+        changeNanoseconds = Int64(information.st_ctimespec.tv_nsec)
+    }
+}
+
+private func descriptorSnapshot(_ descriptor: Int32, label: String) throws -> DescriptorSnapshot {
+    var information = stat()
+    guard Darwin.fstat(descriptor, &information) == 0 else {
+        throw HarnessError.io("fstat failed for \(label): \(String(cString: strerror(errno)))")
+    }
+    return DescriptorSnapshot(information)
+}
+
+private func descriptorFileIdentity(at url: URL) throws -> FileIdentity {
+    let descriptor = Darwin.open(url.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)
+    guard descriptor >= 0 else {
+        throw HarnessError.io("open failed for \(url.lastPathComponent): \(String(cString: strerror(errno)))")
+    }
+    defer { Darwin.close(descriptor) }
+    return try descriptorSnapshot(descriptor, label: url.lastPathComponent).identity
+}
+
+private func readStableDescriptorData(
+    _ descriptor: Int32,
+    expectedIdentity: FileIdentity,
+    label: String
+) throws -> (data: Data, snapshot: DescriptorSnapshot) {
+    let before = try descriptorSnapshot(descriptor, label: label)
+    guard before.identity == expectedIdentity else {
+        throw HarnessError.io("descriptor identity changed before reading \(label)")
+    }
+    guard before.size <= UInt64(Int.max) else {
+        throw HarnessError.io("\(label) is too large to read safely")
+    }
+    let expectedByteCount = Int(before.size)
+    var data = Data()
+    data.reserveCapacity(expectedByteCount)
+    var offset: off_t = 0
+    while data.count < expectedByteCount {
+        let requested = min(1_048_576, expectedByteCount - data.count)
+        var buffer = [UInt8](repeating: 0, count: requested)
+        let count = buffer.withUnsafeMutableBytes { bytes -> Int in
+            guard let baseAddress = bytes.baseAddress else { return 0 }
+            return pread(descriptor, baseAddress, requested, offset)
+        }
+        guard count > 0 else {
+            if count == 0 {
+                throw HarnessError.io("unexpected EOF while reading \(label)")
+            }
+            throw HarnessError.io("pread failed for \(label): \(String(cString: strerror(errno)))")
+        }
+        data.append(contentsOf: buffer.prefix(count))
+        offset += off_t(count)
+    }
+    let after = try descriptorSnapshot(descriptor, label: label)
+    guard after == before else {
+        throw HarnessError.io("\(label) changed while being read")
+    }
+    return (data, after)
+}
+
+private func kernelMappedExecutableIdentity(
+    pid: Int32,
+    executableURL: URL
+) throws -> FileIdentity {
+    guard let imageHeader = _dyld_get_image_header(0) else {
+        throw HarnessError.io("dyld did not expose the main executable image header")
+    }
+    let pageSize = UInt64(getpagesize())
+    guard pageSize > 0, (pageSize & (pageSize - 1)) == 0 else {
+        throw HarnessError.io("macOS reported an invalid VM page size")
+    }
+    let rawAddress = UInt64(UInt(bitPattern: imageHeader))
+    let alignedAddress = rawAddress & ~(pageSize - 1)
+    let candidateAddresses = rawAddress == alignedAddress
+        ? [rawAddress]
+        : [rawAddress, alignedAddress]
+    var lastError = EINVAL
+    for address in candidateAddresses {
+        var region = proc_regionwithpathinfo()
+        errno = 0
+        let byteCount = proc_pidinfo(
+            pid,
+            PROC_PIDREGIONPATHINFO,
+            address,
+            &region,
+            Int32(MemoryLayout<proc_regionwithpathinfo>.size)
+        )
+        if byteCount == 0 {
+            lastError = errno
+            continue
+        }
+        guard byteCount == Int32(MemoryLayout<proc_regionwithpathinfo>.size) else {
+            throw HarnessError.io("proc_pidinfo returned a truncated executable region record")
+        }
+        let protection = region.prp_prinfo.pri_protection
+        if region.prp_prinfo.pri_offset == 0,
+           protection & UInt32(VM_PROT_EXECUTE) != 0 {
+            let statistics = region.prp_vip.vip_vi.vi_stat
+            return FileIdentity(
+                device: UInt64(statistics.vst_dev),
+                inode: statistics.vst_ino
+            )
+        }
+        throw HarnessError.io(
+            "kernel executable mapping at the dyld main-image header was not offset-zero executable"
+        )
+    }
+    if lastError == ESRCH {
+        throw HarnessError.io("process exited while reading the loaded executable mapping")
+    }
+    throw HarnessError.io(
+        "proc_pidinfo could not read the loaded executable mapping (errno \(lastError))"
+    )
+}
+
+private func descriptorIdentityMatchesMappedIdentity(
+    descriptorIdentity: FileIdentity,
+    mappedIdentity: FileIdentity
+) -> Bool {
+    descriptorIdentity == mappedIdentity
+}
+
+private final class LoadedExecutableBinding: @unchecked Sendable {
+    let url: URL
+    let identity: FileIdentity
+    let mappedIdentity: FileIdentity
+    private let descriptor: Int32
+
+    var isBoundToMappedVnode: Bool {
+        descriptorIdentityMatchesMappedIdentity(
+            descriptorIdentity: identity,
+            mappedIdentity: mappedIdentity
+        )
+    }
+
+    init() throws {
+        let resolvedURL = try loadedExecutableURL()
+        guard resolvedURL.lastPathComponent == "keld-macos-bench" else {
+            throw HarnessError.io("loaded harness executable must use the keld-macos-bench basename")
+        }
+        let openedDescriptor = Darwin.open(resolvedURL.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)
+        guard openedDescriptor >= 0 else {
+            throw HarnessError.io(
+                "open failed for loaded harness executable: \(String(cString: strerror(errno)))"
+            )
+        }
+        do {
+            let snapshot = try descriptorSnapshot(
+                openedDescriptor,
+                label: resolvedURL.lastPathComponent
+            )
+            let mappedExecutableIdentity = try kernelMappedExecutableIdentity(
+                pid: getpid(),
+                executableURL: resolvedURL
+            )
+            guard descriptorIdentityMatchesMappedIdentity(
+                descriptorIdentity: snapshot.identity,
+                mappedIdentity: mappedExecutableIdentity
+            ) else {
+                throw HarnessError.io(
+                    "loaded harness descriptor does not match the kernel executable mapping"
+                )
+            }
+            url = resolvedURL
+            identity = snapshot.identity
+            mappedIdentity = mappedExecutableIdentity
+            descriptor = openedDescriptor
+        } catch {
+            Darwin.close(openedDescriptor)
+            throw error
+        }
+    }
+
+    deinit { Darwin.close(descriptor) }
+
+    func readData() throws -> Data {
+        let mappedIdentity = try kernelMappedExecutableIdentity(pid: getpid(), executableURL: url)
+        guard mappedIdentity == identity else {
+            throw HarnessError.io("kernel executable mapping no longer matches the retained descriptor")
+        }
+        return try readStableDescriptorData(
+            descriptor,
+            expectedIdentity: identity,
+            label: url.lastPathComponent
+        ).data
+    }
+}
+
 private func fileIdentity(at url: URL) throws -> FileIdentity {
     let descriptor = Darwin.open(url.path, O_RDONLY | O_CLOEXEC)
     guard descriptor >= 0 else {
@@ -59,7 +266,10 @@ private func fileIdentity(at url: URL) throws -> FileIdentity {
     guard information.st_mode & S_IFMT == S_IFDIR else {
         throw HarnessError.io("expected an app bundle directory at \(url.lastPathComponent)")
     }
-    return FileIdentity(device: UInt64(information.st_dev), inode: UInt64(information.st_ino))
+    return FileIdentity(
+        device: UInt64(UInt32(bitPattern: information.st_dev)),
+        inode: UInt64(information.st_ino)
+    )
 }
 
 struct RunnerOptions {
@@ -143,6 +353,10 @@ struct HarnessRebuildEvidence: Codable, Equatable {
     let attempted: Bool
     let rebuiltExecutableSha256: String?
     let byteForByteMatchesRunningExecutable: Bool
+    let loadedExecutableBoundToMappedVnode: Bool
+    let pathReplacementRejected: Bool
+    let immutableHeadBlobTreeVerified: Bool
+    let transientLiveSourceSubstitutionRejected: Bool
 }
 
 struct HarnessArtifactMetadata: Codable {
@@ -2240,14 +2454,21 @@ private func repositoryRelativePath(of url: URL, within root: URL) -> String? {
     return String(resolvedURL.path.dropFirst(prefix.count))
 }
 
-private func hashFile(_ url: URL, relativeTo root: URL) throws -> ArtifactHash {
+private func hashFile(
+    _ url: URL,
+    relativeTo root: URL,
+    snapshotCommit: String
+) throws -> ArtifactHash {
     guard let relativePath = repositoryRelativePath(of: url, within: root) else {
         throw HarnessError.io("source file is outside the resolved repository")
     }
     let data = try Data(contentsOf: url)
     let headResult = try? runCommand(
         "/usr/bin/git",
-        ["-C", root.path, "rev-parse", "--verify", "HEAD:\(relativePath)"]
+        [
+            "-C", root.path,
+            "rev-parse", "--verify", "\(snapshotCommit):\(relativePath)",
+        ]
     )
     let headObjectId = headResult.flatMap { result -> String? in
         guard result.status == 0 else { return nil }
@@ -2262,6 +2483,135 @@ private func hashFile(_ url: URL, relativeTo root: URL) throws -> ArtifactHash {
         sha256: sha256Hex(data),
         matchesHeadBlob: matchesHeadBlob
     )
+}
+
+private struct ImmutableGitBlob {
+    let objectId: String
+    let data: Data
+}
+
+private func immutableGitBlob(
+    repositoryRoot: URL,
+    commit: String,
+    relativePath: String
+) throws -> ImmutableGitBlob {
+    guard isFullGitCommit(commit),
+          !relativePath.isEmpty,
+          !relativePath.hasPrefix("/"),
+          !relativePath.split(separator: "/").contains("..") else {
+        throw HarnessError.io("invalid immutable source path \(relativePath)")
+    }
+    let objectResult = try runCommand(
+        "/usr/bin/git",
+        ["-C", repositoryRoot.path, "rev-parse", "--verify", "\(commit):\(relativePath)"]
+    )
+    guard objectResult.status == 0 else {
+        throw HarnessError.io("HEAD blob is unavailable for \(relativePath)")
+    }
+    let objectId = objectResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard isFullGitCommit(objectId) else {
+        throw HarnessError.io("Git returned a malformed blob ID for \(relativePath)")
+    }
+    let typeResult = try runCommand(
+        "/usr/bin/git",
+        ["-C", repositoryRoot.path, "cat-file", "-t", "\(commit):\(relativePath)"]
+    )
+    guard typeResult.status == 0,
+          typeResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines) == "blob" else {
+        throw HarnessError.io("HEAD path is not a regular blob: \(relativePath)")
+    }
+    let dataResult = try runCommand(
+        "/usr/bin/git",
+        ["-C", repositoryRoot.path, "cat-file", "blob", "\(commit):\(relativePath)"],
+        timeoutSeconds: 30
+    )
+    guard dataResult.status == 0 else {
+        throw HarnessError.io("Git could not read the immutable blob \(relativePath)")
+    }
+    guard rawGitBlobObjectId(dataResult.stdoutData, hexadecimalLength: objectId.count) == objectId else {
+        throw HarnessError.io("raw Git blob verification failed for \(relativePath)")
+    }
+    return ImmutableGitBlob(objectId: objectId, data: dataResult.stdoutData)
+}
+
+private func materializeImmutableGitTree(
+    repositoryRoot: URL,
+    commit: String,
+    relativePaths: [String],
+    destinationRoot: URL
+) throws -> [ArtifactHash] {
+    try FileManager.default.createDirectory(
+        at: destinationRoot,
+        withIntermediateDirectories: true,
+        attributes: [.posixPermissions: 0o700]
+    )
+    guard Darwin.chmod(destinationRoot.path, 0o700) == 0 else {
+        throw HarnessError.io("could not make the immutable source tree private")
+    }
+    var hashes: [ArtifactHash] = []
+    for relativePath in relativePaths.sorted() {
+        let blob = try immutableGitBlob(
+            repositoryRoot: repositoryRoot,
+            commit: commit,
+            relativePath: relativePath
+        )
+        let destination = destinationRoot.appendingPathComponent(relativePath)
+        let parent = destination.deletingLastPathComponent()
+        try FileManager.default.createDirectory(
+            at: parent,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
+        guard Darwin.chmod(parent.path, 0o700) == 0 else {
+            throw HarnessError.io("could not make an immutable source directory private")
+        }
+        try blob.data.write(to: destination, options: .withoutOverwriting)
+        guard Darwin.chmod(destination.path, 0o600) == 0 else {
+            throw HarnessError.io("could not make an immutable source file private")
+        }
+        let materialized = try Data(contentsOf: destination, options: .mappedIfSafe)
+        guard rawGitBlobObjectId(materialized, hexadecimalLength: blob.objectId.count) == blob.objectId,
+              sha256Hex(materialized) == sha256Hex(blob.data) else {
+            throw HarnessError.io("immutable source materialization changed \(relativePath)")
+        }
+        hashes.append(ArtifactHash(
+            repositoryRelativePath: relativePath,
+            sha256: sha256Hex(materialized),
+            matchesHeadBlob: true
+        ))
+    }
+    return hashes
+}
+
+private func descriptorPathReplacementControl(in temporaryRoot: URL) throws -> Bool {
+    let originalURL = temporaryRoot.appendingPathComponent("descriptor-original")
+    let replacementURL = temporaryRoot.appendingPathComponent("descriptor-replacement")
+    let retainedURL = temporaryRoot.appendingPathComponent("descriptor-retained")
+    let originalData = Data("original descriptor bytes\n".utf8)
+    let replacementData = Data("replacement path bytes\n".utf8)
+    try originalData.write(to: originalURL)
+    try replacementData.write(to: replacementURL)
+    let descriptor = Darwin.open(originalURL.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)
+    guard descriptor >= 0 else {
+        throw HarnessError.io("descriptor replacement control could not open its original")
+    }
+    defer { Darwin.close(descriptor) }
+    let identity = try descriptorSnapshot(descriptor, label: "descriptor replacement control").identity
+    try FileManager.default.moveItem(at: originalURL, to: retainedURL)
+    try FileManager.default.copyItem(at: replacementURL, to: originalURL)
+    let replacementIdentity = try descriptorFileIdentity(at: originalURL)
+    guard !descriptorIdentityMatchesMappedIdentity(
+        descriptorIdentity: replacementIdentity,
+        mappedIdentity: identity
+    ) else {
+        return false
+    }
+    let observed = try readStableDescriptorData(
+        descriptor,
+        expectedIdentity: identity,
+        label: "descriptor replacement control"
+    ).data
+    return observed == originalData
 }
 
 private func nearestTauriSourceRoot(from appURL: URL, repositoryRoot: URL?) -> URL? {
@@ -2373,18 +2723,28 @@ private func fixtureMetadata(_ spec: AppSpec) throws -> FixtureMetadata {
     )
     var sourceFiles: [ArtifactHash] = []
     var lockfiles: [ArtifactHash] = []
-    if let sourceRoot = sourceSnapshot.rootURL, let tauriSourceRoot {
+    if let sourceRoot = sourceSnapshot.rootURL,
+       let tauriSourceRoot,
+       let sourceCommit = sourceSnapshot.metadata.commit {
         for relativePath in requiredTauriSourcePaths {
             let sourceFile = tauriSourceRoot.appendingPathComponent(relativePath)
             if FileManager.default.fileExists(atPath: sourceFile.path) {
-                sourceFiles.append(try hashFile(sourceFile, relativeTo: sourceRoot))
+                sourceFiles.append(try hashFile(
+                    sourceFile,
+                    relativeTo: sourceRoot,
+                    snapshotCommit: sourceCommit
+                ))
             }
         }
         for lockfile in [
             tauriSourceRoot.appendingPathComponent("bun.lock"),
             tauriSourceRoot.appendingPathComponent("src-tauri/Cargo.lock"),
         ] where FileManager.default.fileExists(atPath: lockfile.path) {
-            lockfiles.append(try hashFile(lockfile, relativeTo: sourceRoot))
+            lockfiles.append(try hashFile(
+                lockfile,
+                relativeTo: sourceRoot,
+                snapshotCommit: sourceCommit
+            ))
         }
     }
     let embeddedSourceCommit = bundle?.object(forInfoDictionaryKey: "KeldBenchSourceCommit") as? String
@@ -2459,15 +2819,34 @@ private let harnessProvenanceSourcePaths = harnessCompiledSourcePaths + [
 ]
 
 private func reproducibleHarnessBuildEvidence(
-    executable: URL,
-    repositoryRoot: URL?
+    executableBinding: LoadedExecutableBinding,
+    repositoryRoot: URL?,
+    sourceCommit: String?
 ) throws -> HarnessRebuildEvidence {
     guard let repositoryRoot else {
         return HarnessRebuildEvidence(
             attempted: false,
             rebuiltExecutableSha256: nil,
-            byteForByteMatchesRunningExecutable: false
+            byteForByteMatchesRunningExecutable: false,
+            loadedExecutableBoundToMappedVnode: executableBinding.isBoundToMappedVnode,
+            pathReplacementRejected: false,
+            immutableHeadBlobTreeVerified: false,
+            transientLiveSourceSubstitutionRejected: false
         )
+    }
+    guard let commit = sourceCommit else {
+        return HarnessRebuildEvidence(
+            attempted: false,
+            rebuiltExecutableSha256: nil,
+            byteForByteMatchesRunningExecutable: true,
+            loadedExecutableBoundToMappedVnode: executableBinding.isBoundToMappedVnode,
+            pathReplacementRejected: false,
+            immutableHeadBlobTreeVerified: false,
+            transientLiveSourceSubstitutionRejected: false
+        )
+    }
+    guard harnessCompiledSourcePaths.count >= 2 else {
+        throw HarnessError.io("reproducible build requires at least two compiled harness sources")
     }
 
     let temporaryRoot = FileManager.default.temporaryDirectory
@@ -2484,57 +2863,131 @@ private func reproducibleHarnessBuildEvidence(
         }
     }
 
-    let rebuiltExecutable = temporaryRoot.appendingPathComponent(executable.lastPathComponent)
+    let resolvedTemporaryRoot = temporaryRoot.standardizedFileURL.resolvingSymlinksInPath()
+    guard !path(resolvedTemporaryRoot, isWithinOrEqualTo: repositoryRoot) else {
+        throw HarnessError.io("reproducible-build temporary tree must be outside the source repository")
+    }
+
+    let runningData = try executableBinding.readData()
+    let pathReplacementRejected = try descriptorPathReplacementControl(in: temporaryRoot)
+    let sourceRoot = temporaryRoot
+    let immutableSourceFiles = try materializeImmutableGitTree(
+        repositoryRoot: repositoryRoot,
+        commit: commit,
+        relativePaths: harnessProvenanceSourcePaths,
+        destinationRoot: sourceRoot
+    )
+    let immutableSourceHashes = Dictionary(
+        uniqueKeysWithValues: immutableSourceFiles.map {
+            ($0.repositoryRelativePath, $0.sha256)
+        }
+    )
+    guard harnessCompiledSourcePaths.allSatisfy({ immutableSourceHashes[$0] != nil }) else {
+        throw HarnessError.io("immutable source tree omitted a compiled harness source")
+    }
+
+    let rebuiltExecutable = temporaryRoot.appendingPathComponent("keld-macos-bench")
     let arguments = [
         "swiftc", "-O", "-parse-as-library",
         "-strict-concurrency=complete", "-warn-concurrency", "-warnings-as-errors",
         "-o", rebuiltExecutable.path,
     ] + harnessCompiledSourcePaths
+
+    let liveSourceRoot = temporaryRoot.appendingPathComponent("live-source", isDirectory: true)
+    let liveSubstitutionPath = liveSourceRoot.appendingPathComponent(harnessCompiledSourcePaths[0])
+    try FileManager.default.createDirectory(
+        at: liveSubstitutionPath.deletingLastPathComponent(),
+        withIntermediateDirectories: true,
+        attributes: [.posixPermissions: 0o700]
+    )
+    let immutableSourcePath = sourceRoot.appendingPathComponent(harnessCompiledSourcePaths[0])
+    let liveSource = try Data(contentsOf: immutableSourcePath, options: .mappedIfSafe)
+    try liveSource.write(to: liveSubstitutionPath, options: .withoutOverwriting)
+    let invalidLiveSubstitution = Data("this is an intentionally invalid live-source substitution\n".utf8)
+    guard invalidLiveSubstitution != liveSource else {
+        throw HarnessError.io("live-source substitution marker unexpectedly matches the source")
+    }
+    try invalidLiveSubstitution.write(to: liveSubstitutionPath, options: .atomic)
+    let liveControlOutput = temporaryRoot.appendingPathComponent("live-source-control")
+    let liveControlArguments = [
+        "swiftc", "-O", "-parse-as-library",
+        "-strict-concurrency=complete", "-warn-concurrency", "-warnings-as-errors",
+        "-o", liveControlOutput.path,
+        liveSubstitutionPath.path,
+        temporaryRoot.appendingPathComponent(harnessCompiledSourcePaths[1]).path,
+    ]
+    let liveControl = try runCommand(
+        "/usr/bin/xcrun",
+        liveControlArguments,
+        currentDirectoryURL: temporaryRoot,
+        timeoutSeconds: 120
+    )
     let compile = try runCommand(
         "/usr/bin/xcrun",
         arguments,
-        currentDirectoryURL: repositoryRoot,
+        currentDirectoryURL: temporaryRoot,
         timeoutSeconds: 120
     )
+    let immutableSourceAfter = try Data(contentsOf: immutableSourcePath, options: .mappedIfSafe)
+    let transientLiveSourceSubstitutionRejected =
+        (try? Data(contentsOf: liveSubstitutionPath, options: .mappedIfSafe)) == invalidLiveSubstitution
+        && liveControl.status != 0
+        && compile.status == 0
+        && immutableSourceAfter == liveSource
     guard compile.status == 0 else {
         writeDiagnostic("harness reproducible build exited with status \(compile.status)")
         return HarnessRebuildEvidence(
             attempted: true,
             rebuiltExecutableSha256: nil,
-            byteForByteMatchesRunningExecutable: false
+            byteForByteMatchesRunningExecutable: false,
+            loadedExecutableBoundToMappedVnode: executableBinding.isBoundToMappedVnode,
+            pathReplacementRejected: pathReplacementRejected,
+            immutableHeadBlobTreeVerified: false,
+            transientLiveSourceSubstitutionRejected: transientLiveSourceSubstitutionRejected
         )
     }
 
     let rebuiltData = try Data(contentsOf: rebuiltExecutable, options: .mappedIfSafe)
-    let runningData = try Data(contentsOf: executable, options: .mappedIfSafe)
+    let immutableHeadBlobTreeVerified = immutableSourceFiles.count == harnessProvenanceSourcePaths.count
+        && immutableSourceFiles.allSatisfy { $0.matchesHeadBlob && isSha256($0.sha256) }
     return HarnessRebuildEvidence(
         attempted: true,
         rebuiltExecutableSha256: sha256Hex(rebuiltData),
-        byteForByteMatchesRunningExecutable: rebuiltData == runningData
+        byteForByteMatchesRunningExecutable: rebuiltData == runningData,
+        loadedExecutableBoundToMappedVnode: executableBinding.isBoundToMappedVnode,
+        pathReplacementRejected: pathReplacementRejected,
+        immutableHeadBlobTreeVerified: immutableHeadBlobTreeVerified,
+        transientLiveSourceSubstitutionRejected: transientLiveSourceSubstitutionRejected
     )
 }
 
 private func harnessArtifactMetadata(
-    executable: URL,
+    executableBinding: LoadedExecutableBinding,
     repository: GitSnapshot
 ) throws -> HarnessArtifactMetadata {
-    let attributes = try FileManager.default.attributesOfItem(atPath: executable.path)
-    guard let size = attributes[.size] as? NSNumber else {
-        throw HarnessError.io("could not read harness executable size")
-    }
     var sourceFiles: [ArtifactHash] = []
-    if let root = repository.rootURL {
+    if let root = repository.rootURL, let commit = repository.metadata.commit {
         for relativePath in harnessProvenanceSourcePaths {
-            sourceFiles.append(try hashFile(root.appendingPathComponent(relativePath), relativeTo: root))
+            let blob = try immutableGitBlob(
+                repositoryRoot: root,
+                commit: commit,
+                relativePath: relativePath
+            )
+            sourceFiles.append(ArtifactHash(
+                repositoryRelativePath: relativePath,
+                sha256: sha256Hex(blob.data),
+                matchesHeadBlob: true
+            ))
         }
     }
-    let executableData = try Data(contentsOf: executable, options: .mappedIfSafe)
+    let executableData = try executableBinding.readData()
     let reproducibleBuild = try reproducibleHarnessBuildEvidence(
-        executable: executable,
-        repositoryRoot: repository.rootURL
+        executableBinding: executableBinding,
+        repositoryRoot: repository.rootURL,
+        sourceCommit: repository.metadata.commit
     )
     return HarnessArtifactMetadata(
-        executableSizeBytes: size.uint64Value,
+        executableSizeBytes: UInt64(executableData.count),
         executableSha256: sha256Hex(executableData),
         buildInvocationContract: harnessBuildInvocationContract,
         reproducibleBuild: reproducibleBuild,
@@ -3072,6 +3525,10 @@ private func harnessRebuildEvidenceIsValid(
     evidence.attempted
         && evidence.byteForByteMatchesRunningExecutable
         && evidence.rebuiltExecutableSha256 == executableSha256
+        && evidence.loadedExecutableBoundToMappedVnode
+        && evidence.pathReplacementRejected
+        && evidence.immutableHeadBlobTreeVerified
+        && evidence.transientLiveSourceSubstitutionRejected
 }
 
 private func harnessProvenanceIsComplete(_ harness: HarnessArtifactMetadata) -> Bool {
@@ -4780,12 +5237,11 @@ private func validateStubbornCleanupContract(
 private func runSelfTests(html: Data) async throws {
     try validateForegroundTransitionContract()
     try validatePublicEvidenceRedaction()
-    let loadedExecutable = try loadedExecutableURL()
-    let selfTestRepository = gitSnapshot(
-        containing: loadedExecutable.deletingLastPathComponent()
-    )
+    let executableBinding = try LoadedExecutableBinding()
+    let loadedExecutable = executableBinding.url
+    let selfTestRepository = gitSnapshot(containing: loadedExecutable.deletingLastPathComponent())
     let selfTestHarnessArtifact = try harnessArtifactMetadata(
-        executable: loadedExecutable,
+        executableBinding: executableBinding,
         repository: selfTestRepository
     )
     try require(
@@ -4800,7 +5256,15 @@ private func runSelfTests(html: Data) async throws {
             HarnessRebuildEvidence(
                 attempted: true,
                 rebuiltExecutableSha256: selfTestHarnessArtifact.executableSha256,
-                byteForByteMatchesRunningExecutable: false
+                byteForByteMatchesRunningExecutable: false,
+                loadedExecutableBoundToMappedVnode:
+                    selfTestHarnessArtifact.reproducibleBuild.loadedExecutableBoundToMappedVnode,
+                pathReplacementRejected:
+                    selfTestHarnessArtifact.reproducibleBuild.pathReplacementRejected,
+                immutableHeadBlobTreeVerified:
+                    selfTestHarnessArtifact.reproducibleBuild.immutableHeadBlobTreeVerified,
+                transientLiveSourceSubstitutionRejected:
+                    selfTestHarnessArtifact.reproducibleBuild.transientLiveSourceSubstitutionRejected
             ),
             executableSha256: selfTestHarnessArtifact.executableSha256
         ),
@@ -5192,8 +5656,16 @@ private func runSelfTests(html: Data) async throws {
     try Data("alpha\n".utf8).write(to: maskedFile)
     _ = try runSelfTestGit(["-C", maskedRepository.path, "add", ".gitattributes", "tracked.txt"])
     _ = try runSelfTestGit(["-C", maskedRepository.path, "commit", "--quiet", "-m", "fixture"])
+    let maskedCommit = gitSnapshot(containing: maskedRepository).metadata.commit
+    guard let maskedCommit else {
+        throw HarnessError.measurement("self-test failed: masked repository commit was unavailable")
+    }
     try require(
-        try hashFile(maskedFile, relativeTo: maskedRepository).matchesHeadBlob,
+        try hashFile(
+            maskedFile,
+            relativeTo: maskedRepository,
+            snapshotCommit: maskedCommit
+        ).matchesHeadBlob,
         "unchanged raw working-tree bytes must match the HEAD blob"
     )
     try Data("bravo\n".utf8).write(to: maskedFile)
@@ -5206,7 +5678,11 @@ private func runSelfTests(html: Data) async throws {
         "clean-filter negative control must actually mask the changed file from Git status"
     )
     try require(
-        try !hashFile(maskedFile, relativeTo: maskedRepository).matchesHeadBlob,
+        try !hashFile(
+            maskedFile,
+            relativeTo: maskedRepository,
+            snapshotCommit: maskedCommit
+        ).matchesHeadBlob,
         "raw HEAD-blob comparison must reject bytes hidden by a clean filter"
     )
     try Data("alpha\n".utf8).write(to: maskedFile)
@@ -5221,7 +5697,11 @@ private func runSelfTests(html: Data) async throws {
         "assume-unchanged negative control must actually mask the changed file from Git status"
     )
     try require(
-        try !hashFile(maskedFile, relativeTo: maskedRepository).matchesHeadBlob,
+        try !hashFile(
+            maskedFile,
+            relativeTo: maskedRepository,
+            snapshotCommit: maskedCommit
+        ).matchesHeadBlob,
         "raw HEAD-blob comparison must reject bytes hidden by assume-unchanged"
     )
 
@@ -5697,7 +6177,8 @@ private func runBenchmark(options: RunnerOptions, htmlURL: URL, html: Data) asyn
         )
     }
     try validateKernelGenerationSignalContract()
-    let harnessExecutable = try loadedExecutableURL()
+    let executableBinding = try LoadedExecutableBinding()
+    let harnessExecutable = executableBinding.url
     let repositoryBefore = gitSnapshot(containing: harnessExecutable.deletingLastPathComponent())
     let outputURL = try validatedOutputURL(
         options.outputURL,
@@ -5770,14 +6251,18 @@ private func runBenchmark(options: RunnerOptions, htmlURL: URL, html: Data) asyn
     // Rebuild verification is intentionally after every scored sample and host
     // observation so compiler work cannot perturb launch timing or RSS.
     let harnessArtifact = try harnessArtifactMetadata(
-        executable: harnessExecutable,
+        executableBinding: executableBinding,
         repository: repositoryBefore
     )
     let repositoryAfter = gitSnapshot(containing: harnessExecutable.deletingLastPathComponent())
     let canonicalHTML: Bool
-    if let repositoryRoot = repositoryBefore.rootURL {
-        let committedHTML = repositoryRoot.appendingPathComponent("macos/harness/hello.html")
-        canonicalHTML = (try? Data(contentsOf: committedHTML)) == html
+    if let repositoryRoot = repositoryBefore.rootURL,
+       let commit = repositoryBefore.metadata.commit {
+        canonicalHTML = (try? immutableGitBlob(
+            repositoryRoot: repositoryRoot,
+            commit: commit,
+            relativePath: "macos/harness/hello.html"
+        ).data) == html
     } else {
         canonicalHTML = false
     }
