@@ -1188,11 +1188,17 @@ final class LoopbackBeaconServer: @unchecked Sendable {
             guard clientNow.isFinite, scriptStart.isFinite, firstRaf.isFinite, secondRaf.isFinite else {
                 return reject(target: target, kind: "beacon", status: 422, reason: "non-finite rendering-opportunity diagnostics", token: presentedToken)
             }
-            guard scriptStart >= 0,
-                  scriptStart <= firstRaf,
-                  firstRaf <= secondRaf,
-                  secondRaf <= clientNow else {
-                return reject(target: target, kind: "beacon", status: 422, reason: "unordered rendering-opportunity diagnostics", token: presentedToken)
+            guard scriptStart >= 0 else {
+                return reject(target: target, kind: "beacon", status: 422, reason: "negative script-start diagnostic", token: presentedToken)
+            }
+            guard scriptStart <= firstRaf else {
+                return reject(target: target, kind: "beacon", status: 422, reason: "script-start after first rAF diagnostic", token: presentedToken)
+            }
+            guard firstRaf <= secondRaf else {
+                return reject(target: target, kind: "beacon", status: 422, reason: "first rAF after second rAF diagnostic", token: presentedToken)
+            }
+            guard secondRaf <= clientNow else {
+                return reject(target: target, kind: "beacon", status: 422, reason: "second rAF after client-now diagnostic", token: presentedToken)
             }
 
             lock.lock()
