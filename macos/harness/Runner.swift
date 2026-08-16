@@ -5316,8 +5316,6 @@ private func runSelfTests(html: Data) async throws {
     try require(server.events(for: second).last?.reason == "missing or invalid rendering-opportunity diagnostics", "duplicate diagnostic must map to the missing-or-invalid reason")
     try require(try rawHTTPStatus(port: server.port, target: beaconPrefix + "client_now_ms=12&script_start_ms=-1&raf1_ms=8&raf2_ms=10&visibility=visible&focus=true") == 422, "negative script-start diagnostic must be rejected")
     try require(server.events(for: second).last?.reason == "negative script-start diagnostic", "negative script-start reason must remain precise")
-    try require(try rawHTTPStatus(port: server.port, target: beaconPrefix + "client_now_ms=12&script_start_ms=9&raf1_ms=8&raf2_ms=10&visibility=visible&focus=true") == 422, "script-start after first rAF must be rejected")
-    try require(server.events(for: second).last?.reason == "script-start after first rAF diagnostic", "script-start ordering reason must remain precise")
     try require(try rawHTTPStatus(port: server.port, target: beaconPrefix + "client_now_ms=12&script_start_ms=1&raf1_ms=10&raf2_ms=8&visibility=visible&focus=true") == 422, "first rAF after second rAF must be rejected")
     try require(server.events(for: second).last?.reason == "first rAF after second rAF diagnostic", "rAF ordering reason must remain precise")
     try require(try rawHTTPStatus(port: server.port, target: beaconPrefix + "client_now_ms=9&script_start_ms=1&raf1_ms=8&raf2_ms=10&visibility=visible&focus=true") == 422, "second rAF after client-now must be rejected")
@@ -5328,6 +5326,15 @@ private func runSelfTests(html: Data) async throws {
     let receipt = try await server.awaitBeacon(token: second, deadlineNanoseconds: monotonicNowNanoseconds() + 1_000_000_000)
     try require(receipt.token == second && receipt.clientNowMilliseconds == 12.5, "accepted receipt must retain authenticated metadata")
     server.finish(token: second)
+
+    let frameTimestampBeforeScript = UUID().uuidString.lowercased()
+    try server.activate(token: frameTimestampBeforeScript)
+    try require(try rawHTTPStatus(port: server.port, target: "/run/\(frameTimestampBeforeScript)/hello.html?token=\(frameTimestampBeforeScript)") == 200, "frame-timestamp control HTML must load")
+    let frameTimestampBeacon = "/beacon.gif?token=\(frameTimestampBeforeScript)&phase=double-raf&client_now_ms=12&script_start_ms=9&raf1_ms=8&raf2_ms=10&visibility=visible&focus=true"
+    try require(try rawHTTPStatus(port: server.port, target: frameTimestampBeacon) == 204, "a frame timestamp preceding script performance.now() must remain a valid double-rAF beacon")
+    let frameTimestampReceipt = try await server.awaitBeacon(token: frameTimestampBeforeScript, deadlineNanoseconds: monotonicNowNanoseconds() + 1_000_000_000)
+    try require(frameTimestampReceipt.firstRafMilliseconds == 8 && frameTimestampReceipt.scriptStartMilliseconds == 9, "frame-timestamp control must preserve diagnostic metadata without treating it as rAF ordering")
+    server.finish(token: frameTimestampBeforeScript)
 
     let noBeacon = UUID().uuidString.lowercased()
     try server.activate(token: noBeacon)

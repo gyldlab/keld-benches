@@ -1191,9 +1191,6 @@ final class LoopbackBeaconServer: @unchecked Sendable {
             guard scriptStart >= 0 else {
                 return reject(target: target, kind: "beacon", status: 422, reason: "negative script-start diagnostic", token: presentedToken)
             }
-            guard scriptStart <= firstRaf else {
-                return reject(target: target, kind: "beacon", status: 422, reason: "script-start after first rAF diagnostic", token: presentedToken)
-            }
             guard firstRaf <= secondRaf else {
                 return reject(target: target, kind: "beacon", status: 422, reason: "first rAF after second rAF diagnostic", token: presentedToken)
             }
