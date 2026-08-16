@@ -3,19 +3,25 @@ const path = require('node:path');
 
 const source = fs.readFileSync(path.join(__dirname, 'src/index.js'), 'utf8');
 const hiddenWindow = source.indexOf('show: false');
-const focusRegistration = source.indexOf("mainWindow.webContents.once('dom-ready'");
+const targetURL = source.indexOf('const targetURL = benchmarkURL || localURL;');
+const focusRegistration = source.indexOf("mainWindow.webContents.on('dom-ready', focusTargetDocument);");
+const targetGuard = source.indexOf('mainWindow.webContents.getURL() !== targetURL');
 const show = source.indexOf('mainWindow.show();');
 const focus = source.indexOf('mainWindow.focus();');
+const rendererFocus = source.indexOf('mainWindow.webContents.focus();');
 const navigation = source.indexOf('mainWindow.loadURL(benchmarkURL);');
 
 if (
   hiddenWindow < 0 ||
+  targetURL < 0 ||
   focusRegistration < 0 ||
-  show < focusRegistration ||
-  focus < show ||
-  navigation < focus
+  targetGuard < 0 ||
+  show < 0 ||
+  focus < 0 ||
+  rendererFocus < 0 ||
+  navigation < 0
 ) {
   throw new Error(
-    'the KEL-64 page must be shown and focused from dom-ready before its URL is loaded',
+    'the KEL-64 target document must be shown and focused from its dom-ready lifecycle',
   );
 }

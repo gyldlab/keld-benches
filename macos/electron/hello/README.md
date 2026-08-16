@@ -53,4 +53,6 @@ node test-keld-bench-focus.js
 For the shared KEL-64 oracle, the harness supplies `KELD_BENCH_URL`; the fixture
 loads that loopback URL when present and keeps the bundled page for normal runs.
 Its window is created hidden and is shown/focused from Electron's `dom-ready`
-lifecycle event, before the canonical document's first rendering opportunity.
+lifecycle event only after its URL is the canonical document; the fixture also
+calls `webContents.focus()` so the renderer, not merely the native window,
+owns focus before its first rendering opportunity.

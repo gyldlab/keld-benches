@@ -1,6 +1,7 @@
 const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const createWindow = () => {
   const mainWindow = new BrowserWindow({
@@ -13,16 +14,24 @@ const createWindow = () => {
     },
   });
 
-  mainWindow.webContents.once('dom-ready', () => {
+  const localURL = pathToFileURL(path.join(__dirname, 'index.html')).href;
+  const benchmarkURL = process.env.KELD_BENCH_URL;
+  const targetURL = benchmarkURL || localURL;
+  const focusTargetDocument = () => {
+    if (mainWindow.webContents.getURL() !== targetURL) {
+      return;
+    }
     mainWindow.show();
     mainWindow.focus();
-  });
+    mainWindow.webContents.focus();
+    mainWindow.webContents.removeListener('dom-ready', focusTargetDocument);
+  };
+  mainWindow.webContents.on('dom-ready', focusTargetDocument);
 
-  const benchmarkURL = process.env.KELD_BENCH_URL;
   if (benchmarkURL) {
     mainWindow.loadURL(benchmarkURL);
   } else {
-    mainWindow.loadFile(path.join(__dirname, 'index.html'));
+    mainWindow.loadURL(localURL);
   }
   mainWindow.webContents.on('did-finish-load', () => {
     try {
