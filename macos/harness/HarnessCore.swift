@@ -1176,20 +1176,23 @@ final class LoopbackBeaconServer: @unchecked Sendable {
             let hadFocus = Self.uniqueQueryValue("focus", components: components).flatMap { value in
                 value == "true" ? true : value == "false" ? false : nil
             }
-            guard let clientNow, let scriptStart, let firstRaf, let secondRaf,
-                  visibility == "visible", hadFocus == true,
-                  clientNow.isFinite, scriptStart.isFinite, firstRaf.isFinite, secondRaf.isFinite,
-                  scriptStart >= 0,
+            guard let clientNow, let scriptStart, let firstRaf, let secondRaf else {
+                return reject(target: target, kind: "beacon", status: 422, reason: "missing or invalid rendering-opportunity diagnostics", token: presentedToken)
+            }
+            guard visibility == "visible" else {
+                return reject(target: target, kind: "beacon", status: 422, reason: "hidden document", token: presentedToken)
+            }
+            guard hadFocus == true else {
+                return reject(target: target, kind: "beacon", status: 422, reason: "unfocused document", token: presentedToken)
+            }
+            guard clientNow.isFinite, scriptStart.isFinite, firstRaf.isFinite, secondRaf.isFinite else {
+                return reject(target: target, kind: "beacon", status: 422, reason: "non-finite rendering-opportunity diagnostics", token: presentedToken)
+            }
+            guard scriptStart >= 0,
                   scriptStart <= firstRaf,
                   firstRaf <= secondRaf,
                   secondRaf <= clientNow else {
-                return reject(
-                    target: target,
-                    kind: "beacon",
-                    status: 422,
-                    reason: "invalid, hidden, unfocused, duplicate, or unordered rendering-opportunity diagnostics",
-                    token: presentedToken
-                )
+                return reject(target: target, kind: "beacon", status: 422, reason: "unordered rendering-opportunity diagnostics", token: presentedToken)
             }
 
             lock.lock()
