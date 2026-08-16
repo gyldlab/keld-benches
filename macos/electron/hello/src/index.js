@@ -17,15 +17,25 @@ const createWindow = () => {
   const localURL = pathToFileURL(path.join(__dirname, 'index.html')).href;
   const benchmarkURL = process.env.KELD_BENCH_URL;
   const targetURL = benchmarkURL || localURL;
+  const focusTargetView = () => {
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.webContents.focus();
+  };
+  const focusTargetNavigation = (_event, url, _isInPlace, isMainFrame) => {
+    if (isMainFrame && url === targetURL) {
+      focusTargetView();
+    }
+  };
   const focusTargetDocument = () => {
     if (mainWindow.webContents.getURL() !== targetURL) {
       return;
     }
-    mainWindow.show();
-    mainWindow.focus();
-    mainWindow.webContents.focus();
+    focusTargetView();
+    mainWindow.webContents.removeListener('did-start-navigation', focusTargetNavigation);
     mainWindow.webContents.removeListener('dom-ready', focusTargetDocument);
   };
+  mainWindow.webContents.on('did-start-navigation', focusTargetNavigation);
   mainWindow.webContents.on('dom-ready', focusTargetDocument);
 
   if (benchmarkURL) {

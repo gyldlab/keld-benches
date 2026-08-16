@@ -4,7 +4,9 @@ const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, 'src/index.js'), 'utf8');
 const hiddenWindow = source.indexOf('show: false');
 const targetURL = source.indexOf('const targetURL = benchmarkURL || localURL;');
+const navigationRegistration = source.indexOf("mainWindow.webContents.on('did-start-navigation', focusTargetNavigation);");
 const focusRegistration = source.indexOf("mainWindow.webContents.on('dom-ready', focusTargetDocument);");
+const navigationGuard = source.indexOf('if (isMainFrame && url === targetURL)');
 const targetGuard = source.indexOf('mainWindow.webContents.getURL() !== targetURL');
 const show = source.indexOf('mainWindow.show();');
 const focus = source.indexOf('mainWindow.focus();');
@@ -14,7 +16,9 @@ const navigation = source.indexOf('mainWindow.loadURL(benchmarkURL);');
 if (
   hiddenWindow < 0 ||
   targetURL < 0 ||
+  navigationRegistration < 0 ||
   focusRegistration < 0 ||
+  navigationGuard < 0 ||
   targetGuard < 0 ||
   show < 0 ||
   focus < 0 ||
@@ -22,6 +26,6 @@ if (
   navigation < 0
 ) {
   throw new Error(
-    'the KEL-64 target document must be shown and focused from its dom-ready lifecycle',
+    'the KEL-64 target document must be focused at exact main-frame navigation and dom-ready',
   );
 }
