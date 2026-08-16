@@ -43,7 +43,12 @@ if [ "$(uname -s)" != Darwin ] || [ "$(uname -m)" != arm64 ]; then
 fi
 
 zip_path=${KELD_ELECTRON_ZIP:-}
-if [ -z "$zip_path" ]; then
+runtime_app=${KELD_ELECTRON_RUNTIME_APP:-}
+if [ -n "$zip_path" ] && [ -n "$runtime_app" ]; then
+  echo "set only one Electron runtime source: KELD_ELECTRON_ZIP or KELD_ELECTRON_RUNTIME_APP" >&2
+  exit 64
+fi
+if [ -z "$zip_path" ] && [ -z "$runtime_app" ]; then
   cache_root=${HOME:?HOME must be set}/Library/Caches/electron
   zip_path=$(
     find "$cache_root" -type f \
@@ -51,8 +56,25 @@ if [ -z "$zip_path" ]; then
       -print -quit 2>/dev/null || :
   )
 fi
-if [ -z "$zip_path" ] || [ ! -f "$zip_path" ] || [ -L "$zip_path" ]; then
-  echo "official Electron zip not found; run node node_modules/electron/install.js" >&2
+if [ -n "$runtime_app" ]; then
+  if [ ! -d "$runtime_app" ] || [ -L "$runtime_app" ]; then
+    echo "KELD_ELECTRON_RUNTIME_APP must name a real Electron.app directory" >&2
+    exit 65
+  fi
+  runtime_version=$(
+    /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+      "$runtime_app/Contents/Info.plist" 2>/dev/null || :
+  )
+  if [ "$runtime_version" != "$electron_version" ]; then
+    echo "runtime app version must be Electron $electron_version, found ${runtime_version:-unavailable}" >&2
+    exit 65
+  fi
+  if ! /usr/bin/codesign --verify --deep --strict "$runtime_app"; then
+    echo "KELD_ELECTRON_RUNTIME_APP must pass strict code-signature verification" >&2
+    exit 65
+  fi
+elif [ -z "$zip_path" ] || [ ! -f "$zip_path" ] || [ -L "$zip_path" ]; then
+  echo "official Electron zip not found; run node node_modules/electron/install.js or supply a strictly verified pinned runtime app" >&2
   exit 69
 fi
 
@@ -75,17 +97,22 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
-runtime_root="$temporary_root/runtime"
 staged_app="$temporary_root/Electron Hello.app"
 app_source="$temporary_root/app-source"
 app_asar="$staged_app/Contents/Resources/app.asar"
-/bin/mkdir -m 700 "$runtime_root" "$app_source"
-/usr/bin/ditto -x -k "$zip_path" "$runtime_root"
-if [ ! -d "$runtime_root/Electron.app" ] || [ -L "$runtime_root/Electron.app" ]; then
-  echo "official Electron zip did not contain Electron.app" >&2
-  exit 65
+/bin/mkdir -m 700 "$app_source"
+if [ -n "$runtime_app" ]; then
+  /usr/bin/ditto "$runtime_app" "$staged_app"
+else
+  runtime_root="$temporary_root/runtime"
+  /bin/mkdir -m 700 "$runtime_root"
+  /usr/bin/ditto -x -k "$zip_path" "$runtime_root"
+  if [ ! -d "$runtime_root/Electron.app" ] || [ -L "$runtime_root/Electron.app" ]; then
+    echo "official Electron zip did not contain Electron.app" >&2
+    exit 65
+  fi
+  /usr/bin/ditto "$runtime_root/Electron.app" "$staged_app"
 fi
-/usr/bin/ditto "$runtime_root/Electron.app" "$staged_app"
 
 for source_file in package.json src/index.js src/index.html src/preload.js; do
   if [ ! -f "$script_dir/$source_file" ] || [ -L "$script_dir/$source_file" ]; then
@@ -101,6 +128,13 @@ resources_directory="$staged_app/Contents/Resources"
 if [ -e "$resources_directory/app" ] || [ -L "$resources_directory/app" ]; then
   echo "Electron app must not contain a loose Resources/app fallback" >&2
   exit 65
+fi
+if [ -e "$app_asar" ] || [ -L "$app_asar" ]; then
+  if [ ! -f "$app_asar" ] || [ -L "$app_asar" ]; then
+    echo "existing Electron app.asar must be a regular file" >&2
+    exit 65
+  fi
+  /bin/rm -f -- "$app_asar"
 fi
 "$asar_bin" pack "$app_source" "$app_asar"
 if [ ! -f "$app_asar" ] || [ -L "$app_asar" ]; then

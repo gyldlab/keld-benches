@@ -34,6 +34,12 @@ that ignored bundle explicitly before rebuilding; the recipe refuses to
 overwrite an existing artifact. `KELD_ELECTRON_ZIP=/path/to/electron-v43.4.0-
 darwin-arm64.zip` may be supplied to select a specific official download.
 
+For an offline rebuild, `KELD_ELECTRON_RUNTIME_APP=/absolute/path/to/Electron.app`
+may replace the ZIP source. The recipe accepts that fallback only when the app
+is a real, strictly code-signature-verified **Electron 43.4.0** bundle; it then
+replaces its `app.asar`, recalculates the integrity header, re-applies the
+fuses, and signs the output. Set exactly one of the ZIP and runtime-app inputs.
+
 Do not commit `node_modules/`, `out/`, or the Electron zip.
 
 Before packaging, verify the KEL-64 focus-first navigation seam:
