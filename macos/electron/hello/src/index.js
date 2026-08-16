@@ -6,10 +6,16 @@ const createWindow = () => {
   const mainWindow = new BrowserWindow({
     width: 960,
     height: 640,
+    show: false,
     title: 'Electron Hello',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
+  });
+
+  mainWindow.webContents.once('dom-ready', () => {
+    mainWindow.show();
+    mainWindow.focus();
   });
 
   const benchmarkURL = process.env.KELD_BENCH_URL;

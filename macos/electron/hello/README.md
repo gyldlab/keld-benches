@@ -36,6 +36,12 @@ darwin-arm64.zip` may be supplied to select a specific official download.
 
 Do not commit `node_modules/`, `out/`, or the Electron zip.
 
+Before packaging, verify the KEL-64 focus-first navigation seam:
+
+```bash
+node test-keld-bench-focus.js
+```
+
 ## Weigh
 
 1. `du -sh` on `Electron Hello.app`; `stat` the zip
@@ -46,3 +52,5 @@ Do not commit `node_modules/`, `out/`, or the Electron zip.
 
 For the shared KEL-64 oracle, the harness supplies `KELD_BENCH_URL`; the fixture
 loads that loopback URL when present and keeps the bundled page for normal runs.
+Its window is created hidden and is shown/focused from Electron's `dom-ready`
+lifecycle event, before the canonical document's first rendering opportunity.
