@@ -55,7 +55,7 @@ Paint marker: `/tmp/keld-benches-neutralino-painted`.
 
 For the shared KEL-64 oracle, the harness supplies `KELD_BENCH_URL`; the fixture
 reads it through `os.getEnv`, awaits the documented native `window.focus` call,
-then navigates to that loopback URL. This makes the canonical document's
-double-rAF beacon attest an actually focused window rather than merely a
-foreground app process. When the variable is absent, normal bundled-page startup
-is unchanged.
+then awaits Neutralino's documented `windowFocus` event before navigating to
+that loopback URL. This makes the canonical document's double-rAF beacon attest
+an actually focused window rather than merely a foreground app process. When
+the variable is absent, normal bundled-page startup is unchanged.

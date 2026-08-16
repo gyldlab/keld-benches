@@ -16,8 +16,18 @@ if (!config.nativeAllowList.includes('window.focus')) {
 }
 
 const focus = source.indexOf('await Neutralino.window.focus();');
+const focusEvent = source.indexOf('Neutralino.events.on("windowFocus",');
+const focusObserved = source.indexOf('await windowFocusObserved;');
 const navigate = source.indexOf('window.location.replace(benchmarkURL);');
-if (focus < 0 || navigate < 0 || focus > navigate) {
-  throw new Error('KELD_BENCH_URL navigation must await window.focus before replacing the document');
+if (
+  focusEvent < 0 ||
+  focus < 0 ||
+  focusObserved < 0 ||
+  navigate < 0 ||
+  focusEvent > focus ||
+  focus > focusObserved ||
+  focusObserved > navigate
+) {
+  throw new Error('KELD_BENCH_URL navigation must await the native windowFocus event after window.focus');
 }
 NODE
