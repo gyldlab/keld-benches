@@ -63,3 +63,15 @@ main-frame navigation, then re-checked at Electron's `dom-ready` lifecycle
 event. It calls Electron's app-level `focus({ steal: true })`, then native and
 `webContents.focus()` so the renderer, not merely the native window, owns focus
 before the canonical page reaches its first rendering opportunity.
+
+For a KEL-64 launch, pass both Chromium switches through LaunchServices—before
+Chromium bootstraps—not through JavaScript after Electron has begun starting:
+
+```bash
+--app-arg 'Electron=--password-store=basic' \
+--app-arg 'Electron=--use-mock-keychain'
+```
+
+The benchmark page has no credential flow. These switches avoid a per-user
+macOS Keychain lookup that can foreground `SecurityAgent` and invalidate the
+focused-renderer contract.

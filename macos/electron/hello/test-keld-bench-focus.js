@@ -28,6 +28,6 @@ if (
   navigation < 0
 ) {
   throw new Error(
-    'the KEL-64 target document must be focused at exact main-frame navigation and dom-ready',
+    'the KEL-64 fixture must focus the canonical main-frame navigation and dom-ready target',
   );
 }
