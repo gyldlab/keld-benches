@@ -366,6 +366,7 @@ struct SampleRecord: Codable {
     let launchCallbackOffsetMilliseconds: Double?
     let applicationWasActiveAtLaunchCallback: Bool?
     let applicationWasActiveAtBeacon: Bool?
+    let foreground: ForegroundEvidence
     let hostConditionBeforeLaunch: HostConditionEvidence
     let hostConditionAfterCleanup: HostConditionEvidence
     let beacon: BeaconEvidence?
@@ -374,6 +375,106 @@ struct SampleRecord: Codable {
     let coalition: CoalitionEvidence?
     let serverEvents: [ServerEventEvidence]
     let cleanup: CleanupRecord?
+}
+
+struct ForegroundEvidence: Codable {
+    let observerInstalledBeforeLaunch: Bool
+    let anchorGenerationCaptured: Bool
+    let targetGenerationCaptured: Bool
+    let targetActivatedBeforeBeacon: Bool
+    let transitionUninterruptedBeforeBeacon: Bool
+    let exactAnchorRestoredAfterCleanup: Bool
+    let reasonCode: ForegroundFailureReason?
+
+    var isCompleteForPublication: Bool {
+        observerInstalledBeforeLaunch
+            && anchorGenerationCaptured
+            && targetGenerationCaptured
+            && targetActivatedBeforeBeacon
+            && transitionUninterruptedBeforeBeacon
+            && exactAnchorRestoredAfterCleanup
+            && reasonCode == nil
+    }
+
+    static func captureFailure(_ reason: ForegroundFailureReason) -> ForegroundEvidence {
+        ForegroundEvidence(
+            observerInstalledBeforeLaunch: true,
+            anchorGenerationCaptured: false,
+            targetGenerationCaptured: false,
+            targetActivatedBeforeBeacon: false,
+            transitionUninterruptedBeforeBeacon: false,
+            exactAnchorRestoredAfterCleanup: false,
+            reasonCode: reason
+        )
+    }
+
+    static let notAttempted = ForegroundEvidence(
+        observerInstalledBeforeLaunch: false,
+        anchorGenerationCaptured: false,
+        targetGenerationCaptured: false,
+        targetActivatedBeforeBeacon: false,
+        transitionUninterruptedBeforeBeacon: false,
+        exactAnchorRestoredAfterCleanup: false,
+        reasonCode: nil
+    )
+}
+
+struct ForegroundSessionEvidence: Codable {
+    let observerInstalledOnceBeforeArms: Bool
+    let observerRemainedInstalledThroughArms: Bool
+    let immutableAnchorUsedForEveryStartedSample: Bool
+    let committedCursorAdvancedOnlyAfterExactRestoration: Bool
+    let allSampleLeasesReleased: Bool
+    let tailSealedAtExactAnchor: Bool
+    let atLeastOneSampleStarted: Bool
+    let exactRestorationCommittedForEveryStartedSample: Bool
+    let everyStartedSampleFinished: Bool
+    let startedSampleCount: Int
+    let exactRestorationCount: Int
+    let finishedSampleCount: Int
+
+    init(
+        observerInstalledOnceBeforeArms: Bool,
+        observerRemainedInstalledThroughArms: Bool,
+        immutableAnchorUsedForEveryStartedSample: Bool,
+        committedCursorAdvancedOnlyAfterExactRestoration: Bool,
+        allSampleLeasesReleased: Bool,
+        tailSealedAtExactAnchor: Bool,
+        samplesStarted: Int,
+        exactRestorationCommitCount: Int,
+        finishedSampleCount: Int
+    ) {
+        self.observerInstalledOnceBeforeArms = observerInstalledOnceBeforeArms
+        self.observerRemainedInstalledThroughArms = observerRemainedInstalledThroughArms
+        self.immutableAnchorUsedForEveryStartedSample = immutableAnchorUsedForEveryStartedSample
+        self.committedCursorAdvancedOnlyAfterExactRestoration =
+            committedCursorAdvancedOnlyAfterExactRestoration
+        self.allSampleLeasesReleased = allSampleLeasesReleased
+        self.tailSealedAtExactAnchor = tailSealedAtExactAnchor
+        atLeastOneSampleStarted = samplesStarted > 0
+        exactRestorationCommittedForEveryStartedSample =
+            exactRestorationCommitCount == samplesStarted
+        everyStartedSampleFinished = finishedSampleCount == samplesStarted
+        startedSampleCount = samplesStarted
+        exactRestorationCount = exactRestorationCommitCount
+        self.finishedSampleCount = finishedSampleCount
+    }
+
+    func isCompleteForPublication(recordedSampleCount: Int) -> Bool {
+        recordedSampleCount > 0
+            && observerInstalledOnceBeforeArms
+            && observerRemainedInstalledThroughArms
+            && immutableAnchorUsedForEveryStartedSample
+            && committedCursorAdvancedOnlyAfterExactRestoration
+            && allSampleLeasesReleased
+            && tailSealedAtExactAnchor
+            && atLeastOneSampleStarted
+            && exactRestorationCommittedForEveryStartedSample
+            && everyStartedSampleFinished
+            && startedSampleCount == recordedSampleCount
+            && exactRestorationCount == recordedSampleCount
+            && finishedSampleCount == recordedSampleCount
+    }
 }
 
 struct PublicationReason: Codable, Equatable {
@@ -421,6 +522,7 @@ struct BenchmarkDocument: Codable {
     let fixtures: [FixtureMetadata]
     let protocolMetadata: ProtocolMetadata
     let configuration: MeasurementConfiguration
+    let foregroundSession: ForegroundSessionEvidence
     let samples: [SampleRecord]
     let summaries: [AppSummary]
     let abortedReason: String?
@@ -435,6 +537,883 @@ private struct LaunchOutcome {
     let callbackNanoseconds: UInt64
     let wasActiveAtCallback: Bool
     let callbackError: String?
+}
+
+private struct ForegroundActivationEvent: Sendable {
+    let monotonicNanoseconds: UInt64
+    let generation: ForegroundProcessGeneration?
+}
+
+private struct ForegroundRestorationRecorderSnapshot {
+    let startIndex: Int
+    let revision: UInt64
+    let slotCount: Int
+    let nextIndex: Int
+    let values: [ForegroundActivationEvent]
+    let hasIncompleteObservation: Bool
+}
+
+private struct ForegroundRestorationDecision {
+    private(set) var hasCompletedActivationIntent = false
+    private(set) var latestCompletedActivationIntent: ForegroundProcessGeneration?
+
+    mutating func drain(_ events: [ForegroundActivationEvent]) {
+        for event in events {
+            hasCompletedActivationIntent = true
+            latestCompletedActivationIntent = event.generation
+        }
+    }
+
+    func canAccept(
+        anchor: ForegroundProcessGeneration,
+        frontmost: ForegroundProcessGeneration?,
+        hasIncompleteObservation: Bool,
+        recorderSnapshotIsCurrent: Bool
+    ) -> Bool {
+        hasCompletedActivationIntent
+            && latestCompletedActivationIntent == anchor
+            && !hasIncompleteObservation
+            && frontmost == anchor
+            && recorderSnapshotIsCurrent
+    }
+}
+
+private func foregroundTailCanSeal(
+    anchor: ForegroundProcessGeneration,
+    events: [ForegroundActivationEvent],
+    hasIncompleteObservation: Bool,
+    anchorStatus: ForegroundAnchorGenerationStatus,
+    frontmost: ForegroundProcessGeneration?
+) -> Bool {
+    !hasIncompleteObservation
+        && anchorStatus == .sameGeneration
+        && frontmost == anchor
+        && events.allSatisfy { $0.generation == anchor }
+}
+
+private struct ForegroundObservationSeed: Sendable {
+    let id: UUID
+    let monotonicNanoseconds: UInt64
+}
+
+#if FOREGROUND_STATE_SELF_TEST
+private final class ForegroundObservationAdmissionBarrier: @unchecked Sendable {
+    private let condition = NSCondition()
+    private var admissionWorkStarted = false
+    private var admissionWorkObservedRecorderLockHeld = false
+    private var sealWillContend = false
+
+    func supplyObservationSeedWhileRecorderLockShouldBeOwned(
+        recorderLockHeld: Bool
+    ) -> ForegroundObservationSeed {
+        condition.lock()
+        admissionWorkStarted = true
+        admissionWorkObservedRecorderLockHeld = recorderLockHeld
+        condition.broadcast()
+        let deadline = Date().addingTimeInterval(2)
+        while !sealWillContend, condition.wait(until: deadline) {}
+        condition.unlock()
+        return ForegroundObservationSeed(
+            id: UUID(),
+            monotonicNanoseconds: monotonicNowNanoseconds()
+        )
+    }
+
+    func awaitAdmissionWorkStarting() -> Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        let deadline = Date().addingTimeInterval(2)
+        while !admissionWorkStarted {
+            guard condition.wait(until: deadline) else { return false }
+        }
+        return true
+    }
+
+    func observedRecorderLockHeldDuringAdmissionWork() -> Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        return admissionWorkObservedRecorderLockHeld
+    }
+
+    func announceSealContention() {
+        condition.lock()
+        sealWillContend = true
+        condition.broadcast()
+        condition.unlock()
+    }
+}
+#endif
+
+private final class ForegroundActivationRecorder: @unchecked Sendable {
+    struct ObservationHandle {
+        let id: UUID
+        let monotonicNanoseconds: UInt64
+    }
+
+    private struct ObservationSlot {
+        let id: UUID
+        let monotonicNanoseconds: UInt64
+        var completed = false
+        var generation: ForegroundProcessGeneration?
+    }
+
+    private struct Waiter {
+        let observedRevision: UInt64
+        let continuation: CheckedContinuation<Bool, Never>
+    }
+
+    private let lock = NSLock()
+    private let timeoutQueue = DispatchQueue(label: "com.keld.benches.harness.foreground-timeout")
+    private var slots: [ObservationSlot] = []
+    private var slotIndexesById: [UUID: Int] = [:]
+    private var revision: UInt64 = 0
+    private var waiters: [UUID: Waiter] = [:]
+    private var closed = false
+#if FOREGROUND_STATE_SELF_TEST
+    private let testAdmissionBarrier: ForegroundObservationAdmissionBarrier?
+    private let testObservationSeedProvider:
+        (@Sendable (Bool) -> ForegroundObservationSeed)?
+    private var testAdmissionLockHeld = false
+
+    init(
+        testAdmissionBarrier: ForegroundObservationAdmissionBarrier? = nil,
+        testObservationSeedProvider:
+            (@Sendable (Bool) -> ForegroundObservationSeed)? = nil
+    ) {
+        self.testAdmissionBarrier = testAdmissionBarrier
+        self.testObservationSeedProvider = testObservationSeedProvider
+    }
+#else
+    init() {}
+#endif
+
+    func beginObservation() -> ObservationHandle? {
+        lock.lock()
+#if FOREGROUND_STATE_SELF_TEST
+        testAdmissionLockHeld = true
+#endif
+        guard !closed else {
+#if FOREGROUND_STATE_SELF_TEST
+            testAdmissionLockHeld = false
+#endif
+            lock.unlock()
+            return nil
+        }
+        let seed = makeObservationSeed()
+        let observationId = seed.id
+        let now = seed.monotonicNanoseconds
+        let monotonicNanoseconds: UInt64
+        if let last = slots.last?.monotonicNanoseconds, now <= last {
+            monotonicNanoseconds = last &+ 1
+        } else {
+            monotonicNanoseconds = now
+        }
+        let handle = ObservationHandle(
+            id: observationId,
+            monotonicNanoseconds: monotonicNanoseconds
+        )
+        slotIndexesById[handle.id] = slots.count
+        slots.append(ObservationSlot(
+            id: handle.id,
+            monotonicNanoseconds: handle.monotonicNanoseconds
+        ))
+        revision &+= 1
+        let currentRevision = revision
+        let ready = waiters.filter { $0.value.observedRevision < currentRevision }
+        for (id, _) in ready { waiters.removeValue(forKey: id) }
+#if FOREGROUND_STATE_SELF_TEST
+        testAdmissionLockHeld = false
+#endif
+        lock.unlock()
+        for (_, waiter) in ready { waiter.continuation.resume(returning: true) }
+        return handle
+    }
+
+    private func makeObservationSeed() -> ForegroundObservationSeed {
+#if FOREGROUND_STATE_SELF_TEST
+        if let testObservationSeedProvider {
+            return testObservationSeedProvider(testAdmissionLockHeld)
+        }
+#endif
+        return ForegroundObservationSeed(
+            id: UUID(),
+            monotonicNanoseconds: monotonicNowNanoseconds()
+        )
+    }
+
+    func completeObservation(
+        _ observationId: UUID,
+        generation: ForegroundProcessGeneration?
+    ) {
+        lock.lock()
+        guard let slotIndex = slotIndexesById[observationId],
+              !slots[slotIndex].completed else {
+            lock.unlock()
+            return
+        }
+        slots[slotIndex].completed = true
+        slots[slotIndex].generation = generation
+        revision &+= 1
+        let currentRevision = revision
+        let ready = waiters.filter { $0.value.observedRevision < currentRevision }
+        for (id, _) in ready { waiters.removeValue(forKey: id) }
+        lock.unlock()
+        for (_, waiter) in ready { waiter.continuation.resume(returning: true) }
+    }
+
+    func events(after index: Int, through cutoffNanoseconds: UInt64) -> (
+        values: [ForegroundActivationEvent],
+        nextIndex: Int,
+        hasIncompleteObservationAtOrBeforeCutoff: Bool
+    ) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard index <= slots.count else {
+            return ([], index, true)
+        }
+        var nextIndex = index
+        var values: [ForegroundActivationEvent] = []
+        var hasIncompleteObservationAtOrBeforeCutoff = false
+        while nextIndex < slots.count,
+              slots[nextIndex].monotonicNanoseconds <= cutoffNanoseconds {
+            let slot = slots[nextIndex]
+            guard slot.completed else {
+                hasIncompleteObservationAtOrBeforeCutoff = true
+                break
+            }
+            values.append(ForegroundActivationEvent(
+                monotonicNanoseconds: slot.monotonicNanoseconds,
+                generation: slot.generation
+            ))
+            nextIndex += 1
+        }
+        return (
+            values,
+            nextIndex,
+            hasIncompleteObservationAtOrBeforeCutoff
+        )
+    }
+
+    func restorationSnapshot(after index: Int) -> ForegroundRestorationRecorderSnapshot {
+        lock.lock()
+        defer { lock.unlock() }
+        guard index <= slots.count else {
+            return ForegroundRestorationRecorderSnapshot(
+                startIndex: index,
+                revision: revision,
+                slotCount: slots.count,
+                nextIndex: index,
+                values: [],
+                hasIncompleteObservation: true
+            )
+        }
+
+        var nextIndex = index
+        var values: [ForegroundActivationEvent] = []
+        while nextIndex < slots.count {
+            let slot = slots[nextIndex]
+            guard slot.completed else { break }
+            values.append(ForegroundActivationEvent(
+                monotonicNanoseconds: slot.monotonicNanoseconds,
+                generation: slot.generation
+            ))
+            nextIndex += 1
+        }
+        return ForegroundRestorationRecorderSnapshot(
+            startIndex: index,
+            revision: revision,
+            slotCount: slots.count,
+            nextIndex: nextIndex,
+            values: values,
+            hasIncompleteObservation: nextIndex < slots.count
+        )
+    }
+
+    func restorationSnapshotIsCurrent(
+        _ snapshot: ForegroundRestorationRecorderSnapshot
+    ) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return restorationSnapshotIsCurrentLocked(snapshot)
+    }
+
+    @MainActor
+    func withCurrentSnapshot(
+        _ snapshot: ForegroundRestorationRecorderSnapshot,
+        acceptance: () -> Bool
+    ) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard restorationSnapshotIsCurrentLocked(snapshot) else { return false }
+        return acceptance()
+    }
+
+    @MainActor
+    func sealCurrentSnapshot(
+        _ snapshot: ForegroundRestorationRecorderSnapshot,
+        acceptance: () -> Bool
+    ) -> Bool {
+#if FOREGROUND_STATE_SELF_TEST
+        testAdmissionBarrier?.announceSealContention()
+#endif
+        lock.lock()
+        defer { lock.unlock() }
+        guard !closed,
+              restorationSnapshotIsCurrentLocked(snapshot),
+              acceptance() else {
+            return false
+        }
+        closed = true
+        return true
+    }
+
+    func stopAcceptingObservations() {
+        lock.lock()
+        closed = true
+        lock.unlock()
+    }
+
+    private func restorationSnapshotIsCurrentLocked(
+        _ snapshot: ForegroundRestorationRecorderSnapshot
+    ) -> Bool {
+        guard revision == snapshot.revision,
+              slots.count == snapshot.slotCount,
+              snapshot.startIndex <= slots.count else {
+            return false
+        }
+        var completedPrefixEnd = snapshot.startIndex
+        while completedPrefixEnd < slots.count,
+              slots[completedPrefixEnd].completed {
+            completedPrefixEnd += 1
+        }
+        return completedPrefixEnd == snapshot.nextIndex
+            && (completedPrefixEnd < slots.count) == snapshot.hasIncompleteObservation
+    }
+
+    func waitForEvent(after observedRevision: UInt64, deadlineNanoseconds: UInt64) async -> Bool {
+        await withCheckedContinuation { continuation in
+            let waiterId = UUID()
+            lock.lock()
+            if revision > observedRevision {
+                lock.unlock()
+                continuation.resume(returning: true)
+                return
+            }
+            let now = monotonicNowNanoseconds()
+            if now >= deadlineNanoseconds {
+                lock.unlock()
+                continuation.resume(returning: false)
+                return
+            }
+            waiters[waiterId] = Waiter(
+                observedRevision: observedRevision,
+                continuation: continuation
+            )
+            lock.unlock()
+            timeoutQueue.asyncAfter(
+                deadline: .now() + .nanoseconds(Int(clamping: deadlineNanoseconds - now))
+            ) { [weak self] in
+                self?.timeout(waiterId)
+            }
+        }
+    }
+
+    func cancelWaiters() {
+        lock.lock()
+        let pending = waiters.values
+        waiters.removeAll()
+        lock.unlock()
+        for waiter in pending { waiter.continuation.resume(returning: false) }
+    }
+
+    private func timeout(_ waiterId: UUID) {
+        lock.lock()
+        let waiter = waiters.removeValue(forKey: waiterId)
+        lock.unlock()
+        waiter?.continuation.resume(returning: false)
+    }
+}
+
+private func foregroundGeneration(
+    for application: NSRunningApplication
+) throws -> ForegroundProcessGeneration? {
+    let pid = application.processIdentifier
+    guard let identity = try kernelProcessUniqueIdentity(for: pid) else { return nil }
+    return ForegroundProcessGeneration(
+        pid: pid,
+        uniqueId: identity.uniqueId,
+        pidVersion: identity.pidVersion
+    )
+}
+
+@MainActor
+private final class ForegroundSessionMonitor {
+    private let workspace: NSWorkspace
+    private let notificationCenter: NotificationCenter
+    private let observation: NSObjectProtocol
+    private let recorder: ForegroundActivationRecorder
+    private let continuityToken = UUID()
+    private var cursorState: ForegroundSessionCursorState
+    private var stopped = false
+    private var armsFinished = false
+    private var immutableAnchorUsedForEveryStartedSample = true
+    private var committedCursorAdvancedOnlyAfterExactRestoration = true
+    private var samplesStarted = 0
+    private var exactRestorationCommitCount = 0
+    private var finishedSampleCount = 0
+    private var lastRestorationCommittedLeaseId: UInt64?
+
+    private init(
+        workspace: NSWorkspace,
+        notificationCenter: NotificationCenter,
+        observation: NSObjectProtocol,
+        recorder: ForegroundActivationRecorder,
+        committedCursor: Int,
+        anchor: ForegroundProcessGeneration
+    ) {
+        self.workspace = workspace
+        self.notificationCenter = notificationCenter
+        self.observation = observation
+        self.recorder = recorder
+        cursorState = ForegroundSessionCursorState(
+            anchor: anchor,
+            committedCursor: committedCursor
+        )
+    }
+
+    static func capture() throws -> ForegroundSessionMonitor {
+        let workspace = NSWorkspace.shared
+        let notificationCenter = workspace.notificationCenter
+        let recorder = ForegroundActivationRecorder()
+        let observation = notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: nil
+        ) { notification in
+            guard let observation = recorder.beginObservation() else { return }
+            guard let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey]
+                as? NSRunningApplication else {
+                recorder.completeObservation(observation.id, generation: nil)
+                return
+            }
+            do {
+                recorder.completeObservation(
+                    observation.id,
+                    generation: try foregroundGeneration(for: application)
+                )
+            } catch {
+                writeDiagnostic("foreground activation generation capture failed: \(error)")
+                recorder.completeObservation(observation.id, generation: nil)
+            }
+        }
+        do {
+            let initialSnapshot = recorder.restorationSnapshot(after: 0)
+            guard !initialSnapshot.hasIncompleteObservation else {
+                throw HarnessError.foregroundInterference(.activationGenerationUnavailable)
+            }
+            guard let anchorApplication = workspace.frontmostApplication else {
+                throw HarnessError.foregroundInterference(.anchorUnavailable)
+            }
+            guard let captured = try foregroundGeneration(for: anchorApplication) else {
+                throw HarnessError.foregroundInterference(.anchorGenerationUnavailable)
+            }
+            for event in initialSnapshot.values where event.generation == nil {
+                _ = event
+                throw HarnessError.foregroundInterference(.activationGenerationUnavailable)
+            }
+            if let latestIntent = initialSnapshot.values.last?.generation,
+               latestIntent != captured {
+                throw HarnessError.foregroundInterference(.anchorChangedBeforeLaunch)
+            }
+            let snapshotAccepted = recorder.withCurrentSnapshot(
+                initialSnapshot,
+                acceptance: { true }
+            )
+            guard snapshotAccepted else {
+                throw HarnessError.foregroundInterference(.activationGenerationUnavailable)
+            }
+            return ForegroundSessionMonitor(
+                workspace: workspace,
+                notificationCenter: notificationCenter,
+                observation: observation,
+                recorder: recorder,
+                committedCursor: initialSnapshot.nextIndex,
+                anchor: captured
+            )
+        } catch {
+            notificationCenter.removeObserver(observation)
+            recorder.cancelWaiters()
+            if let harnessError = error as? HarnessError { throw harnessError }
+            writeDiagnostic("foreground session anchor capture failed: \(error)")
+            throw HarnessError.foregroundInterference(.anchorGenerationUnavailable)
+        }
+    }
+
+    func beginSample() throws -> ForegroundSampleMonitor {
+        guard !stopped, !armsFinished,
+              let lease = cursorState.beginSample() else {
+            throw HarnessError.measurement(
+                "foreground session already owns an active sample; finish it before starting another"
+            )
+        }
+        let sample = ForegroundSampleMonitor(
+            session: self,
+            workspace: workspace,
+            recorder: recorder,
+            lease: lease,
+            anchor: cursorState.anchor,
+            continuityToken: continuityToken
+        )
+        immutableAnchorUsedForEveryStartedSample = immutableAnchorUsedForEveryStartedSample
+            && sample.anchor == cursorState.anchor
+        samplesStarted += 1
+        return sample
+    }
+
+    func owns(
+        _ lease: ForegroundSampleLease,
+        anchor: ForegroundProcessGeneration,
+        continuityToken: UUID
+    ) -> Bool {
+        !stopped
+            && self.continuityToken == continuityToken
+            && cursorState.anchor == anchor
+            && cursorState.owns(lease)
+    }
+
+    func commitExactRestoration(
+        _ lease: ForegroundSampleLease,
+        cursor: Int,
+        anchor: ForegroundProcessGeneration,
+        continuityToken: UUID
+    ) -> Bool {
+        guard owns(lease, anchor: anchor, continuityToken: continuityToken),
+              lastRestorationCommittedLeaseId != lease.id,
+              cursorState.commit(lease, cursor: cursor) else {
+            committedCursorAdvancedOnlyAfterExactRestoration = false
+            return false
+        }
+        lastRestorationCommittedLeaseId = lease.id
+        exactRestorationCommitCount += 1
+        return true
+    }
+
+    func endSample(_ lease: ForegroundSampleLease) -> Bool {
+        guard cursorState.end(lease) else { return false }
+        finishedSampleCount += 1
+        return true
+    }
+
+    func finishArms() -> ForegroundSessionEvidence {
+        armsFinished = true
+        let observerRemainedInstalledThroughArms = !stopped
+        let tailSnapshot = recorder.restorationSnapshot(after: cursorState.committedCursor)
+        let tailSealedAtExactAnchor = recorder.sealCurrentSnapshot(
+            tailSnapshot,
+            acceptance: {
+                guard !stopped,
+                      cursorState.activeLease == nil else {
+                    return false
+                }
+
+                let liveAnchorStatus: ForegroundAnchorGenerationStatus
+                let frontmost: ForegroundProcessGeneration?
+                do {
+                    guard let liveIdentity = try kernelProcessUniqueIdentity(
+                        for: cursorState.anchor.pid
+                    ) else {
+                        return false
+                    }
+                    liveAnchorStatus = liveIdentity.uniqueId == cursorState.anchor.uniqueId
+                        && liveIdentity.pidVersion == cursorState.anchor.pidVersion
+                        ? .sameGeneration
+                        : .reused
+                    frontmost = try workspace.frontmostApplication.flatMap(foregroundGeneration)
+                } catch {
+                    writeDiagnostic("foreground end-of-arms tail seal failed: \(error)")
+                    return false
+                }
+
+                guard foregroundTailCanSeal(
+                    anchor: cursorState.anchor,
+                    events: tailSnapshot.values,
+                    hasIncompleteObservation: tailSnapshot.hasIncompleteObservation,
+                    anchorStatus: liveAnchorStatus,
+                    frontmost: frontmost
+                ) else {
+                    return false
+                }
+                return cursorState.sealTail(cursor: tailSnapshot.nextIndex)
+            }
+        )
+        if !tailSealedAtExactAnchor {
+            recorder.stopAcceptingObservations()
+        }
+        return ForegroundSessionEvidence(
+            observerInstalledOnceBeforeArms: true,
+            observerRemainedInstalledThroughArms: observerRemainedInstalledThroughArms,
+            immutableAnchorUsedForEveryStartedSample: immutableAnchorUsedForEveryStartedSample,
+            committedCursorAdvancedOnlyAfterExactRestoration: committedCursorAdvancedOnlyAfterExactRestoration,
+            allSampleLeasesReleased: cursorState.activeLease == nil,
+            tailSealedAtExactAnchor: tailSealedAtExactAnchor,
+            samplesStarted: samplesStarted,
+            exactRestorationCommitCount: exactRestorationCommitCount,
+            finishedSampleCount: finishedSampleCount
+        )
+    }
+
+    func observerIsContinuous(_ token: UUID) -> Bool {
+        !stopped && continuityToken == token
+    }
+
+    func stop() {
+        guard !stopped else { return }
+        stopped = true
+        recorder.stopAcceptingObservations()
+        notificationCenter.removeObserver(observation)
+        recorder.cancelWaiters()
+    }
+}
+
+@MainActor
+private final class ForegroundSampleMonitor {
+    fileprivate let anchor: ForegroundProcessGeneration
+    private let session: ForegroundSessionMonitor
+    private let workspace: NSWorkspace
+    private let recorder: ForegroundActivationRecorder
+    private let lease: ForegroundSampleLease
+    private let continuityToken: UUID
+    private var eventCursor: Int
+    private var state: ForegroundTransitionState
+    private var restorationCommitted = false
+    private var finished = false
+
+    init(
+        session: ForegroundSessionMonitor,
+        workspace: NSWorkspace,
+        recorder: ForegroundActivationRecorder,
+        lease: ForegroundSampleLease,
+        anchor: ForegroundProcessGeneration,
+        continuityToken: UUID
+    ) {
+        self.session = session
+        self.workspace = workspace
+        self.recorder = recorder
+        self.lease = lease
+        self.anchor = anchor
+        self.continuityToken = continuityToken
+        eventCursor = lease.startCursor
+        state = ForegroundTransitionState(anchor: anchor)
+    }
+
+    func prepareForLaunch() throws {
+        let recorderSnapshot = recorder.restorationSnapshot(after: eventCursor)
+        guard !recorderSnapshot.hasIncompleteObservation else {
+            state.activationGenerationWasUnavailable()
+            try throwIfFailed()
+            return
+        }
+        for event in recorderSnapshot.values {
+            state.observeBetweenSampleActivation(event.generation)
+        }
+        try throwIfFailed()
+
+        let generation: ForegroundProcessGeneration?
+        do {
+            generation = try workspace.frontmostApplication.flatMap(foregroundGeneration)
+        } catch {
+            writeDiagnostic("foreground pre-launch generation check failed: \(error)")
+            state.reject(.anchorGenerationUnavailable)
+            throw HarnessError.foregroundInterference(.anchorGenerationUnavailable)
+        }
+        let accepted = recorder.withCurrentSnapshot(recorderSnapshot, acceptance: {
+            guard session.owns(
+                lease,
+                anchor: anchor,
+                continuityToken: continuityToken
+            ) else {
+                return false
+            }
+            state.prepareForLaunch(current: generation)
+            guard state.failureReason == nil else { return false }
+            eventCursor = recorderSnapshot.nextIndex
+            return true
+        })
+        guard accepted else {
+            if state.failureReason == nil { state.activationGenerationWasUnavailable() }
+            try throwIfFailed()
+            return
+        }
+        try throwIfFailed()
+    }
+
+    func bindTarget(_ ownership: KernelLaunchOwnership?) throws {
+        let generation = ownership.map {
+            ForegroundProcessGeneration(
+                pid: $0.pid,
+                uniqueId: $0.uniqueId,
+                pidVersion: $0.pidVersion
+            )
+        }
+        state.bindTarget(generation)
+        inspectPreBeaconEvents(through: monotonicNowNanoseconds())
+        try throwIfFailed()
+    }
+
+    func acceptBeacon(_ beacon: BeaconReceipt, targetReportsActive: Bool) throws {
+        inspectPreBeaconEvents(through: beacon.receivedMonotonicNanoseconds)
+        state.acceptBeacon(targetReportsActive: targetReportsActive)
+        try throwIfFailed()
+    }
+
+    func inspectPreBeaconEvents(through cutoffNanoseconds: UInt64) {
+        let captured = recorder.events(after: eventCursor, through: cutoffNanoseconds)
+        eventCursor = captured.nextIndex
+        for event in captured.values {
+            if let generation = event.generation {
+                state.observeActivation(generation)
+            } else {
+                state.activationGenerationWasUnavailable()
+            }
+        }
+        if captured.hasIncompleteObservationAtOrBeforeCutoff {
+            state.activationGenerationWasUnavailable()
+        }
+    }
+
+    func awaitAnchorRestoration(deadlineNanoseconds: UInt64) async {
+        var restorationCursor = eventCursor
+        var restorationDecision = ForegroundRestorationDecision()
+        while monotonicNowNanoseconds() < deadlineNanoseconds {
+            let recorderSnapshot = recorder.restorationSnapshot(after: restorationCursor)
+            restorationCursor = recorderSnapshot.nextIndex
+            restorationDecision.drain(recorderSnapshot.values)
+
+            if recorderSnapshot.hasIncompleteObservation {
+                _ = await recorder.waitForEvent(
+                    after: recorderSnapshot.revision,
+                    deadlineNanoseconds: deadlineNanoseconds
+                )
+                continue
+            }
+
+            guard restorationDecision.hasCompletedActivationIntent,
+                  restorationDecision.latestCompletedActivationIntent == state.anchor else {
+                _ = await recorder.waitForEvent(
+                    after: recorderSnapshot.revision,
+                    deadlineNanoseconds: deadlineNanoseconds
+                )
+                continue
+            }
+
+            let anchorStatus: ForegroundAnchorGenerationStatus
+            do {
+                guard let liveIdentity = try kernelProcessUniqueIdentity(for: state.anchor.pid) else {
+                    _ = state.observeAnchorRestoration(current: nil, anchorStatus: .exited)
+                    return
+                }
+                anchorStatus = liveIdentity.uniqueId == state.anchor.uniqueId
+                    && liveIdentity.pidVersion == state.anchor.pidVersion
+                    ? .sameGeneration
+                    : .reused
+            } catch {
+                writeDiagnostic("foreground anchor restoration generation check failed: \(error)")
+                state.reject(.anchorGenerationUnavailable)
+                return
+            }
+
+            let current: ForegroundProcessGeneration?
+            do {
+                current = try workspace.frontmostApplication.flatMap(foregroundGeneration)
+            } catch {
+                writeDiagnostic("foreground restoration frontmost check failed: \(error)")
+                state.reject(.activationGenerationUnavailable)
+                return
+            }
+            let restorationCandidate = restorationDecision.canAccept(
+                anchor: state.anchor,
+                frontmost: current,
+                hasIncompleteObservation: recorderSnapshot.hasIncompleteObservation,
+                recorderSnapshotIsCurrent: true
+            )
+            if restorationCandidate {
+                var sessionCommitFailed = false
+                let restorationAccepted = recorder.withCurrentSnapshot(
+                    recorderSnapshot,
+                    acceptance: {
+                        guard !restorationCommitted else {
+                            _ = state.observeCommittedAnchorRestoration(
+                                current: current,
+                                anchorStatus: anchorStatus,
+                                sessionCommitAccepted: false
+                            )
+                            sessionCommitFailed = true
+                            return false
+                        }
+                        let sessionOwnsLease = session.owns(
+                            lease,
+                            anchor: anchor,
+                            continuityToken: continuityToken
+                        )
+                        let sessionCommitAccepted = sessionOwnsLease
+                            && session.commitExactRestoration(
+                                lease,
+                                cursor: recorderSnapshot.nextIndex,
+                                anchor: anchor,
+                                continuityToken: continuityToken
+                            )
+                        guard state.observeCommittedAnchorRestoration(
+                            current: current,
+                            anchorStatus: anchorStatus,
+                            sessionCommitAccepted: sessionCommitAccepted
+                        ) else {
+                            sessionCommitFailed = true
+                            return false
+                        }
+                        restorationCommitted = true
+                        eventCursor = recorderSnapshot.nextIndex
+                        return true
+                    }
+                )
+                if restorationAccepted { return }
+                if sessionCommitFailed {
+                    return
+                }
+            }
+            if anchorStatus == .reused { return }
+            _ = await recorder.waitForEvent(
+                after: recorderSnapshot.revision,
+                deadlineNanoseconds: deadlineNanoseconds
+            )
+        }
+        state.restorationTimedOut()
+    }
+
+    var failureReason: ForegroundFailureReason? { state.failureReason }
+
+    var evidence: ForegroundEvidence {
+        ForegroundEvidence(
+            observerInstalledBeforeLaunch: session.observerIsContinuous(continuityToken),
+            anchorGenerationCaptured: true,
+            targetGenerationCaptured: state.target != nil,
+            targetActivatedBeforeBeacon: state.targetActivatedBeforeBeacon,
+            transitionUninterruptedBeforeBeacon: state.transitionUninterruptedBeforeBeacon,
+            exactAnchorRestoredAfterCleanup: state.exactAnchorRestoredAfterCleanup,
+            reasonCode: state.failureReason
+        )
+    }
+
+    func finish() {
+        guard !finished else { return }
+        finished = true
+        _ = session.endSample(lease)
+    }
+
+    private func throwIfFailed() throws {
+        if let reason = state.failureReason {
+            throw HarnessError.foregroundInterference(reason)
+        }
+    }
 }
 
 private final class LaunchOwnershipWatchdog: @unchecked Sendable {
@@ -469,10 +1448,45 @@ private func publicFailureCode(_ error: Error) -> String {
     case .invalidArgument: return "invalid_argument"
     case .io: return "io_failure"
     case .launch: return "launch_failure"
+    case .foregroundInterference: return "foreground_interference"
     case .protocolViolation: return "protocol_violation"
     case .timeout: return "timeout"
     case .measurement: return "measurement_failure"
     }
+}
+
+private func sampleErrorAfterForegroundRestoration(
+    existingSampleError: String?,
+    foregroundFailureReason: ForegroundFailureReason?
+) -> String? {
+    guard foregroundFailureReason != nil else { return existingSampleError }
+    return existingSampleError ?? "foreground_interference"
+}
+
+private func sampleErrorAfterForegroundFinalization(
+    existingSampleError: String?,
+    foregroundEvidence: ForegroundEvidence
+) -> String? {
+    guard !foregroundEvidence.isCompleteForPublication else { return existingSampleError }
+    return existingSampleError ?? "foreground_interference"
+}
+
+private func abortedReasonAfterForegroundSessionFinalization(
+    existingAbortedReason: String?,
+    foregroundSessionProofComplete: Bool
+) -> String? {
+    guard !foregroundSessionProofComplete else { return existingAbortedReason }
+    return existingAbortedReason ?? "foreground_session_continuity_unproven"
+}
+
+private func benchmarkMeasurementSucceeded(
+    abortedReason: String?,
+    foregroundSessionProofComplete: Bool,
+    samplesContainFailure: Bool
+) -> Bool {
+    abortedReason == nil
+        && foregroundSessionProofComplete
+        && !samplesContainFailure
 }
 
 @MainActor
@@ -480,7 +1494,8 @@ private func launch(
     app: AppSpec,
     benchmarkURL: URL,
     token: String,
-    measurementTimeoutNanoseconds: UInt64
+    measurementTimeoutNanoseconds: UInt64,
+    foregroundMonitor: ForegroundSampleMonitor
 ) async throws -> LaunchOutcome {
     let configuration = NSWorkspace.OpenConfiguration()
     configuration.createsNewApplicationInstance = true
@@ -503,9 +1518,16 @@ private func launch(
         DispatchQueue.global(qos: .utility).asyncAfter(
             deadline: .now() + .nanoseconds(Int(clamping: measurementTimeoutNanoseconds))
         ) { ownershipWatchdog.fire() }
+        do {
+            try foregroundMonitor.prepareForLaunch()
+        } catch {
+            ownershipWatchdog.cancel()
+            continuation.resume(throwing: error)
+            return
+        }
         // This clock read is intentionally the statement immediately before the
-        // NSWorkspace launch API; setup, URL generation, and environment work are
-        // outside the measured interval.
+        // NSWorkspace launch API; setup, URL generation, foreground validation,
+        // and environment work are outside the measured interval.
         let t0 = monotonicNowNanoseconds()
         workspace.openApplication(at: app.bundleURL, configuration: configuration) { application, error in
             ownershipWatchdog.cancel()
@@ -724,6 +1746,7 @@ private func parseLaunchServicesOriginalPid(_ output: String) throws -> Int32? {
     return pid
 }
 
+@MainActor
 private func runOneSample(
     spec: AppSpec,
     round: Int,
@@ -731,8 +1754,10 @@ private func runOneSample(
     globalOrdinal: Int,
     options: RunnerOptions,
     server: LoopbackBeaconServer,
-    reader: ResourceCoalitionReader
+    reader: ResourceCoalitionReader,
+    foregroundMonitor: ForegroundSampleMonitor
 ) async -> SampleRecord {
+    defer { foregroundMonitor.finish() }
     let hostConditionBeforeLaunch = currentHostCondition()
     let token = UUID().uuidString.lowercased()
     let benchmarkURL = server.url(for: token)
@@ -753,6 +1778,7 @@ private func runOneSample(
     var sampleError: String?
     var cleanupRecord: CleanupRecord?
     var cleanupPreparationError: String?
+    var foregroundEvidence = ForegroundEvidence.notAttempted
 
     do {
         try server.activate(token: token)
@@ -760,11 +1786,13 @@ private func runOneSample(
             app: spec,
             benchmarkURL: benchmarkURL,
             token: token,
-            measurementTimeoutNanoseconds: timeoutNanoseconds
+            measurementTimeoutNanoseconds: timeoutNanoseconds,
+            foregroundMonitor: foregroundMonitor
         )
         launchOutcome = outcome
         let rootPid = outcome.launchedPid
         let deadline = outcome.t0Nanoseconds + timeoutNanoseconds
+        try foregroundMonitor.bindTarget(outcome.kernelOwnership)
         if let callbackError = outcome.callbackError {
             throw HarnessError.launch(callbackError)
         }
@@ -779,9 +1807,7 @@ private func runOneSample(
         }
         acceptedBeacon = beacon
         wasActiveAtBeacon = outcome.application.isActive
-        guard wasActiveAtBeacon == true else {
-            throw HarnessError.measurement("application was not active when the paint-opportunity beacon arrived")
-        }
+        try foregroundMonitor.acceptBeacon(beacon, targetReportsActive: wasActiveAtBeacon == true)
         paintMilliseconds = Double(beacon.receivedMonotonicNanoseconds - outcome.t0Nanoseconds) / 1_000_000
         server.finish(token: token)
 
@@ -834,8 +1860,22 @@ private func runOneSample(
         snapshot = stable.snapshot
         stableObservationCount = stable.observations
     } catch {
+        if acceptedBeacon == nil {
+            foregroundMonitor.inspectPreBeaconEvents(through: monotonicNowNanoseconds())
+        }
         writeDiagnostic("\(spec.label) round \(round) failed: \(error)")
-        sampleError = publicFailureCode(error)
+        if let foregroundReason = foregroundMonitor.failureReason {
+            writeDiagnostic(
+                "\(spec.label) round \(round) foreground contract failed: \(foregroundReason.rawValue)"
+            )
+            sampleError = "foreground_interference"
+        } else if let harnessError = error as? HarnessError,
+                  case .foregroundInterference(let reason) = harnessError {
+            foregroundEvidence = .captureFailure(reason)
+            sampleError = "foreground_interference"
+        } else {
+            sampleError = publicFailureCode(error)
+        }
     }
 
     // A missing/late beacon still owns a launched application. Resolve its
@@ -898,6 +1938,19 @@ private func runOneSample(
             if sampleError == nil { sampleError = "cleanup_failed:\(cleanupFailure)" }
         }
     }
+    await foregroundMonitor.awaitAnchorRestoration(
+        deadlineNanoseconds: monotonicNowNanoseconds() + cleanupTimeoutNanoseconds
+    )
+    foregroundEvidence = foregroundMonitor.evidence
+    if let reason = foregroundMonitor.failureReason {
+        writeDiagnostic(
+            "\(spec.label) round \(round) foreground contract failed: \(reason.rawValue)"
+        )
+        sampleError = sampleErrorAfterForegroundRestoration(
+            existingSampleError: sampleError,
+            foregroundFailureReason: reason
+        )
+    }
     server.finish(token: token)
     do {
         try await server.quiesceClientHandlers(
@@ -907,6 +1960,10 @@ private func runOneSample(
         writeDiagnostic("\(spec.label) round \(round) client quiescence failed: \(error)")
         if sampleError == nil { sampleError = "client_handlers_unfinished" }
     }
+    sampleError = sampleErrorAfterForegroundFinalization(
+        existingSampleError: sampleError,
+        foregroundEvidence: foregroundEvidence
+    )
     let evidenceContext = launchOutcome.map {
         PublicEvidenceContext(t0MonotonicNanoseconds: $0.t0Nanoseconds)
     }
@@ -933,6 +1990,7 @@ private func runOneSample(
         },
         applicationWasActiveAtLaunchCallback: launchOutcome?.wasActiveAtCallback,
         applicationWasActiveAtBeacon: wasActiveAtBeacon,
+        foreground: foregroundEvidence,
         hostConditionBeforeLaunch: hostConditionBeforeLaunch,
         hostConditionAfterCleanup: hostConditionAfterCleanup,
         beacon: evidenceContext.flatMap { context in
@@ -1678,6 +2736,7 @@ private struct PublicationArmFacts {
     let successfulSampleCount: Int
     let completeCleanupCount: Int
     let completeMetricCount: Int
+    let completeForegroundCount: Int
     let fixtureUnchanged: Bool
     let provenanceComplete: Bool
     let adapterRecipeMatches: Bool
@@ -1700,6 +2759,11 @@ private struct PublicationFacts {
     let hostBefore: HostMetadata
     let hostAfter: HostMetadata
     let aborted: Bool
+    let foregroundSessionProofComplete: Bool
+    let recordedSampleCount: Int
+    let foregroundSessionStartedSampleCount: Int
+    let foregroundSessionExactRestorationCount: Int
+    let foregroundSessionFinishedSampleCount: Int
     let arms: [PublicationArmFacts]
 }
 
@@ -1773,11 +2837,21 @@ private func publicationAssessment(
     }
     if facts.hostBefore != facts.hostAfter { append("host_state_changed") }
     if facts.aborted { append("aborted") }
+    let foregroundSessionCountsMatchRecords = facts.recordedSampleCount > 0
+        && facts.foregroundSessionStartedSampleCount == facts.recordedSampleCount
+        && facts.foregroundSessionExactRestorationCount == facts.recordedSampleCount
+        && facts.foregroundSessionFinishedSampleCount == facts.recordedSampleCount
+    if !facts.foregroundSessionProofComplete || !foregroundSessionCountsMatchRecords {
+        append("foreground_session_proof_missing")
+    }
     for arm in facts.arms {
         if arm.sampleCount != 11 { append("sample_count_mismatch", label: arm.label) }
         if arm.successfulSampleCount != arm.sampleCount { append("sample_failed", label: arm.label) }
         if arm.completeCleanupCount != arm.sampleCount { append("cleanup_unproven", label: arm.label) }
         if arm.completeMetricCount != arm.sampleCount { append("metric_missing", label: arm.label) }
+        if arm.completeForegroundCount != arm.sampleCount {
+            append("foreground_proof_missing", label: arm.label)
+        }
         if !arm.fixtureUnchanged { append("fixture_changed", label: arm.label) }
         if !arm.provenanceComplete { append("fixture_provenance_missing", label: arm.label) }
         if !arm.adapterRecipeMatches { append("fixture_adapter_recipe_mismatch", label: arm.label) }
@@ -1788,7 +2862,7 @@ private func publicationAssessment(
         }
     }
     return PublicationMetadata(
-        policyVersion: 3,
+        policyVersion: 4,
         requested: requested,
         eligible: reasons.isEmpty,
         reasons: reasons
@@ -2273,6 +3347,914 @@ private func require(_ condition: @autoclosure () throws -> Bool, _ message: Str
     if try !condition() { throw HarnessError.measurement("self-test failed: \(message)") }
 }
 
+@MainActor
+private func validateForegroundTransitionContract() throws {
+    let anchor = ForegroundProcessGeneration(pid: 101, uniqueId: 1_001, pidVersion: 11)
+    let target = ForegroundProcessGeneration(pid: 202, uniqueId: 2_002, pidVersion: 22)
+    let foreign = ForegroundProcessGeneration(pid: 303, uniqueId: 3_003, pidVersion: 33)
+    func beginTestObservation(
+        _ recorder: ForegroundActivationRecorder
+    ) throws -> ForegroundActivationRecorder.ObservationHandle {
+        guard let observation = recorder.beginObservation() else {
+            throw HarnessError.measurement(
+                "self-test failed: foreground recorder closed before the test observation"
+            )
+        }
+        return observation
+    }
+
+    var clean = ForegroundTransitionState(anchor: anchor)
+    clean.prepareForLaunch(current: anchor)
+    clean.bindTarget(target)
+    clean.observeActivation(target)
+    clean.acceptBeacon(targetReportsActive: true)
+    try require(
+        clean.beaconAccepted
+            && clean.targetActivatedBeforeBeacon
+            && clean.transitionUninterruptedBeforeBeacon
+            && clean.failureReason == nil,
+        "the clean anchor-to-target transition must be accepted"
+    )
+    clean.observeActivation(foreign)
+    try require(
+        !clean.observeAnchorRestoration(current: foreign, anchorStatus: .sameGeneration),
+        "a transient post-cleanup foreground app must not count as anchor restoration"
+    )
+    try require(
+        clean.observeAnchorRestoration(current: anchor, anchorStatus: .sameGeneration)
+            && clean.exactAnchorRestoredAfterCleanup,
+        "the exact original anchor generation must complete restoration"
+    )
+
+    var anchorChangedBeforeLaunch = ForegroundTransitionState(anchor: anchor)
+    anchorChangedBeforeLaunch.prepareForLaunch(current: foreign)
+    try require(
+        anchorChangedBeforeLaunch.failureReason == .anchorChangedBeforeLaunch
+            && !anchorChangedBeforeLaunch.beaconAccepted,
+        "a changed pre-launch foreground generation must fail with its stable reason"
+    )
+
+    var foreignBeforeTarget = ForegroundTransitionState(anchor: anchor)
+    foreignBeforeTarget.prepareForLaunch(current: anchor)
+    foreignBeforeTarget.bindTarget(target)
+    foreignBeforeTarget.observeActivation(foreign)
+    try require(
+        foreignBeforeTarget.failureReason == .foreignApplicationBeforeTarget
+            && !foreignBeforeTarget.targetActivatedBeforeBeacon,
+        "a foreign activation before the target must fail with its stable reason"
+    )
+
+    var foreignSteal = ForegroundTransitionState(anchor: anchor)
+    foreignSteal.prepareForLaunch(current: anchor)
+    foreignSteal.bindTarget(target)
+    foreignSteal.observeActivation(target)
+    foreignSteal.observeActivation(foreign)
+    foreignSteal.acceptBeacon(targetReportsActive: false)
+    try require(
+        foreignSteal.failureReason == .targetLostToForeignBeforeBeacon
+            && !foreignSteal.beaconAccepted,
+        "a foreign foreground steal before the beacon must fail with its stable reason"
+    )
+
+    // Ordering sensitivity: model a synchronous observer callback that began
+    // before the beacon but finishes generation capture after beacon
+    // validation starts. The in-flight marker must fail closed; completing the
+    // foreign event later cannot turn the sample into a success.
+    let delayedRecorder = ForegroundActivationRecorder()
+    let preBeaconObservation = try beginTestObservation(delayedRecorder)
+    let postBeaconObservation = try beginTestObservation(delayedRecorder)
+    let postBeaconGeneration = ForegroundProcessGeneration(
+        pid: 404,
+        uniqueId: 4_004,
+        pidVersion: 44
+    )
+    delayedRecorder.completeObservation(
+        postBeaconObservation.id,
+        generation: postBeaconGeneration
+    )
+    let atBeacon = delayedRecorder.events(
+        after: 0,
+        through: preBeaconObservation.monotonicNanoseconds
+    )
+    var delayedForeignSteal = ForegroundTransitionState(anchor: anchor)
+    delayedForeignSteal.prepareForLaunch(current: anchor)
+    delayedForeignSteal.bindTarget(target)
+    delayedForeignSteal.observeActivation(target)
+    if atBeacon.hasIncompleteObservationAtOrBeforeCutoff {
+        delayedForeignSteal.activationGenerationWasUnavailable()
+    }
+    delayedRecorder.completeObservation(preBeaconObservation.id, generation: foreign)
+    delayedForeignSteal.acceptBeacon(targetReportsActive: true)
+    let deliveredAfterBeacon = delayedRecorder.events(
+        after: atBeacon.nextIndex,
+        through: UInt64.max
+    )
+    try require(
+        delayedForeignSteal.failureReason == .activationGenerationUnavailable
+            && !delayedForeignSteal.beaconAccepted
+            && atBeacon.values.isEmpty
+            && atBeacon.nextIndex == 0
+            && deliveredAfterBeacon.values.count == 2
+            && deliveredAfterBeacon.values[0].generation == foreign
+            && deliveredAfterBeacon.values[1].generation == postBeaconGeneration,
+        "reverse callback completion must not hide a pre-beacon foreign steal behind a post-beacon slot"
+    )
+
+    // Restoration sensitivity: NSWorkspace can publish an activation intent
+    // before frontmostApplication reflects it. A stale anchor snapshot must not
+    // pass while a foreign intent is pending or is the latest completed slot.
+    // A later exact-anchor intent may pass only while that recorder snapshot
+    // remains unchanged through the frontmost-generation check.
+    let restorationRecorder = ForegroundActivationRecorder()
+    var restorationDecision = ForegroundRestorationDecision()
+    var restorationCursor = 0
+    let pendingForeignIntent = try beginTestObservation(restorationRecorder)
+    var restorationSnapshot = restorationRecorder.restorationSnapshot(
+        after: restorationCursor
+    )
+    restorationCursor = restorationSnapshot.nextIndex
+    restorationDecision.drain(restorationSnapshot.values)
+    try require(
+        !restorationDecision.canAccept(
+            anchor: anchor,
+            frontmost: anchor,
+            hasIncompleteObservation: restorationSnapshot.hasIncompleteObservation,
+            recorderSnapshotIsCurrent: restorationRecorder.restorationSnapshotIsCurrent(
+                restorationSnapshot
+            )
+        ),
+        "a pending foreign activation intent must defeat a stale anchor frontmost snapshot"
+    )
+
+    restorationRecorder.completeObservation(pendingForeignIntent.id, generation: foreign)
+    restorationSnapshot = restorationRecorder.restorationSnapshot(after: restorationCursor)
+    restorationCursor = restorationSnapshot.nextIndex
+    restorationDecision.drain(restorationSnapshot.values)
+    try require(
+        restorationDecision.latestCompletedActivationIntent == foreign
+            && !restorationDecision.canAccept(
+                anchor: anchor,
+                frontmost: anchor,
+                hasIncompleteObservation: restorationSnapshot.hasIncompleteObservation,
+                recorderSnapshotIsCurrent: restorationRecorder.restorationSnapshotIsCurrent(
+                    restorationSnapshot
+                )
+            ),
+        "a completed foreign activation intent must defeat a stale anchor frontmost snapshot"
+    )
+
+    let exactAnchorIntent = try beginTestObservation(restorationRecorder)
+    restorationRecorder.completeObservation(exactAnchorIntent.id, generation: anchor)
+    restorationSnapshot = restorationRecorder.restorationSnapshot(after: restorationCursor)
+    restorationCursor = restorationSnapshot.nextIndex
+    restorationDecision.drain(restorationSnapshot.values)
+    try require(
+        restorationDecision.canAccept(
+            anchor: anchor,
+            frontmost: anchor,
+            hasIncompleteObservation: restorationSnapshot.hasIncompleteObservation,
+            recorderSnapshotIsCurrent: restorationRecorder.restorationSnapshotIsCurrent(
+                restorationSnapshot
+            )
+        ),
+        "a subsequent exact-anchor intent plus an exact stable frontmost generation must restore"
+    )
+
+    let foreignAfterFrontmostSnapshot = try beginTestObservation(restorationRecorder)
+    try require(
+        !restorationDecision.canAccept(
+            anchor: anchor,
+            frontmost: anchor,
+            hasIncompleteObservation: restorationSnapshot.hasIncompleteObservation,
+            recorderSnapshotIsCurrent: restorationRecorder.restorationSnapshotIsCurrent(
+                restorationSnapshot
+            )
+        ),
+        "a recorder revision or pending-slot change after the frontmost query must defeat restoration"
+    )
+    restorationRecorder.completeObservation(
+        foreignAfterFrontmostSnapshot.id,
+        generation: foreign
+    )
+
+    // Session continuity: committing exact restoration advances only the
+    // shared cursor. The lease remains active until explicit sample finish, so
+    // no second sample can overlap post-restoration finalization.
+    var sessionCursor = ForegroundSessionCursorState(
+        anchor: anchor,
+        committedCursor: 0
+    )
+    guard let firstLease = sessionCursor.beginSample() else {
+        throw HarnessError.measurement("self-test failed: first foreground lease was unavailable")
+    }
+    let wrongLease = ForegroundSampleLease(
+        id: firstLease.id + 10,
+        startCursor: firstLease.startCursor
+    )
+    try require(
+        sessionCursor.beginSample() == nil
+            && !sessionCursor.commit(wrongLease, cursor: 1)
+            && !sessionCursor.end(wrongLease),
+        "duplicate begin and wrong-lease commit/end must be rejected"
+    )
+
+    let sessionRecorder = ForegroundActivationRecorder()
+    let firstAnchorRestoration = try beginTestObservation(sessionRecorder)
+    sessionRecorder.completeObservation(firstAnchorRestoration.id, generation: anchor)
+    let acceptedFirstRestoration = sessionRecorder.restorationSnapshot(after: 0)
+    try require(
+        sessionRecorder.restorationSnapshotIsCurrent(acceptedFirstRestoration)
+            && sessionCursor.commit(
+                firstLease,
+                cursor: acceptedFirstRestoration.nextIndex
+            )
+            && sessionCursor.activeLease == firstLease
+            && sessionCursor.beginSample() == nil,
+        "exact restoration must advance the cursor without releasing the first sample lease"
+    )
+
+    let foreignBetweenSamples = try beginTestObservation(sessionRecorder)
+    sessionRecorder.completeObservation(foreignBetweenSamples.id, generation: foreign)
+    try require(
+        sessionCursor.end(firstLease),
+        "the first sample must explicitly release its lease after finalization"
+    )
+    guard let secondLease = sessionCursor.beginSample() else {
+        throw HarnessError.measurement("self-test failed: second foreground lease was unavailable")
+    }
+    try require(
+        secondLease.startCursor == acceptedFirstRestoration.nextIndex,
+        "sample two must start at the exact restoration cursor committed by sample one"
+    )
+    let secondSampleEvents = sessionRecorder.restorationSnapshot(
+        after: secondLease.startCursor
+    )
+    var immutableSessionAnchor = ForegroundTransitionState(anchor: anchor)
+    for event in secondSampleEvents.values {
+        immutableSessionAnchor.observeBetweenSampleActivation(event.generation)
+    }
+    immutableSessionAnchor.prepareForLaunch(current: anchor)
+    var omittedBetweenSampleEvent = ForegroundTransitionState(anchor: anchor)
+    omittedBetweenSampleEvent.prepareForLaunch(current: anchor)
+    try require(
+        secondSampleEvents.values.count == 1
+            && secondSampleEvents.values[0].generation == foreign
+            && immutableSessionAnchor.failureReason == .anchorChangedBeforeLaunch
+            && omittedBetweenSampleEvent.failureReason == nil,
+        "a post-commit foreign activation must fail sample two solely from the continuous event record even after A is frontmost again"
+    )
+
+    var silentFrontmostChange = ForegroundTransitionState(anchor: anchor)
+    silentFrontmostChange.prepareForLaunch(current: foreign)
+    var perSampleRecaptureWouldAccept = ForegroundTransitionState(anchor: foreign)
+    perSampleRecaptureWouldAccept.prepareForLaunch(current: foreign)
+    try require(
+        silentFrontmostChange.failureReason == .anchorChangedBeforeLaunch
+            && perSampleRecaptureWouldAccept.failureReason == nil,
+        "sample two must reject silent frontmost B where recapturing B per sample would pass"
+    )
+    try require(
+        sessionCursor.end(secondLease),
+        "the second sample lease must be explicitly releasable"
+    )
+
+    var racingCursor = ForegroundSessionCursorState(
+        anchor: anchor,
+        committedCursor: 0
+    )
+    guard let racingLease = racingCursor.beginSample() else {
+        throw HarnessError.measurement("self-test failed: racing foreground lease was unavailable")
+    }
+    let racingRecorder = ForegroundActivationRecorder()
+    let racingAnchorIntent = try beginTestObservation(racingRecorder)
+    racingRecorder.completeObservation(racingAnchorIntent.id, generation: anchor)
+    let candidateSnapshot = racingRecorder.restorationSnapshot(after: 0)
+    let racingForeignIntent = try beginTestObservation(racingRecorder)
+    let candidateStayedCurrent = racingRecorder.restorationSnapshotIsCurrent(candidateSnapshot)
+    if candidateStayedCurrent {
+        _ = racingCursor.commit(racingLease, cursor: candidateSnapshot.nextIndex)
+    }
+    try require(
+        !candidateStayedCurrent
+            && racingCursor.committedCursor == 0
+            && racingCursor.activeLease == racingLease,
+        "an activation beginning after the candidate snapshot must prevent its cursor from committing"
+    )
+    racingRecorder.completeObservation(racingForeignIntent.id, generation: foreign)
+    try require(
+        racingCursor.end(racingLease),
+        "a failed racing restoration must retain ownership until explicit sample finish"
+    )
+
+    var rejectedCommitRestoration = ForegroundTransitionState(anchor: anchor)
+    let rejectedCommitAccepted = rejectedCommitRestoration.observeCommittedAnchorRestoration(
+        current: anchor,
+        anchorStatus: .sameGeneration,
+        sessionCommitAccepted: false
+    )
+    var acceptedCommitRestoration = ForegroundTransitionState(anchor: anchor)
+    let acceptedCommit = acceptedCommitRestoration.observeCommittedAnchorRestoration(
+        current: anchor,
+        anchorStatus: .sameGeneration,
+        sessionCommitAccepted: true
+    )
+    try require(
+        !rejectedCommitAccepted
+            && !rejectedCommitRestoration.exactAnchorRestoredAfterCleanup
+            && rejectedCommitRestoration.failureReason == .sessionContinuityUnavailable
+            && acceptedCommit
+            && acceptedCommitRestoration.exactAnchorRestoredAfterCleanup
+            && acceptedCommitRestoration.failureReason == nil
+            && abortedReasonAfterForegroundSessionFinalization(
+                existingAbortedReason: nil,
+                foregroundSessionProofComplete: false
+            ) == "foreground_session_continuity_unproven"
+            && abortedReasonAfterForegroundSessionFinalization(
+                existingAbortedReason: "primary_failure",
+                foregroundSessionProofComplete: false
+            ) == "primary_failure"
+            && !benchmarkMeasurementSucceeded(
+                abortedReason: nil,
+                foregroundSessionProofComplete: false,
+                samplesContainFailure: false
+            )
+            && benchmarkMeasurementSucceeded(
+                abortedReason: nil,
+                foregroundSessionProofComplete: true,
+                samplesContainFailure: false
+            ),
+        "a rejected session cursor commit must fail typed before exact restoration and must fail the run without masking an earlier reason"
+    )
+
+    let foreignTailRecorder = ForegroundActivationRecorder()
+    let foreignTailIntent = try beginTestObservation(foreignTailRecorder)
+    foreignTailRecorder.completeObservation(foreignTailIntent.id, generation: foreign)
+    let foreignTailSnapshot = foreignTailRecorder.restorationSnapshot(after: 0)
+    try require(
+        !foregroundTailCanSeal(
+            anchor: anchor,
+            events: foreignTailSnapshot.values,
+            hasIncompleteObservation: foreignTailSnapshot.hasIncompleteObservation,
+            anchorStatus: .sameGeneration,
+            frontmost: anchor
+        ),
+        "a foreign tail intent must fail even when A is frontmost again"
+    )
+
+    let reboundTailRecorder = ForegroundActivationRecorder()
+    let reboundTailForeign = try beginTestObservation(reboundTailRecorder)
+    reboundTailRecorder.completeObservation(reboundTailForeign.id, generation: foreign)
+    let reboundTailAnchor = try beginTestObservation(reboundTailRecorder)
+    reboundTailRecorder.completeObservation(reboundTailAnchor.id, generation: anchor)
+    let reboundTailSnapshot = reboundTailRecorder.restorationSnapshot(after: 0)
+    try require(
+        !foregroundTailCanSeal(
+            anchor: anchor,
+            events: reboundTailSnapshot.values,
+            hasIncompleteObservation: reboundTailSnapshot.hasIncompleteObservation,
+            anchorStatus: .sameGeneration,
+            frontmost: anchor
+        ),
+        "a foreign-to-anchor tail rebound must not erase the foreign activation"
+    )
+
+    let pendingTailRecorder = ForegroundActivationRecorder()
+    let pendingTailIntent = try beginTestObservation(pendingTailRecorder)
+    let pendingTailSnapshot = pendingTailRecorder.restorationSnapshot(after: 0)
+    try require(
+        !foregroundTailCanSeal(
+            anchor: anchor,
+            events: pendingTailSnapshot.values,
+            hasIncompleteObservation: pendingTailSnapshot.hasIncompleteObservation,
+            anchorStatus: .sameGeneration,
+            frontmost: anchor
+        ),
+        "an incomplete final activation slot must fail the tail seal closed"
+    )
+    pendingTailRecorder.completeObservation(pendingTailIntent.id, generation: anchor)
+
+    let unavailableTailRecorder = ForegroundActivationRecorder()
+    let unavailableTailIntent = try beginTestObservation(unavailableTailRecorder)
+    unavailableTailRecorder.completeObservation(unavailableTailIntent.id, generation: nil)
+    let unavailableTailSnapshot = unavailableTailRecorder.restorationSnapshot(after: 0)
+    try require(
+        !foregroundTailCanSeal(
+            anchor: anchor,
+            events: unavailableTailSnapshot.values,
+            hasIncompleteObservation: unavailableTailSnapshot.hasIncompleteObservation,
+            anchorStatus: .sameGeneration,
+            frontmost: anchor
+        ),
+        "a completed tail activation without generation proof must fail closed"
+    )
+
+    try require(
+        !foregroundTailCanSeal(
+            anchor: anchor,
+            events: [],
+            hasIncompleteObservation: false,
+            anchorStatus: .sameGeneration,
+            frontmost: foreign
+        )
+            && !foregroundTailCanSeal(
+                anchor: anchor,
+                events: [],
+                hasIncompleteObservation: false,
+                anchorStatus: .reused,
+                frontmost: anchor
+            ),
+        "silent frontmost B and a reused anchor generation must each fail the final tail seal"
+    )
+
+    let staleTailRecorder = ForegroundActivationRecorder()
+    let staleTailSnapshot = staleTailRecorder.restorationSnapshot(after: 0)
+    let staleTailEvent = try beginTestObservation(staleTailRecorder)
+    staleTailRecorder.completeObservation(staleTailEvent.id, generation: anchor)
+    let staleTailAccepted = staleTailRecorder.sealCurrentSnapshot(
+        staleTailSnapshot,
+        acceptance: { true }
+    )
+    try require(
+        !staleTailAccepted,
+        "a stale final snapshot must not close or seal the foreground recorder"
+    )
+
+#if FOREGROUND_STATE_SELF_TEST
+    let admissionBarrier = ForegroundObservationAdmissionBarrier()
+    let contendedRecorder = ForegroundActivationRecorder(
+        testAdmissionBarrier: admissionBarrier,
+        testObservationSeedProvider: { recorderLockHeld in
+            admissionBarrier.supplyObservationSeedWhileRecorderLockShouldBeOwned(
+                recorderLockHeld: recorderLockHeld
+            )
+        }
+    )
+    let snapshotBeforeContendedBegin = contendedRecorder.restorationSnapshot(after: 0)
+    let contendedBeginFinished = DispatchSemaphore(value: 0)
+    DispatchQueue.global(qos: .userInitiated).async {
+        _ = contendedRecorder.beginObservation()
+        contendedBeginFinished.signal()
+    }
+    guard admissionBarrier.awaitAdmissionWorkStarting() else {
+        throw HarnessError.measurement(
+            "self-test failed: contended callback did not start admission work"
+        )
+    }
+    let contendedSealAccepted = contendedRecorder.sealCurrentSnapshot(
+        snapshotBeforeContendedBegin,
+        acceptance: { true }
+    )
+    guard contendedBeginFinished.wait(timeout: .now() + 2) == .success else {
+        throw HarnessError.measurement(
+            "self-test failed: contended callback did not finish slot admission"
+        )
+    }
+    let snapshotAfterContendedBegin = contendedRecorder.restorationSnapshot(after: 0)
+    try require(
+        !contendedSealAccepted
+            && admissionBarrier.observedRecorderLockHeldDuringAdmissionWork()
+            && snapshotAfterContendedBegin.revision
+                > snapshotBeforeContendedBegin.revision
+            && snapshotAfterContendedBegin.slotCount == 1
+            && snapshotAfterContendedBegin.hasIncompleteObservation,
+        "a callback owning the recorder lock must install its pending slot before a prior snapshot can seal"
+    )
+    contendedRecorder.stopAcceptingObservations()
+#endif
+
+    let cleanTailRecorder = ForegroundActivationRecorder()
+    let cleanTailSnapshot = cleanTailRecorder.restorationSnapshot(after: 0)
+    var cleanTailCursor = ForegroundSessionCursorState(
+        anchor: anchor,
+        committedCursor: 0
+    )
+    let cleanTailAccepted = cleanTailRecorder.sealCurrentSnapshot(
+        cleanTailSnapshot,
+        acceptance: {
+            foregroundTailCanSeal(
+                anchor: anchor,
+                events: cleanTailSnapshot.values,
+                hasIncompleteObservation: cleanTailSnapshot.hasIncompleteObservation,
+                anchorStatus: .sameGeneration,
+                frontmost: anchor
+            ) && cleanTailCursor.sealTail(cursor: cleanTailSnapshot.nextIndex)
+        }
+    )
+    let sealedRecorderSnapshot = cleanTailRecorder.restorationSnapshot(after: 0)
+    let rejectedPostSealObservation = cleanTailRecorder.beginObservation()
+    let unchangedSealedRecorderSnapshot = cleanTailRecorder.restorationSnapshot(after: 0)
+    try require(
+        cleanTailAccepted
+            && rejectedPostSealObservation == nil
+            && sealedRecorderSnapshot.revision == unchangedSealedRecorderSnapshot.revision
+            && sealedRecorderSnapshot.slotCount == unchangedSealedRecorderSnapshot.slotCount,
+        "successful tail sealing must atomically close observation without appending or revising later callbacks"
+    )
+
+    // Sensitivity control: this sequence differs from the accepted transition
+    // by one target-to-anchor event. Removing that event must change the result.
+    var rebound = ForegroundTransitionState(anchor: anchor)
+    rebound.prepareForLaunch(current: anchor)
+    rebound.bindTarget(target)
+    rebound.observeActivation(target)
+    rebound.observeActivation(anchor)
+    rebound.acceptBeacon(targetReportsActive: false)
+    try require(
+        rebound.failureReason == .anchorReboundedBeforeBeacon
+            && clean.failureReason == nil,
+        "a target-to-anchor rebound before the beacon must make the clean control fail"
+    )
+
+    var deadAnchor = ForegroundTransitionState(anchor: anchor)
+    deadAnchor.prepareForLaunch(current: anchor)
+    deadAnchor.bindTarget(target)
+    deadAnchor.observeActivation(target)
+    deadAnchor.acceptBeacon(targetReportsActive: true)
+    try require(
+        !deadAnchor.observeAnchorRestoration(current: nil, anchorStatus: .exited)
+            && deadAnchor.failureReason == .anchorExitedBeforeRestoration
+            && deadAnchor.transitionUninterruptedBeforeBeacon,
+        "an exited anchor generation must fail restoration without rewriting the clean pre-beacon fact"
+    )
+
+    let reusedAnchor = ForegroundProcessGeneration(
+        pid: anchor.pid,
+        uniqueId: anchor.uniqueId + 1,
+        pidVersion: anchor.pidVersion + 1
+    )
+    var reused = ForegroundTransitionState(anchor: anchor)
+    reused.prepareForLaunch(current: anchor)
+    reused.bindTarget(target)
+    reused.observeActivation(target)
+    reused.acceptBeacon(targetReportsActive: true)
+    try require(
+        !reused.observeAnchorRestoration(current: reusedAnchor, anchorStatus: .reused)
+            && reused.failureReason == .anchorGenerationChangedBeforeRestoration,
+        "a reused anchor PID must not be mistaken for the captured generation"
+    )
+
+    var targetNeverActive = ForegroundTransitionState(anchor: anchor)
+    targetNeverActive.prepareForLaunch(current: anchor)
+    targetNeverActive.bindTarget(target)
+    targetNeverActive.acceptBeacon(targetReportsActive: false)
+    try require(
+        targetNeverActive.failureReason == .targetNeverActive
+            && !targetNeverActive.beaconAccepted,
+        "a beacon cannot succeed when the target never became foreground"
+    )
+
+    var targetInactiveAtBeacon = ForegroundTransitionState(anchor: anchor)
+    targetInactiveAtBeacon.prepareForLaunch(current: anchor)
+    targetInactiveAtBeacon.bindTarget(target)
+    targetInactiveAtBeacon.observeActivation(target)
+    targetInactiveAtBeacon.acceptBeacon(targetReportsActive: false)
+    try require(
+        targetInactiveAtBeacon.failureReason == .targetNotActiveAtBeacon
+            && targetInactiveAtBeacon.targetActivatedBeforeBeacon
+            && !targetInactiveAtBeacon.beaconAccepted,
+        "an activated target reporting inactive at the beacon must reach its distinct failure branch"
+    )
+
+    var restorationTimedOut = ForegroundTransitionState(anchor: anchor)
+    restorationTimedOut.prepareForLaunch(current: anchor)
+    restorationTimedOut.bindTarget(target)
+    restorationTimedOut.observeActivation(target)
+    restorationTimedOut.acceptBeacon(targetReportsActive: true)
+    restorationTimedOut.restorationTimedOut()
+    try require(
+        restorationTimedOut.failureReason == .anchorNotRestoredBeforeDeadline
+            && restorationTimedOut.transitionUninterruptedBeforeBeacon
+            && !restorationTimedOut.exactAnchorRestoredAfterCleanup,
+        "an unrestored anchor at the deadline must fail without rewriting clean pre-beacon proof"
+    )
+
+    let publicEvidence = ForegroundEvidence(
+        observerInstalledBeforeLaunch: true,
+        anchorGenerationCaptured: true,
+        targetGenerationCaptured: true,
+        targetActivatedBeforeBeacon: false,
+        transitionUninterruptedBeforeBeacon: false,
+        exactAnchorRestoredAfterCleanup: false,
+        reasonCode: .targetNeverActive
+    )
+    let publicObject = try JSONSerialization.jsonObject(
+        with: JSONEncoder().encode(publicEvidence)
+    )
+    guard let publicFields = publicObject as? [String: Any] else {
+        throw HarnessError.measurement("self-test failed: foreground evidence was not an object")
+    }
+    try require(
+        Set(publicFields.keys) == [
+            "observerInstalledBeforeLaunch",
+            "anchorGenerationCaptured",
+            "targetGenerationCaptured",
+            "targetActivatedBeforeBeacon",
+            "transitionUninterruptedBeforeBeacon",
+            "exactAnchorRestoredAfterCleanup",
+            "reasonCode",
+        ],
+        "public foreground evidence must contain only stable booleans and one reason code"
+    )
+    try require(
+        publicFields.allSatisfy { $0.value is Bool || $0.value is String },
+        "public foreground evidence must never serialize application identities"
+    )
+    let completeSessionEvidence = ForegroundSessionEvidence(
+        observerInstalledOnceBeforeArms: true,
+        observerRemainedInstalledThroughArms: true,
+        immutableAnchorUsedForEveryStartedSample: true,
+        committedCursorAdvancedOnlyAfterExactRestoration: true,
+        allSampleLeasesReleased: true,
+        tailSealedAtExactAnchor: true,
+        samplesStarted: 11,
+        exactRestorationCommitCount: 11,
+        finishedSampleCount: 11
+    )
+    let interruptedSessionEvidence = ForegroundSessionEvidence(
+        observerInstalledOnceBeforeArms: true,
+        observerRemainedInstalledThroughArms: false,
+        immutableAnchorUsedForEveryStartedSample: true,
+        committedCursorAdvancedOnlyAfterExactRestoration: true,
+        allSampleLeasesReleased: true,
+        tailSealedAtExactAnchor: true,
+        samplesStarted: 11,
+        exactRestorationCommitCount: 11,
+        finishedSampleCount: 11
+    )
+    let emptySessionEvidence = ForegroundSessionEvidence(
+        observerInstalledOnceBeforeArms: true,
+        observerRemainedInstalledThroughArms: true,
+        immutableAnchorUsedForEveryStartedSample: true,
+        committedCursorAdvancedOnlyAfterExactRestoration: true,
+        allSampleLeasesReleased: true,
+        tailSealedAtExactAnchor: true,
+        samplesStarted: 0,
+        exactRestorationCommitCount: 0,
+        finishedSampleCount: 0
+    )
+    let unsealedSessionEvidence = ForegroundSessionEvidence(
+        observerInstalledOnceBeforeArms: true,
+        observerRemainedInstalledThroughArms: true,
+        immutableAnchorUsedForEveryStartedSample: true,
+        committedCursorAdvancedOnlyAfterExactRestoration: true,
+        allSampleLeasesReleased: true,
+        tailSealedAtExactAnchor: false,
+        samplesStarted: 11,
+        exactRestorationCommitCount: 11,
+        finishedSampleCount: 11
+    )
+    let sessionObject = try JSONSerialization.jsonObject(
+        with: JSONEncoder().encode(completeSessionEvidence)
+    )
+    guard let sessionFields = sessionObject as? [String: Any] else {
+        throw HarnessError.measurement("self-test failed: foreground session evidence was not an object")
+    }
+    try require(
+        completeSessionEvidence.isCompleteForPublication(recordedSampleCount: 11)
+            && !interruptedSessionEvidence.isCompleteForPublication(recordedSampleCount: 11)
+            && !emptySessionEvidence.isCompleteForPublication(recordedSampleCount: 0)
+            && !unsealedSessionEvidence.isCompleteForPublication(recordedSampleCount: 11)
+            && Set(sessionFields.keys) == [
+                "observerInstalledOnceBeforeArms",
+                "observerRemainedInstalledThroughArms",
+                "immutableAnchorUsedForEveryStartedSample",
+                "committedCursorAdvancedOnlyAfterExactRestoration",
+                "allSampleLeasesReleased",
+                "tailSealedAtExactAnchor",
+                "atLeastOneSampleStarted",
+                "exactRestorationCommittedForEveryStartedSample",
+                "everyStartedSampleFinished",
+                "startedSampleCount",
+                "exactRestorationCount",
+                "finishedSampleCount",
+            ]
+            && sessionFields.values.allSatisfy { $0 is Bool || $0 is Int }
+            && sessionFields["startedSampleCount"] as? Int == 11
+            && sessionFields["exactRestorationCount"] as? Int == 11
+            && sessionFields["finishedSampleCount"] as? Int == 11,
+        "session proof must be explicit, count-bound, falsifiable, and identity-free"
+    )
+    let completeForegroundEvidence = ForegroundEvidence(
+        observerInstalledBeforeLaunch: true,
+        anchorGenerationCaptured: true,
+        targetGenerationCaptured: true,
+        targetActivatedBeforeBeacon: true,
+        transitionUninterruptedBeforeBeacon: true,
+        exactAnchorRestoredAfterCleanup: true,
+        reasonCode: nil
+    )
+    let reasonlessIncompleteForegroundEvidence = ForegroundEvidence(
+        observerInstalledBeforeLaunch: true,
+        anchorGenerationCaptured: true,
+        targetGenerationCaptured: true,
+        targetActivatedBeforeBeacon: true,
+        transitionUninterruptedBeforeBeacon: true,
+        exactAnchorRestoredAfterCleanup: false,
+        reasonCode: nil
+    )
+    try require(
+        completeForegroundEvidence.isCompleteForPublication
+            && !ForegroundEvidence.notAttempted.isCompleteForPublication
+            && !reasonlessIncompleteForegroundEvidence.isCompleteForPublication,
+        "the single foreground completeness predicate must reject not-attempted and incomplete proof"
+    )
+    try require(
+        sampleErrorAfterForegroundFinalization(
+            existingSampleError: nil,
+            foregroundEvidence: completeForegroundEvidence
+        ) == nil
+            && sampleErrorAfterForegroundFinalization(
+                existingSampleError: nil,
+                foregroundEvidence: ForegroundEvidence.notAttempted
+            ) == "foreground_interference"
+            && sampleErrorAfterForegroundFinalization(
+                existingSampleError: "timeout",
+                foregroundEvidence: reasonlessIncompleteForegroundEvidence
+            ) == "timeout",
+        "sample finalization must reject incomplete foreground proof without overwriting a primary error"
+    )
+    try require(
+        sampleErrorAfterForegroundRestoration(
+            existingSampleError: "timeout",
+            foregroundFailureReason: .anchorNotRestoredBeforeDeadline
+        ) == "timeout",
+        "anchor restoration failure must preserve an earlier primary sample error"
+    )
+    try require(
+        sampleErrorAfterForegroundRestoration(
+            existingSampleError: nil,
+            foregroundFailureReason: .anchorNotRestoredBeforeDeadline
+        ) == "foreground_interference",
+        "anchor restoration failure must become primary when no earlier sample error exists"
+    )
+}
+
+private func validateForegroundPublicationPolicyContract() throws {
+    let cleanRepository = RepositoryMetadata(
+        identifier: canonicalBenchesRepositoryIdentifier,
+        commit: String(repeating: "a", count: 40),
+        workingTreeState: .clean,
+        commitAdvertisedAsOriginHead: true
+    )
+    let nominalHost = HostMetadata(
+        operatingSystemVersion: "test",
+        architecture: "arm64",
+        hardwareModel: "test",
+        processor: "test",
+        logicalCpuCount: 1,
+        physicalMemoryBytes: 1,
+        lowPowerModeEnabled: false,
+        thermalState: "nominal"
+    )
+    let completeForegroundEvidence = ForegroundEvidence(
+        observerInstalledBeforeLaunch: true,
+        anchorGenerationCaptured: true,
+        targetGenerationCaptured: true,
+        targetActivatedBeforeBeacon: true,
+        transitionUninterruptedBeforeBeacon: true,
+        exactAnchorRestoredAfterCleanup: true,
+        reasonCode: nil
+    )
+    let incompleteForegroundEvidence = ForegroundEvidence(
+        observerInstalledBeforeLaunch: true,
+        anchorGenerationCaptured: true,
+        targetGenerationCaptured: true,
+        targetActivatedBeforeBeacon: true,
+        transitionUninterruptedBeforeBeacon: true,
+        exactAnchorRestoredAfterCleanup: false,
+        reasonCode: nil
+    )
+    let completeControls = Array(repeating: completeForegroundEvidence, count: 11)
+    let notAttemptedControls = Array(
+        repeating: completeForegroundEvidence,
+        count: 10
+    ) + [ForegroundEvidence.notAttempted]
+    let incompleteControls = Array(
+        repeating: completeForegroundEvidence,
+        count: 10
+    ) + [incompleteForegroundEvidence]
+
+    func completeCount(_ evidence: [ForegroundEvidence]) -> Int {
+        evidence.filter(\.isCompleteForPublication).count
+    }
+
+    func assessment(
+        completeForegroundCount: Int,
+        foregroundSessionProofComplete: Bool = true,
+        recordedSampleCount: Int = 11,
+        foregroundSessionStartedSampleCount: Int = 11,
+        foregroundSessionExactRestorationCount: Int = 11,
+        foregroundSessionFinishedSampleCount: Int = 11
+    ) -> PublicationMetadata {
+        let arm = PublicationArmFacts(
+            label: "fixture",
+            sampleCount: 11,
+            successfulSampleCount: 11,
+            completeCleanupCount: 11,
+            completeMetricCount: 11,
+            completeForegroundCount: completeForegroundCount,
+            fixtureUnchanged: true,
+            provenanceComplete: true,
+            adapterRecipeMatches: true,
+            toolchainComplete: true,
+            publicArgumentsSafe: true,
+            sampleHostConditionsAcceptable: true
+        )
+        return publicationAssessment(
+            requested: true,
+            facts: PublicationFacts(
+                runsPerApp: 11,
+                stableCoalitionObservations: 3,
+                stableCoalitionWindowMilliseconds: 500,
+                rssToleranceKiB: 1_024,
+                repositoryBefore: cleanRepository,
+                repositoryAfter: cleanRepository,
+                harnessProvenanceComplete: true,
+                canonicalHTML: true,
+                publicationOutputProvided: true,
+                outputWillPreserveCleanTree: true,
+                hostBefore: nominalHost,
+                hostAfter: nominalHost,
+                aborted: false,
+                foregroundSessionProofComplete: foregroundSessionProofComplete,
+                recordedSampleCount: recordedSampleCount,
+                foregroundSessionStartedSampleCount: foregroundSessionStartedSampleCount,
+                foregroundSessionExactRestorationCount: foregroundSessionExactRestorationCount,
+                foregroundSessionFinishedSampleCount: foregroundSessionFinishedSampleCount,
+                arms: [arm]
+            )
+        )
+    }
+
+    let completeAssessment = assessment(
+        completeForegroundCount: completeCount(completeControls)
+    )
+    try require(
+        completeAssessment.eligible && completeAssessment.policyVersion == 4,
+        "11-of-11 foreground proof must pass publication policy v4"
+    )
+
+    let notAttemptedCompleteCount = completeCount(notAttemptedControls)
+    let incompleteCompleteCount = completeCount(incompleteControls)
+    let notAttemptedAssessment = assessment(
+        completeForegroundCount: notAttemptedCompleteCount
+    )
+    let incompleteAssessment = assessment(
+        completeForegroundCount: incompleteCompleteCount
+    )
+    try require(
+        notAttemptedCompleteCount == 10
+            && incompleteCompleteCount == 10
+            && !notAttemptedAssessment.eligible
+            && !incompleteAssessment.eligible
+            && notAttemptedAssessment.reasons.contains {
+                $0.code == "foreground_proof_missing" && $0.label == "fixture"
+            }
+            && incompleteAssessment.reasons.contains {
+                $0.code == "foreground_proof_missing" && $0.label == "fixture"
+            },
+        "not-attempted and incomplete 10-of-11 foreground proof must fail with the stable labeled reason"
+    )
+    let missingSessionAssessment = assessment(
+        completeForegroundCount: completeCount(completeControls),
+        foregroundSessionProofComplete: false
+    )
+    try require(
+        !missingSessionAssessment.eligible
+            && missingSessionAssessment.reasons.contains {
+                $0.code == "foreground_session_proof_missing" && $0.label == nil
+            },
+        "publication policy must reject missing continuous session proof with its stable reason"
+    )
+
+    let startedCountNMinusOne = assessment(
+        completeForegroundCount: completeCount(completeControls),
+        foregroundSessionStartedSampleCount: 10
+    )
+    let restorationCountNMinusOne = assessment(
+        completeForegroundCount: completeCount(completeControls),
+        foregroundSessionExactRestorationCount: 10
+    )
+    let finishedCountNMinusOne = assessment(
+        completeForegroundCount: completeCount(completeControls),
+        foregroundSessionFinishedSampleCount: 10
+    )
+    let countMismatchAssessments = [
+        startedCountNMinusOne,
+        restorationCountNMinusOne,
+        finishedCountNMinusOne,
+    ]
+    try require(
+        countMismatchAssessments.allSatisfy { assessment in
+            !assessment.eligible
+                && assessment.reasons.contains {
+                    $0.code == "foreground_session_proof_missing" && $0.label == nil
+                }
+            },
+        "each session lifecycle count must independently bind eleven emitted sample records"
+    )
+}
+
 private func validatePublicEvidenceRedaction() throws {
     let rawToken = "raw-token-public-evidence-negative-control"
     let rawAbsolutePath = "/private/tmp/keld-public-evidence-negative-control/secret.app"
@@ -2393,6 +4375,15 @@ private func validatePublicEvidenceRedaction() throws {
         launchCallbackOffsetMilliseconds: context.offsetMilliseconds(for: rawT0 + 5_000_000),
         applicationWasActiveAtLaunchCallback: true,
         applicationWasActiveAtBeacon: true,
+        foreground: ForegroundEvidence(
+            observerInstalledBeforeLaunch: true,
+            anchorGenerationCaptured: true,
+            targetGenerationCaptured: true,
+            targetActivatedBeforeBeacon: true,
+            transitionUninterruptedBeforeBeacon: true,
+            exactAnchorRestoredAfterCleanup: true,
+            reasonCode: nil
+        ),
         hostConditionBeforeLaunch: HostConditionEvidence(
             lowPowerModeEnabled: false,
             thermalState: "nominal"
@@ -2572,6 +4563,7 @@ private func validateKernelGenerationSignalContract() throws {
     }
 }
 
+@MainActor
 private func validateStubbornCleanupContract(
     appURL: URL,
     server: LoopbackBeaconServer,
@@ -2586,6 +4578,10 @@ private func validateStubbornCleanupContract(
         buildCommand: "self-test fixture"
     )
     let token = UUID().uuidString.lowercased()
+    let foregroundSession = try ForegroundSessionMonitor.capture()
+    defer { foregroundSession.stop() }
+    let foregroundMonitor = try foregroundSession.beginSample()
+    defer { foregroundMonitor.finish() }
     try server.activate(token: token)
 
     let outcome: LaunchOutcome
@@ -2594,7 +4590,8 @@ private func validateStubbornCleanupContract(
             app: spec,
             benchmarkURL: server.url(for: token),
             token: token,
-            measurementTimeoutNanoseconds: 10_000_000_000
+            measurementTimeoutNanoseconds: 10_000_000_000,
+            foregroundMonitor: foregroundMonitor
         )
     } catch {
         server.finish(token: token)
@@ -2702,6 +4699,13 @@ private func validateStubbornCleanupContract(
             error: "launch_ownership_unresolved"
         )
     }
+    await foregroundMonitor.awaitAnchorRestoration(
+        deadlineNanoseconds: monotonicNowNanoseconds() + 3_000_000_000
+    )
+    let foregroundEvidence = foregroundMonitor.evidence
+    foregroundMonitor.finish()
+    let foregroundSessionEvidence = foregroundSession.finishArms()
+    foregroundSession.stop()
     server.finish(token: token)
     var quiescenceError: Error?
     do {
@@ -2727,6 +4731,14 @@ private func validateStubbornCleanupContract(
         containmentFailures.append("coalition_not_drained")
     }
     if cleanupRecord.error != nil { containmentFailures.append("cleanup_error") }
+    if !foregroundEvidence.exactAnchorRestoredAfterCleanup {
+        containmentFailures.append(
+            foregroundEvidence.reasonCode?.rawValue ?? "foreground_anchor_restoration_unproven"
+        )
+    }
+    if !foregroundSessionEvidence.isCompleteForPublication(recordedSampleCount: 1) {
+        containmentFailures.append("foreground_session_continuity_unproven")
+    }
     if let spawnedChild {
         do {
             if try kernelProcessUniqueIdentity(for: spawnedChild.pid) == spawnedChild.identity {
@@ -2764,7 +4776,9 @@ private func validateStubbornCleanupContract(
     )
 }
 
+@MainActor
 private func runSelfTests(html: Data) async throws {
+    try validateForegroundTransitionContract()
     try validatePublicEvidenceRedaction()
     let loadedExecutable = try loadedExecutableURL()
     let selfTestRepository = gitSnapshot(
@@ -3439,6 +5453,7 @@ private func runSelfTests(html: Data) async throws {
         successfulSampleCount: 11,
         completeCleanupCount: 11,
         completeMetricCount: 11,
+        completeForegroundCount: 11,
         fixtureUnchanged: true,
         provenanceComplete: true,
         adapterRecipeMatches: true,
@@ -3446,32 +5461,14 @@ private func runSelfTests(html: Data) async throws {
         publicArgumentsSafe: true,
         sampleHostConditionsAcceptable: true
     )
-    let publishableFacts = PublicationFacts(
-        runsPerApp: 11,
-        stableCoalitionObservations: 3,
-        stableCoalitionWindowMilliseconds: 500,
-        rssToleranceKiB: 1_024,
-        repositoryBefore: cleanRepository,
-        repositoryAfter: cleanRepository,
-        harnessProvenanceComplete: true,
-        canonicalHTML: true,
-        publicationOutputProvided: true,
-        outputWillPreserveCleanTree: true,
-        hostBefore: nominalHost,
-        hostAfter: nominalHost,
-        aborted: false,
-        arms: [completeArm]
-    )
-    try require(
-        publicationAssessment(requested: true, facts: publishableFacts).eligible,
-        "complete clean 11-sample arm must pass publication policy"
-    )
+    try validateForegroundPublicationPolicyContract()
     let nonNominalSampleArm = PublicationArmFacts(
         label: "fixture",
         sampleCount: 11,
         successfulSampleCount: 11,
         completeCleanupCount: 11,
         completeMetricCount: 11,
+        completeForegroundCount: 11,
         fixtureUnchanged: true,
         provenanceComplete: true,
         adapterRecipeMatches: true,
@@ -3493,6 +5490,11 @@ private func runSelfTests(html: Data) async throws {
         hostBefore: nominalHost,
         hostAfter: nominalHost,
         aborted: false,
+        foregroundSessionProofComplete: true,
+        recordedSampleCount: 11,
+        foregroundSessionStartedSampleCount: 11,
+        foregroundSessionExactRestorationCount: 11,
+        foregroundSessionFinishedSampleCount: 11,
         arms: [nonNominalSampleArm]
     )
     try require(
@@ -3515,12 +5517,18 @@ private func runSelfTests(html: Data) async throws {
         hostBefore: nominalHost,
         hostAfter: nominalHost,
         aborted: false,
+        foregroundSessionProofComplete: true,
+        recordedSampleCount: 10,
+        foregroundSessionStartedSampleCount: 10,
+        foregroundSessionExactRestorationCount: 10,
+        foregroundSessionFinishedSampleCount: 10,
         arms: [PublicationArmFacts(
             label: "fixture",
             sampleCount: 10,
             successfulSampleCount: 10,
             completeCleanupCount: 10,
             completeMetricCount: 10,
+            completeForegroundCount: 10,
             fixtureUnchanged: true,
             provenanceComplete: true,
             adapterRecipeMatches: true,
@@ -3550,6 +5558,11 @@ private func runSelfTests(html: Data) async throws {
         hostBefore: nominalHost,
         hostAfter: nominalHost,
         aborted: false,
+        foregroundSessionProofComplete: true,
+        recordedSampleCount: 11,
+        foregroundSessionStartedSampleCount: 11,
+        foregroundSessionExactRestorationCount: 11,
+        foregroundSessionFinishedSampleCount: 11,
         arms: [completeArm]
     )
     try require(
@@ -3582,6 +5595,11 @@ private func runSelfTests(html: Data) async throws {
         hostBefore: incompleteHost,
         hostAfter: incompleteHost,
         aborted: false,
+        foregroundSessionProofComplete: true,
+        recordedSampleCount: 11,
+        foregroundSessionStartedSampleCount: 11,
+        foregroundSessionExactRestorationCount: 11,
+        foregroundSessionFinishedSampleCount: 11,
         arms: [completeArm]
     )
     try require(
@@ -3610,6 +5628,11 @@ private func runSelfTests(html: Data) async throws {
         hostBefore: nominalHost,
         hostAfter: nominalHost,
         aborted: false,
+        foregroundSessionProofComplete: true,
+        recordedSampleCount: 11,
+        foregroundSessionStartedSampleCount: 11,
+        foregroundSessionExactRestorationCount: 11,
+        foregroundSessionFinishedSampleCount: 11,
         arms: [completeArm]
     )
     try require(
@@ -3624,6 +5647,7 @@ private func runSelfTests(html: Data) async throws {
         successfulSampleCount: 11,
         completeCleanupCount: 11,
         completeMetricCount: 11,
+        completeForegroundCount: 11,
         fixtureUnchanged: true,
         provenanceComplete: true,
         adapterRecipeMatches: false,
@@ -3645,6 +5669,11 @@ private func runSelfTests(html: Data) async throws {
         hostBefore: nominalHost,
         hostAfter: nominalHost,
         aborted: false,
+        foregroundSessionProofComplete: true,
+        recordedSampleCount: 11,
+        foregroundSessionStartedSampleCount: 11,
+        foregroundSessionExactRestorationCount: 11,
+        foregroundSessionFinishedSampleCount: 11,
         arms: [mismatchedAdapterArm]
     )
     try require(
@@ -3657,6 +5686,7 @@ private func runSelfTests(html: Data) async throws {
     FileHandle.standardError.write(Data("self-test: all protocol, parser, and negative controls passed\n".utf8))
 }
 
+@MainActor
 private func runBenchmark(options: RunnerOptions, htmlURL: URL, html: Data) async throws -> BenchmarkOutcome {
     guard !options.apps.isEmpty else {
         throw HarnessError.invalidArgument("at least one --app is required")
@@ -3681,6 +5711,8 @@ private func runBenchmark(options: RunnerOptions, htmlURL: URL, html: Data) asyn
     let server = try LoopbackBeaconServer(html: html)
     defer { server.stop() }
     let reader = ResourceCoalitionReader()
+    let foregroundSession = try ForegroundSessionMonitor.capture()
+    defer { foregroundSession.stop() }
 
     let started = Date()
     var samples: [SampleRecord] = []
@@ -3694,6 +5726,7 @@ private func runBenchmark(options: RunnerOptions, htmlURL: URL, html: Data) asyn
             let spec = options.apps[appIndex]
             globalOrdinal += 1
             FileHandle.standardError.write(Data("[\(globalOrdinal)/\(options.runsPerApp * options.apps.count)] \(spec.label), round \(round + 1)\n".utf8))
+            let foregroundMonitor = try foregroundSession.beginSample()
             let sample = await runOneSample(
                 spec: spec,
                 round: round + 1,
@@ -3701,7 +5734,8 @@ private func runBenchmark(options: RunnerOptions, htmlURL: URL, html: Data) asyn
                 globalOrdinal: globalOrdinal,
                 options: options,
                 server: server,
-                reader: reader
+                reader: reader,
+                foregroundMonitor: foregroundMonitor
             )
             samples.append(sample)
             if sample.status != "ok" {
@@ -3716,6 +5750,14 @@ private func runBenchmark(options: RunnerOptions, htmlURL: URL, html: Data) asyn
             }
         }
     }
+    let foregroundSessionEvidence = foregroundSession.finishArms()
+    let foregroundSessionProofComplete = foregroundSessionEvidence
+        .isCompleteForPublication(recordedSampleCount: samples.count)
+    abortedReason = abortedReasonAfterForegroundSessionFinalization(
+        existingAbortedReason: abortedReason,
+        foregroundSessionProofComplete: foregroundSessionProofComplete
+    )
+    foregroundSession.stop()
 
     if hasUnresolvedLaunchOwnership(samples.map(\.cleanup)) {
         throw HarnessError.measurement(
@@ -3762,6 +5804,9 @@ private func runBenchmark(options: RunnerOptions, htmlURL: URL, html: Data) asyn
                 $0.doubleRafPaintOpportunityProxyMilliseconds != nil
                     && $0.coalition != nil
             }.count,
+            completeForegroundCount: appSamples.filter {
+                $0.foreground.isCompleteForPublication
+            }.count,
             fixtureUnchanged: fixtureBefore == fixtureAfter,
             provenanceComplete: fixtureProvenanceIsComplete(fixtureBefore)
                 && fixtureProvenanceIsComplete(fixtureAfter),
@@ -3797,6 +5842,11 @@ private func runBenchmark(options: RunnerOptions, htmlURL: URL, html: Data) asyn
             hostBefore: hostBefore,
             hostAfter: hostAfter,
             aborted: abortedReason != nil,
+            foregroundSessionProofComplete: foregroundSessionProofComplete,
+            recordedSampleCount: samples.count,
+            foregroundSessionStartedSampleCount: foregroundSessionEvidence.startedSampleCount,
+            foregroundSessionExactRestorationCount: foregroundSessionEvidence.exactRestorationCount,
+            foregroundSessionFinishedSampleCount: foregroundSessionEvidence.finishedSampleCount,
             arms: armFacts
         )
     )
@@ -3833,6 +5883,7 @@ private func runBenchmark(options: RunnerOptions, htmlURL: URL, html: Data) asyn
             observationPollMilliseconds: 50,
             cacheState: "fresh application process; OS and WebKit caches uncontrolled (not a cold-cache claim)"
         ),
+        foregroundSession: foregroundSessionEvidence,
         samples: samples,
         summaries: summarize(apps: options.apps, samples: samples),
         abortedReason: abortedReason,
@@ -3844,11 +5895,33 @@ private func runBenchmark(options: RunnerOptions, htmlURL: URL, html: Data) asyn
     let json = try encoder.encode(document)
     try emitBenchmarkJSON(json, outputDestination: outputURL)
     return BenchmarkOutcome(
-        measurementSucceeded: abortedReason == nil && !samples.contains(where: { $0.status != "ok" }),
+        measurementSucceeded: benchmarkMeasurementSucceeded(
+            abortedReason: abortedReason,
+            foregroundSessionProofComplete: foregroundSessionProofComplete,
+            samplesContainFailure: samples.contains(where: { $0.status != "ok" })
+        ),
         publicationEligible: publication.eligible
     )
 }
 
+#if FOREGROUND_STATE_SELF_TEST
+@main
+struct ForegroundStateTestMain {
+    @MainActor
+    static func main() {
+        do {
+            try validateForegroundTransitionContract()
+            try validateForegroundPublicationPolicyContract()
+            FileHandle.standardError.write(
+                Data("foreground-state self-test: all controls passed\n".utf8)
+            )
+        } catch {
+            FileHandle.standardError.write(Data("error: \(error)\n".utf8))
+            Darwin.exit(1)
+        }
+    }
+}
+#else
 @main
 struct HarnessMain {
     static func main() async {
@@ -3873,3 +5946,4 @@ struct HarnessMain {
         }
     }
 }
+#endif

@@ -3,8 +3,8 @@ import CryptoKit
 import Darwin
 import Foundation
 
-let harnessSchemaVersion = 5
-let harnessVersion = "0.5.0"
+let harnessSchemaVersion = 6
+let harnessVersion = "0.6.0"
 
 @inline(__always)
 func monotonicNowNanoseconds() -> UInt64 {
@@ -15,6 +15,7 @@ enum HarnessError: Error, CustomStringConvertible {
     case invalidArgument(String)
     case io(String)
     case launch(String)
+    case foregroundInterference(ForegroundFailureReason)
     case protocolViolation(String)
     case timeout(String)
     case measurement(String)
@@ -27,6 +28,8 @@ enum HarnessError: Error, CustomStringConvertible {
             return "I/O failure: \(message)"
         case .launch(let message):
             return "launch failure: \(message)"
+        case .foregroundInterference(let reason):
+            return "foreground interference: \(reason.rawValue)"
         case .protocolViolation(let message):
             return "benchmark protocol violation: \(message)"
         case .timeout(let message):
@@ -197,6 +200,234 @@ struct KernelLaunchOwnership: Equatable {
 struct KernelProcessUniqueIdentity: Equatable {
     let uniqueId: UInt64
     let pidVersion: UInt32
+}
+
+/// Internal process-generation key used to reason about foreground ownership.
+/// It is deliberately not `Codable`: benchmark JSON may expose only stable
+/// booleans and reason codes, never foreground application identities.
+struct ForegroundProcessGeneration: Equatable, Sendable {
+    let pid: Int32
+    let uniqueId: UInt64
+    let pidVersion: UInt32
+}
+
+struct ForegroundSampleLease: Equatable, Sendable {
+    let id: UInt64
+    let startCursor: Int
+}
+
+struct ForegroundSessionCursorState {
+    let anchor: ForegroundProcessGeneration
+    private(set) var committedCursor: Int
+    private(set) var activeLease: ForegroundSampleLease?
+    private var nextLeaseId: UInt64 = 1
+
+    init(anchor: ForegroundProcessGeneration, committedCursor: Int) {
+        self.anchor = anchor
+        self.committedCursor = committedCursor
+    }
+
+    mutating func beginSample() -> ForegroundSampleLease? {
+        guard activeLease == nil else { return nil }
+        let lease = ForegroundSampleLease(
+            id: nextLeaseId,
+            startCursor: committedCursor
+        )
+        nextLeaseId &+= 1
+        activeLease = lease
+        return lease
+    }
+
+    func owns(_ lease: ForegroundSampleLease) -> Bool {
+        activeLease == lease
+    }
+
+    mutating func commit(_ lease: ForegroundSampleLease, cursor: Int) -> Bool {
+        guard activeLease == lease,
+              cursor >= lease.startCursor,
+              cursor >= committedCursor else {
+            return false
+        }
+        committedCursor = cursor
+        return true
+    }
+
+    mutating func end(_ lease: ForegroundSampleLease) -> Bool {
+        guard activeLease == lease else { return false }
+        activeLease = nil
+        return true
+    }
+
+    mutating func sealTail(cursor: Int) -> Bool {
+        guard activeLease == nil, cursor >= committedCursor else { return false }
+        committedCursor = cursor
+        return true
+    }
+}
+
+enum ForegroundFailureReason: String, Codable, Equatable, Sendable {
+    case anchorUnavailable = "foreground_anchor_unavailable"
+    case anchorGenerationUnavailable = "foreground_anchor_generation_unavailable"
+    case anchorChangedBeforeLaunch = "foreground_anchor_changed_before_launch"
+    case targetGenerationUnavailable = "foreground_target_generation_unavailable"
+    case activationGenerationUnavailable = "foreground_activation_generation_unavailable"
+    case foreignApplicationBeforeTarget = "foreground_foreign_application_before_target"
+    case targetLostToForeignBeforeBeacon = "foreground_target_lost_to_foreign_before_beacon"
+    case anchorReboundedBeforeBeacon = "foreground_anchor_rebounded_before_beacon"
+    case targetNeverActive = "foreground_target_never_active"
+    case targetNotActiveAtBeacon = "foreground_target_not_active_at_beacon"
+    case sessionContinuityUnavailable = "foreground_session_continuity_unavailable"
+    case anchorExitedBeforeRestoration = "foreground_anchor_exited_before_restoration"
+    case anchorGenerationChangedBeforeRestoration = "foreground_anchor_generation_changed_before_restoration"
+    case anchorNotRestoredBeforeDeadline = "foreground_anchor_not_restored_before_deadline"
+}
+
+enum ForegroundAnchorGenerationStatus: Equatable, Sendable {
+    case sameGeneration
+    case exited
+    case reused
+}
+
+/// Pure foreground-transition contract. The AppKit observer feeds this state
+/// machine generation-bound activation events; no NSWorkspace policy is hidden
+/// in the integration layer.
+struct ForegroundTransitionState {
+    let anchor: ForegroundProcessGeneration
+    private(set) var target: ForegroundProcessGeneration?
+    private(set) var current: ForegroundProcessGeneration
+    private(set) var targetActivatedBeforeBeacon = false
+    private(set) var transitionUninterruptedBeforeBeacon = false
+    private(set) var beaconAccepted = false
+    private(set) var exactAnchorRestoredAfterCleanup = false
+    private(set) var failureReason: ForegroundFailureReason?
+
+    init(anchor: ForegroundProcessGeneration) {
+        self.anchor = anchor
+        current = anchor
+    }
+
+    mutating func reject(_ reason: ForegroundFailureReason) {
+        if failureReason == nil { failureReason = reason }
+        if !beaconAccepted { transitionUninterruptedBeforeBeacon = false }
+    }
+
+    mutating func prepareForLaunch(current generation: ForegroundProcessGeneration?) {
+        guard failureReason == nil else { return }
+        guard generation == anchor else {
+            reject(.anchorChangedBeforeLaunch)
+            return
+        }
+        current = anchor
+    }
+
+    mutating func observeBetweenSampleActivation(
+        _ generation: ForegroundProcessGeneration?
+    ) {
+        guard failureReason == nil else { return }
+        guard let generation else {
+            reject(.activationGenerationUnavailable)
+            return
+        }
+        guard generation == anchor else {
+            reject(.anchorChangedBeforeLaunch)
+            return
+        }
+        current = anchor
+    }
+
+    mutating func bindTarget(_ generation: ForegroundProcessGeneration?) {
+        guard failureReason == nil else { return }
+        guard let generation, generation != anchor else {
+            reject(.targetGenerationUnavailable)
+            return
+        }
+        target = generation
+    }
+
+    mutating func activationGenerationWasUnavailable() {
+        guard !beaconAccepted else { return }
+        reject(.activationGenerationUnavailable)
+    }
+
+    mutating func observeActivation(_ generation: ForegroundProcessGeneration) {
+        guard !beaconAccepted, failureReason == nil else { return }
+        guard generation != current else { return }
+        guard let target else {
+            reject(.targetGenerationUnavailable)
+            return
+        }
+
+        if current == anchor {
+            if generation == target {
+                current = target
+                targetActivatedBeforeBeacon = true
+            } else {
+                reject(.foreignApplicationBeforeTarget)
+            }
+            return
+        }
+
+        if current == target {
+            if generation == anchor {
+                reject(.anchorReboundedBeforeBeacon)
+            } else {
+                reject(.targetLostToForeignBeforeBeacon)
+            }
+        }
+    }
+
+    mutating func acceptBeacon(targetReportsActive: Bool) {
+        guard failureReason == nil else { return }
+        guard let target, targetActivatedBeforeBeacon, current == target else {
+            reject(.targetNeverActive)
+            return
+        }
+        guard targetReportsActive else {
+            reject(.targetNotActiveAtBeacon)
+            return
+        }
+        beaconAccepted = true
+        transitionUninterruptedBeforeBeacon = true
+    }
+
+    @discardableResult
+    mutating func observeAnchorRestoration(
+        current generation: ForegroundProcessGeneration?,
+        anchorStatus: ForegroundAnchorGenerationStatus
+    ) -> Bool {
+        switch anchorStatus {
+        case .exited:
+            reject(.anchorExitedBeforeRestoration)
+            return false
+        case .reused:
+            reject(.anchorGenerationChangedBeforeRestoration)
+            return false
+        case .sameGeneration:
+            exactAnchorRestoredAfterCleanup = generation == anchor
+            return exactAnchorRestoredAfterCleanup
+        }
+    }
+
+    @discardableResult
+    mutating func observeCommittedAnchorRestoration(
+        current generation: ForegroundProcessGeneration?,
+        anchorStatus: ForegroundAnchorGenerationStatus,
+        sessionCommitAccepted: Bool
+    ) -> Bool {
+        guard sessionCommitAccepted else {
+            reject(.sessionContinuityUnavailable)
+            return false
+        }
+        return observeAnchorRestoration(
+            current: generation,
+            anchorStatus: anchorStatus
+        )
+    }
+
+    mutating func restorationTimedOut() {
+        guard !exactAnchorRestoredAfterCleanup else { return }
+        reject(.anchorNotRestoredBeforeDeadline)
+    }
 }
 
 // Mirrors XNU bsd/sys/proc_info_private.h's 56-byte
