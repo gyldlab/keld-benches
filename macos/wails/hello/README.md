@@ -23,6 +23,9 @@ wails3 package
 
 Artifact (gitignored `bin/`): `bin/wails-hello.app`.
 
+Set `KELD_BENCH_URL` to override the initial window URL for a hosted fixture;
+when unset, the app serves the bundled frontend at `/`.
+
 ## Weigh
 
 See [`../../../MEASUREMENTS.md`](../../../MEASUREMENTS.md) (2026-08-14).

@@ -16,6 +16,9 @@
     <p>Hello from Chromium (NW.js) — same-class hello window as the Swift fixtures.</p>
   </div>
   <script>
+    if (typeof process !== 'undefined' && process.env && process.env.KELD_BENCH_URL) {
+      window.location.replace(process.env.KELD_BENCH_URL);
+    }
     try {
       require('fs').writeFileSync('/tmp/keld-benches-nwjs-painted', 'painted');
     } catch (e) {}

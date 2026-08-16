@@ -32,3 +32,6 @@ Lanes (different — do not blend):
 
 See [`../../../MEASUREMENTS.md`](../../../MEASUREMENTS.md) (2026-08-14).
 The wrapped `.app` stays ~18 MB until first launch extracts Bun + launcher.
+
+For the shared KEL-64 oracle, the harness supplies `KELD_BENCH_URL`; the Bun
+entrypoint opens that loopback URL when present and keeps the bundled view otherwise.

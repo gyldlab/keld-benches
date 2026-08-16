@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"log"
+	"os"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -11,6 +12,11 @@ import (
 var assets embed.FS
 
 func main() {
+	url := os.Getenv("KELD_BENCH_URL")
+	if url == "" {
+		url = "/"
+	}
+
 	app := application.New(application.Options{
 		Name:        "Wails Hello",
 		Description: "keld-benches macOS hello-window fixture (Wails v3)",
@@ -27,7 +33,7 @@ func main() {
 		Width:            960,
 		Height:           640,
 		BackgroundColour: application.NewRGB(11, 15, 20),
-		URL:              "/",
+		URL:              url,
 	})
 
 	if err := app.Run(); err != nil {

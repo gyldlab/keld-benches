@@ -15,7 +15,8 @@
   },
   "nativeAllowList": [
     "app.*",
-    "filesystem.writeFile"
+    "filesystem.writeFile",
+    "os.getEnv"
   ],
   "modes": {
     "window": {

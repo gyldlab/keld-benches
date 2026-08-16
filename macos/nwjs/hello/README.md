@@ -29,3 +29,6 @@ open "$APP"
 See [`../../../MEASUREMENTS.md`](../../../MEASUREMENTS.md) (2026-08-14).
 Paint marker: `/tmp/keld-benches-nwjs-painted`.
 Weigh the assembled `.app` (runtime + `app.nw`), not the SDK zip.
+
+For the shared KEL-64 oracle, the harness supplies `KELD_BENCH_URL`; the page
+navigates to that loopback URL when present and keeps the bundled page otherwise.

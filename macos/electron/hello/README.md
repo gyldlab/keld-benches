@@ -55,3 +55,6 @@ Do not commit `node_modules/`, `out/`, or the Electron zip.
    on the **main** Electron process. Note Chromium GPU / renderer helpers
    separately.
 3. Record in [`../../../MEASUREMENTS.md`](../../../MEASUREMENTS.md).
+
+For the shared KEL-64 oracle, the harness supplies `KELD_BENCH_URL`; the fixture
+loads that loopback URL when present and keeps the bundled page for normal runs.

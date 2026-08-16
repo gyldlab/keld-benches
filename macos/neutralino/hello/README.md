@@ -46,3 +46,6 @@ open "$APP"
 
 See [`../../../MEASUREMENTS.md`](../../../MEASUREMENTS.md) (2026-08-14).
 Paint marker: `/tmp/keld-benches-neutralino-painted`.
+
+For the shared KEL-64 oracle, the harness supplies `KELD_BENCH_URL`; the fixture
+reads it through `os.getEnv` and navigates to that loopback URL when present.

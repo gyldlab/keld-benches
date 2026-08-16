@@ -1,8 +1,9 @@
 import { BrowserWindow } from "electrobun/bun";
 
+const benchmarkURL = process.env.KELD_BENCH_URL;
 const _mainWindow = new BrowserWindow({
 	title: "Electrobun Hello",
-	url: "views://mainview/index.html",
+	url: benchmarkURL || "views://mainview/index.html",
 	frame: {
 		width: 960,
 		height: 640,

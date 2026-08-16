@@ -12,7 +12,12 @@ const createWindow = () => {
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  const benchmarkURL = process.env.KELD_BENCH_URL;
+  if (benchmarkURL) {
+    mainWindow.loadURL(benchmarkURL);
+  } else {
+    mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  }
   mainWindow.webContents.on('did-finish-load', () => {
     try {
       fs.writeFileSync('/tmp/keld-benches-electron-painted', 'painted');
