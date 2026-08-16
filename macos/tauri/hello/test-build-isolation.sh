@@ -50,6 +50,39 @@ if directory_is_within "$selected_tmpdir" "$repository_physical"; then
   fail "TMPDIR inside the checkout was accepted"
 fi
 
+# The output target may not exist on a clean checkout. Selecting the external
+# staging root must validate the nearest existing output ancestor without
+# creating anything under the checkout first.
+missing_output_case="$test_root/missing-output"
+missing_repository="$missing_output_case/repository"
+missing_output_parent="$missing_repository/src-tauri/target/release/bundle/macos"
+missing_external_tmpdir="$missing_output_case/external-tmp"
+/bin/mkdir -p "$missing_repository/src-tauri" "$missing_external_tmpdir"
+missing_repository_physical=$(canonical_directory "$missing_repository")
+create_external_staging_root \
+  "$missing_repository_physical" "$missing_external_tmpdir" \
+  "$missing_output_parent"
+missing_staging_root=$created_staging_root
+missing_staging_identity=$created_staging_identity
+if [ -e "$missing_output_parent" ] || [ -L "$missing_output_parent" ]; then
+  fail "staging selection created the checkout output target before validation"
+fi
+if [ -e "$missing_repository/src-tauri/target" ] || \
+   [ -L "$missing_repository/src-tauri/target" ]; then
+  fail "staging selection created the checkout target before validation"
+fi
+/bin/mkdir -p "$missing_repository/src-tauri/target"
+if [ ! -d "$missing_repository/src-tauri/target" ] || \
+   [ -L "$missing_repository/src-tauri/target" ]; then
+  fail "output target could not be created after external staging validation"
+fi
+if [ "$(/usr/bin/stat -f '%d' "$missing_staging_root")" != \
+     "$(/usr/bin/stat -f '%d' "$missing_repository/src-tauri/target")" ]; then
+  fail "staging and output target do not share a filesystem"
+fi
+remove_owned_staging_root "$missing_staging_root" "$missing_external_tmpdir" \
+  "$missing_staging_identity"
+
 # Hostile ignored state in the checkout is a sibling of the isolated archive,
 # so it cannot participate in Bun or Cargo ancestor discovery.
 external_physical=$(canonical_directory "$external_tmpdir")
@@ -152,6 +185,13 @@ fi
   "$build_script" || fail "production recipe no longer uses identity-bound cleanup"
 if /usr/bin/grep -Fq '$source_target_root/.tauri-bench-target' "$build_script"; then
   fail "build staging was restored inside the checkout"
+fi
+if ! /usr/bin/awk '
+  /if ! create_external_staging_root/ { staging_line = NR }
+  /ensure_real_directory "\$source_target_root"/ { target_line = NR }
+  END { exit (staging_line > 0 && target_line > staging_line) ? 0 : 1 }
+' "$build_script"; then
+  fail "checkout target directories are created before external staging validation"
 fi
 
 echo "PASS: Tauri source, dependency, and target staging stays external"

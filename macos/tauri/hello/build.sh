@@ -103,6 +103,27 @@ directory_is_within() {
   esac
 }
 
+filesystem_device_for_path() {
+  candidate=$1
+  while [ ! -e "$candidate" ]; do
+    if [ -L "$candidate" ]; then
+      echo "benchmark output path must not contain a symlink: $candidate" >&2
+      return 1
+    fi
+    parent=$(/usr/bin/dirname "$candidate")
+    if [ "$parent" = "$candidate" ]; then
+      echo "could not find an existing filesystem ancestor: $candidate" >&2
+      return 1
+    fi
+    candidate=$parent
+  done
+  if [ -L "$candidate" ] || [ ! -d "$candidate" ]; then
+    echo "benchmark output filesystem ancestor must be a real directory: $candidate" >&2
+    return 1
+  fi
+  /usr/bin/stat -f '%d' "$candidate"
+}
+
 select_external_tmpdir() {
   repository=$1
   requested_tmpdir=${2:-/tmp}
@@ -152,8 +173,12 @@ create_external_staging_root() {
       "$staging_identity" || :
     return 1
   fi
-  if [ "$(/usr/bin/stat -f '%d' "$staging_physical")" != \
-       "$(/usr/bin/stat -f '%d' "$output_parent")" ]; then
+  if ! output_device=$(filesystem_device_for_path "$output_parent"); then
+    remove_owned_staging_root "$staging_root" "$temporary_parent" \
+      "$staging_identity" || :
+    return 1
+  fi
+  if [ "$(/usr/bin/stat -f '%d' "$staging_physical")" != "$output_device" ]; then
     echo "isolated Tauri staging and the final app must share a filesystem for atomic install" >&2
     remove_owned_staging_root "$staging_root" "$temporary_parent" \
       "$staging_identity" || :
@@ -347,10 +372,6 @@ rustc_dir=$(CDPATH= cd -- "$(dirname -- "$rustc_bin")" && pwd)
 build_path="$bun_dir:$cargo_dir:$rustc_dir:/usr/bin:/bin:/usr/sbin:/sbin"
 
 source_target_root="$script_dir/src-tauri/target"
-ensure_real_directory "$source_target_root"
-ensure_real_directory "$source_target_root/release"
-ensure_real_directory "$source_target_root/release/bundle"
-ensure_real_directory "$source_target_root/release/bundle/macos"
 output_parent="$source_target_root/release/bundle/macos"
 output_app="$output_parent/Tauri Hello.app"
 if [ -e "$output_app" ] || [ -L "$output_app" ]; then
@@ -375,6 +396,15 @@ cleanup() {
   fi
 }
 trap cleanup EXIT HUP INT TERM
+ensure_real_directory "$source_target_root"
+ensure_real_directory "$source_target_root/release"
+ensure_real_directory "$source_target_root/release/bundle"
+ensure_real_directory "$source_target_root/release/bundle/macos"
+if [ "$(/usr/bin/stat -f '%d' "$output_parent")" != \
+     "$(/usr/bin/stat -f '%d' "$temporary_root")" ]; then
+  echo "final Tauri app directory is not on the isolated staging filesystem" >&2
+  exit 65
+fi
 if [ ! -f "$script_path" ] || [ -L "$script_path" ]; then
   echo "canonical benchmark build script must be a regular non-symlink file" >&2
   exit 65

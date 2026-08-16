@@ -35,6 +35,11 @@ The recipe also refuses a `node_modules` directory, Cargo configuration, or
 ancestor `package.json` anywhere above the isolated fixture, because Bun and
 Cargo search their ancestor directories. Ignored checkout state cannot select
 tools or alter the build.
+The checkout's `src-tauri/target` tree is not created until that external
+staging root has been created and its filesystem has been validated; a clean
+checkout is therefore safe to use without pre-seeding an output target. The
+final target directory is rechecked against the staging device before the
+build proceeds.
 The recipe invokes the freshly installed local Tauri CLI by its exact path and
 embeds the source/recipe commit, build-script hash, and actual Bun, Tauri CLI,
 Rust, Cargo, Xcode, and macOS SDK versions in the app's `Info.plist`, then
