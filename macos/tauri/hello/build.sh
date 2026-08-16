@@ -84,6 +84,193 @@ ensure_real_directory() {
   fi
 }
 
+# BEGIN TAURI BUILD ISOLATION CONTRACT
+canonical_directory() {
+  directory=$1
+  if [ ! -d "$directory" ]; then
+    echo "benchmark isolation path must be a directory: $directory" >&2
+    return 1
+  fi
+  (CDPATH= cd -- "$directory" && pwd -P)
+}
+
+directory_is_within() {
+  child=$1
+  parent=$2
+  case "$child" in
+    "$parent"|"$parent"/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+select_external_tmpdir() {
+  repository=$1
+  requested_tmpdir=${2:-/tmp}
+  case "$requested_tmpdir" in
+    /*) ;;
+    *)
+      echo "TMPDIR must be an absolute directory when set" >&2
+      return 1
+      ;;
+  esac
+  if ! requested_physical=$(canonical_directory "$requested_tmpdir"); then
+    return 1
+  fi
+  if directory_is_within "$requested_physical" "$repository"; then
+    requested_physical=$(canonical_directory /tmp) || return 1
+  fi
+  if directory_is_within "$requested_physical" "$repository"; then
+    echo "no external temporary directory is available for the Tauri build" >&2
+    return 1
+  fi
+  printf '%s\n' "$requested_physical"
+}
+
+create_external_staging_root() {
+  repository=$1
+  temporary_parent=$2
+  output_parent=$3
+  created_staging_root=
+  created_staging_identity=
+  if ! staging_root=$(/usr/bin/mktemp -d "$temporary_parent/tauri-bench-build.XXXXXX"); then
+    echo "could not create the isolated Tauri build root" >&2
+    return 1
+  fi
+  if ! staging_identity=$(staging_root_identity "$staging_root"); then
+    echo "leaving unverified Tauri staging path in place: $staging_root" >&2
+    return 1
+  fi
+  if ! /bin/chmod 700 "$staging_root" || \
+     ! staging_physical=$(canonical_directory "$staging_root"); then
+    remove_owned_staging_root "$staging_root" "$temporary_parent" \
+      "$staging_identity" || :
+    return 1
+  fi
+  if directory_is_within "$staging_physical" "$repository"; then
+    echo "Tauri source and build staging must be outside the repository" >&2
+    remove_owned_staging_root "$staging_root" "$temporary_parent" \
+      "$staging_identity" || :
+    return 1
+  fi
+  if [ "$(/usr/bin/stat -f '%d' "$staging_physical")" != \
+       "$(/usr/bin/stat -f '%d' "$output_parent")" ]; then
+    echo "isolated Tauri staging and the final app must share a filesystem for atomic install" >&2
+    remove_owned_staging_root "$staging_root" "$temporary_parent" \
+      "$staging_identity" || :
+    return 1
+  fi
+  if [ "$(staging_root_identity "$staging_root")" != "$staging_identity" ]; then
+    echo "Tauri staging root changed while it was being validated" >&2
+    return 1
+  fi
+  created_staging_root=$staging_root
+  created_staging_identity=$staging_identity
+}
+
+staging_root_identity() {
+  staging_path=$1
+  if [ -L "$staging_path" ]; then
+    echo "Tauri staging root must not be a symlink" >&2
+    return 1
+  fi
+  if ! /usr/bin/stat -f '%HT:%d:%i' "$staging_path"; then
+    echo "could not record Tauri staging-root identity" >&2
+    return 1
+  fi
+}
+
+remove_owned_staging_root() {
+  staging_path=$1
+  expected_parent=$2
+  expected_identity=$3
+  staging_parent=$(/usr/bin/dirname "$staging_path")
+  staging_name=${staging_path##*/}
+  if [ "$staging_parent" != "$expected_parent" ]; then
+    echo "refusing to clean Tauri staging outside its original parent: $staging_path" >&2
+    return 1
+  fi
+  case "$staging_name" in
+    tauri-bench-build.??????) ;;
+    *)
+      echo "refusing to clean unexpected Tauri staging pathname: $staging_path" >&2
+      return 1
+      ;;
+  esac
+  if [ -L "$staging_path" ]; then
+    echo "refusing to follow replaced Tauri staging symlink: $staging_path" >&2
+    return 1
+  fi
+  if [ ! -e "$staging_path" ]; then
+    return 0
+  fi
+  if ! current_identity=$(/usr/bin/stat -f '%HT:%d:%i' "$staging_path"); then
+    echo "refusing to clean unreadable Tauri staging path: $staging_path" >&2
+    return 1
+  fi
+  if [ "$current_identity" != "$expected_identity" ]; then
+    echo "refusing to clean replaced Tauri staging inode: $staging_path" >&2
+    return 1
+  fi
+  case "$current_identity" in
+    Directory:*) ;;
+    *)
+      echo "refusing to clean non-directory Tauri staging path: $staging_path" >&2
+      return 1
+      ;;
+  esac
+  /bin/rm -rf -- "$staging_path"
+}
+
+verify_isolated_directory() {
+  repository=$1
+  staging_root=$2
+  directory=$3
+  label=$4
+  if [ -L "$directory" ] || ! directory_physical=$(canonical_directory "$directory"); then
+    echo "$label must be a real directory" >&2
+    return 1
+  fi
+  if ! directory_is_within "$directory_physical" "$staging_root" || \
+     directory_is_within "$directory_physical" "$repository"; then
+    echo "$label escaped the external Tauri staging root" >&2
+    return 1
+  fi
+}
+
+reject_ambient_dependency_ancestors() {
+  source_directory=$1
+  staging_root=$2
+  source_physical=$(canonical_directory "$source_directory") || return 1
+  staging_physical=$(canonical_directory "$staging_root") || return 1
+  if ! directory_is_within "$source_physical" "$staging_physical"; then
+    echo "isolated Tauri source is not inside the staging root" >&2
+    return 1
+  fi
+
+  ancestor=$source_physical
+  while :; do
+    for ambient_path in \
+      "$ancestor/node_modules" \
+      "$ancestor/.cargo/config.toml" \
+      "$ancestor/.cargo/config"; do
+      if [ -e "$ambient_path" ] || [ -L "$ambient_path" ]; then
+        echo "ambient dependency or Cargo configuration would affect the Tauri build: $ambient_path" >&2
+        return 1
+      fi
+    done
+    if [ "$ancestor" != "$source_physical" ] && \
+       { [ -e "$ancestor/package.json" ] || [ -L "$ancestor/package.json" ]; }; then
+      echo "ambient Bun workspace manifest would affect the Tauri build: $ancestor/package.json" >&2
+      return 1
+    fi
+    if [ "$ancestor" = / ]; then
+      break
+    fi
+    ancestor=$(/usr/bin/dirname "$ancestor")
+  done
+}
+# END TAURI BUILD ISOLATION CONTRACT
+
 if clean_git -C /var/empty rev-parse --git-dir >/dev/null 2>&1; then
   echo "canonical Git network-query directory must not be a repository" >&2
   exit 65
@@ -95,6 +282,7 @@ if clean_git -C "$script_dir" config --local --no-includes --get-regexp \
 fi
 repository_root=$(clean_git -C "$script_dir" rev-parse --show-toplevel)
 repository_prefix=$(clean_git -C "$script_dir" rev-parse --show-prefix)
+repository_physical=$(canonical_directory "$repository_root")
 if [ "$repository_prefix" != macos/tauri/hello/ ]; then
   echo "benchmark recipe must run from its committed macos/tauri/hello location" >&2
   exit 65
@@ -139,30 +327,7 @@ if ! remote_has_exact_branch_head "$source_commit" "$remote_heads"; then
   exit 65
 fi
 
-if [ ! -f "$script_path" ] || [ -L "$script_path" ]; then
-  echo "canonical benchmark build script must be a regular non-symlink file" >&2
-  exit 65
-fi
-verified_script=$(/usr/bin/mktemp "${TMPDIR:-/tmp}/tauri-build-script.XXXXXX")
-cleanup_verified_script() {
-  /bin/rm -f -- "$verified_script"
-}
-trap cleanup_verified_script EXIT HUP INT TERM
-if ! clean_git -C "$repository_root" cat-file blob \
-  "$source_commit:$recipe_path" >"$verified_script"; then
-  echo "could not read the committed benchmark build script" >&2
-  exit 65
-fi
-if ! /usr/bin/cmp -s "$script_path" "$verified_script"; then
-  echo "benchmark build script bytes differ from the committed recipe" >&2
-  exit 65
-fi
-if ! build_script_sha=$(sha256_file "$verified_script"); then
-  exit 65
-fi
-
 build_home=${HOME:?HOME must be set for Bun and the Rust toolchain}
-build_tmpdir=${TMPDIR:-/tmp}
 build_rustup_home=${RUSTUP_HOME:-$build_home/.rustup}
 if ! bun_bin=$(command -v bun) || [ ! -x "$bun_bin" ]; then
   echo "bun must be installed and executable" >&2
@@ -186,44 +351,60 @@ ensure_real_directory "$source_target_root"
 ensure_real_directory "$source_target_root/release"
 ensure_real_directory "$source_target_root/release/bundle"
 ensure_real_directory "$source_target_root/release/bundle/macos"
-output_app="$source_target_root/release/bundle/macos/Tauri Hello.app"
+output_parent="$source_target_root/release/bundle/macos"
+output_app="$output_parent/Tauri Hello.app"
 if [ -e "$output_app" ] || [ -L "$output_app" ]; then
   echo "refusing to overwrite existing benchmark app: $output_app" >&2
   echo "remove that ignored build product explicitly, then rerun this recipe" >&2
   exit 73
 fi
 
-temporary_root=$(/usr/bin/mktemp -d "$build_tmpdir/tauri-bench-source.XXXXXX")
-output_staging_root=
+if ! sanitized_tmpdir=$(select_external_tmpdir "$repository_physical" "${TMPDIR:-/tmp}"); then
+  exit 65
+fi
+if ! create_external_staging_root \
+  "$repository_physical" "$sanitized_tmpdir" "$output_parent"; then
+  exit 65
+fi
+temporary_root=$created_staging_root
+temporary_root_identity=$created_staging_identity
 cleanup() {
-  /bin/rm -f -- "$verified_script"
-  /bin/rm -rf -- "$temporary_root"
-  if [ -n "$output_staging_root" ]; then
-    /bin/rm -rf -- "$output_staging_root"
+  if [ -n "${temporary_root:-}" ]; then
+    remove_owned_staging_root "$temporary_root" "$sanitized_tmpdir" \
+      "$temporary_root_identity" || :
   fi
 }
 trap cleanup EXIT HUP INT TERM
-repository_physical=$(CDPATH= cd -- "$repository_root" && pwd -P)
-temporary_physical=$(CDPATH= cd -- "$temporary_root" && pwd -P)
-case "$temporary_physical" in
-  "$repository_physical"|"$repository_physical"/*)
-    echo "Tauri benchmark source isolation must be outside the repository" >&2
-    exit 65
-    ;;
-esac
+if [ ! -f "$script_path" ] || [ -L "$script_path" ]; then
+  echo "canonical benchmark build script must be a regular non-symlink file" >&2
+  exit 65
+fi
+verified_script="$temporary_root/verified-build.sh"
+if ! clean_git -C "$repository_root" cat-file blob \
+  "$source_commit:$recipe_path" >"$verified_script"; then
+  echo "could not read the committed benchmark build script" >&2
+  exit 65
+fi
+if ! /usr/bin/cmp -s "$script_path" "$verified_script"; then
+  echo "benchmark build script bytes differ from the committed recipe" >&2
+  exit 65
+fi
+if ! build_script_sha=$(sha256_file "$verified_script"); then
+  exit 65
+fi
 
-output_staging_root=$(/usr/bin/mktemp -d "$source_target_root/.tauri-bench-target.XXXXXX")
-build_target="$output_staging_root/target"
+build_target="$temporary_root/target"
 cargo_home_dir="$temporary_root/cargo-home"
 isolated_home_dir="$temporary_root/home"
 isolated_tmpdir="$temporary_root/tmp"
 bun_cache_dir="$temporary_root/bun-cache"
+bun_install_dir="$temporary_root/bun-install"
 source_archive="$temporary_root/source.tar"
 isolated_source_root="$temporary_root/source"
 isolated_source_dir="$isolated_source_root/macos/tauri/hello"
 staged_app="$build_target/release/bundle/macos/Tauri Hello.app"
 /bin/mkdir -m 700 "$cargo_home_dir" "$isolated_home_dir" "$isolated_tmpdir" \
-  "$bun_cache_dir" "$isolated_source_root"
+  "$bun_cache_dir" "$bun_install_dir" "$isolated_source_root" "$build_target"
 
 # Build only the committed fixture bytes in a fresh source tree. A frozen Bun
 # install validates dependency resolution, but it does not replace a preexisting
@@ -243,6 +424,23 @@ if [ ! -d "$isolated_source_dir" ] || [ -L "$isolated_source_dir" ] || \
   echo "committed Tauri benchmark source was not an empty dependency workspace" >&2
   exit 65
 fi
+for isolated_directory in \
+  "$isolated_source_root" \
+  "$isolated_source_dir" \
+  "$build_target" \
+  "$cargo_home_dir" \
+  "$isolated_home_dir" \
+  "$isolated_tmpdir" \
+  "$bun_cache_dir" \
+  "$bun_install_dir"; do
+  if ! verify_isolated_directory "$repository_physical" "$temporary_root" \
+    "$isolated_directory" "Tauri build directory"; then
+    exit 65
+  fi
+done
+if ! reject_ambient_dependency_ancestors "$isolated_source_dir" "$temporary_root"; then
+  exit 65
+fi
 
 clean_build_env() {
   /usr/bin/env -i \
@@ -251,6 +449,7 @@ clean_build_env() {
     TMPDIR="$isolated_tmpdir" \
     LC_ALL=C \
     LANG=C \
+    BUN_INSTALL="$bun_install_dir" \
     BUN_INSTALL_CACHE_DIR="$bun_cache_dir" \
     CARGO_HOME="$cargo_home_dir" \
     CARGO_TARGET_DIR="$build_target" \

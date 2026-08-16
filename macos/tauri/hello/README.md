@@ -27,14 +27,22 @@ The canonical recipe refuses a dirty or non-canonical checkout, non-default
 Git index flags, a commit that is not an exact live branch head at
 `gyldlab/keld-benches`, and an existing output app. It runs the frozen Bun
 install and Release Tauri app build from a fresh archive of the committed
-fixture bytes in a validated source tree physically outside the repository,
-with ambient build flags removed. Ignored checkout state such as
-`node_modules/` or `.cargo/config.toml` cannot select tools or alter the build.
-The recipe invokes the freshly installed local Tauri CLI by its exact path and embeds the
-source/recipe commit, build-script hash, and actual Bun, Tauri CLI, Rust, Cargo,
-Xcode, and macOS SDK versions in the app's `Info.plist`, then re-signs and
-verifies the bundle. The app is installed with an exclusive atomic rename, so
-a path created during the build cannot be overwritten.
+fixture bytes in one validated source/dependency/target staging root physically
+outside the repository, with fresh `HOME`, `BUN_INSTALL`, `CARGO_HOME`, and
+`CARGO_TARGET_DIR` directories and ambient build flags removed. A caller
+`TMPDIR` inside the checkout is ignored in favor of validated external `/tmp`.
+The recipe also refuses a `node_modules` directory, Cargo configuration, or
+ancestor `package.json` anywhere above the isolated fixture, because Bun and
+Cargo search their ancestor directories. Ignored checkout state cannot select
+tools or alter the build.
+The recipe invokes the freshly installed local Tauri CLI by its exact path and
+embeds the source/recipe commit, build-script hash, and actual Bun, Tauri CLI,
+Rust, Cargo, Xcode, and macOS SDK versions in the app's `Info.plist`, then
+re-signs and verifies the bundle. Staging must share a filesystem with the final
+app, which is installed with an exclusive atomic rename; a path created during
+the build cannot be overwritten. Cleanup is bound to the original staging
+pathname and device/inode. If that path is replaced, cleanup refuses it rather
+than resolving a symlink or deleting an unrelated directory.
 
 Remove an old ignored app explicitly before rebuilding. Ad-hoc codesign is set
 (`signingIdentity: "-"`). Artifact (gitignored):
@@ -42,6 +50,12 @@ Remove an old ignored app explicitly before rebuilding. Ad-hoc codesign is set
 - `.app`: `src-tauri/target/release/bundle/macos/Tauri Hello.app`
 
 Do not commit `node_modules/` or `src-tauri/target/`.
+
+The non-GUI isolation self-test does not install dependencies or build an app:
+
+```bash
+./macos/tauri/hello/test-build-isolation.sh
+```
 
 ## Weigh
 
