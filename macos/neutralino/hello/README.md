@@ -41,9 +41,10 @@ beacon is rejected with HTTP 422.
 
 [`patches/v6.9.0-macos-window-focus-webview.patch`](./patches/v6.9.0-macos-window-focus-webview.patch)
 contains the smallest validated runtime change. After Neutralino's existing
-`makeKeyAndOrderFront:`, its documented `window.focus()` API also makes the
-runtime's `WKWebView` the `NSWindow` first responder. It does not synthesize
-input or change the benchmark oracle.
+macOS focus handling (which either restores or keys and brings the window
+front), its documented `window.focus()` API also makes the runtime's `WKWebView`
+the `NSWindow` first responder. It does not synthesize input or change the
+benchmark oracle.
 
 Build an arm64 patched runtime from a clean checkout at exact v6.9.0 commit
 `2cec764ac5e3ccc5b1b44d046d6e6d6c85c3099e`:
