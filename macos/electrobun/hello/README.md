@@ -35,3 +35,8 @@ The wrapped `.app` stays ~18 MB until first launch extracts Bun + launcher.
 
 For the shared KEL-64 oracle, the harness supplies `KELD_BENCH_URL`; the Bun
 entrypoint opens that loopback URL when present and keeps the bundled view otherwise.
+The entrypoint creates the window hidden, calls the documented
+`BrowserWindow.show()` and `activate()` lifecycle methods after the WebView is
+attached, then starts navigation with the documented `BrowserView.loadURL()`
+method. This ordering keeps the externally supplied page visible and active
+when the oracle samples its double-rAF beacon.
