@@ -6,6 +6,7 @@ const hiddenWindow = source.indexOf('show: false');
 const targetURL = source.indexOf('const targetURL = benchmarkURL || localURL;');
 const navigationRegistration = source.indexOf("mainWindow.webContents.on('did-start-navigation', focusTargetNavigation);");
 const focusRegistration = source.indexOf("mainWindow.webContents.on('dom-ready', focusTargetDocument);");
+const initialFocus = source.indexOf('  focusTargetView();\n\n  if (benchmarkURL) {');
 const navigationGuard = source.indexOf('if (isMainFrame && url === targetURL)');
 const targetGuard = source.indexOf('mainWindow.webContents.getURL() !== targetURL');
 const show = source.indexOf('mainWindow.show();');
@@ -19,6 +20,8 @@ if (
   targetURL < 0 ||
   navigationRegistration < 0 ||
   focusRegistration < 0 ||
+  initialFocus < focusRegistration ||
+  initialFocus > navigation ||
   navigationGuard < 0 ||
   targetGuard < 0 ||
   show < 0 ||
@@ -28,6 +31,6 @@ if (
   navigation < 0
 ) {
   throw new Error(
-    'the KEL-64 fixture must focus the canonical main-frame navigation and dom-ready target',
+    'the KEL-64 fixture must focus its empty native window before canonical navigation and reassert target focus',
   );
 }

@@ -39,6 +39,11 @@ const createWindow = () => {
   mainWindow.webContents.on('did-start-navigation', focusTargetNavigation);
   mainWindow.webContents.on('dom-ready', focusTargetDocument);
 
+  // Focus only the new native window while it still contains about:blank. The
+  // canonical page then inherits focus for its first rendering opportunity;
+  // the guarded navigation and dom-ready handlers reassert it for that page.
+  focusTargetView();
+
   if (benchmarkURL) {
     mainWindow.loadURL(benchmarkURL);
   } else {

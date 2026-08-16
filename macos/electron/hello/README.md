@@ -58,11 +58,13 @@ node test-keld-bench-focus.js
 
 For the shared KEL-64 oracle, the harness supplies `KELD_BENCH_URL`; the fixture
 loads that loopback URL when present and keeps the bundled page for normal runs.
-Its window is created hidden and is shown/focused at the exact canonical
-main-frame navigation, then re-checked at Electron's `dom-ready` lifecycle
-event. It calls Electron's app-level `focus({ steal: true })`, then native and
-`webContents.focus()` so the renderer, not merely the native window, owns focus
-before the canonical page reaches its first rendering opportunity.
+Its window is created hidden, then its empty native `about:blank` view is
+shown/focused immediately before canonical navigation. The fixture reasserts
+that focus at the exact canonical main-frame navigation and Electron's
+`dom-ready` lifecycle event. It calls Electron's app-level `focus({ steal:
+true })`, then native and `webContents.focus()` so the renderer, not merely the
+native window, owns focus before the canonical page reaches its first rendering
+opportunity.
 
 For a KEL-64 launch, pass both Chromium switches through LaunchServices—before
 Chromium bootstraps—not through JavaScript after Electron has begun starting:
