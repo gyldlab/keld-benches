@@ -9,6 +9,7 @@ const focusRegistration = source.indexOf("mainWindow.webContents.on('dom-ready',
 const navigationGuard = source.indexOf('if (isMainFrame && url === targetURL)');
 const targetGuard = source.indexOf('mainWindow.webContents.getURL() !== targetURL');
 const show = source.indexOf('mainWindow.show();');
+const applicationFocus = source.indexOf('app.focus({ steal: true });');
 const focus = source.indexOf('mainWindow.focus();');
 const rendererFocus = source.indexOf('mainWindow.webContents.focus();');
 const navigation = source.indexOf('mainWindow.loadURL(benchmarkURL);');
@@ -21,6 +22,7 @@ if (
   navigationGuard < 0 ||
   targetGuard < 0 ||
   show < 0 ||
+  applicationFocus < 0 ||
   focus < 0 ||
   rendererFocus < 0 ||
   navigation < 0

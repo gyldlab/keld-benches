@@ -19,6 +19,7 @@ const createWindow = () => {
   const targetURL = benchmarkURL || localURL;
   const focusTargetView = () => {
     mainWindow.show();
+    app.focus({ steal: true });
     mainWindow.focus();
     mainWindow.webContents.focus();
   };
