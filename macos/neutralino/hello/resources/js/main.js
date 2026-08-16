@@ -5,13 +5,12 @@ Neutralino.events.on("windowClose", () => {
 });
 
 Neutralino.events.on("ready", async () => {
-  try {
-    const benchmarkURL = await Neutralino.os.getEnv("KELD_BENCH_URL");
-    if (benchmarkURL) {
-      window.location.replace(benchmarkURL);
-      return;
-    }
-  } catch (_) {}
+  const benchmarkURL = await Neutralino.os.getEnv("KELD_BENCH_URL");
+  if (benchmarkURL) {
+    await Neutralino.window.focus();
+    window.location.replace(benchmarkURL);
+    return;
+  }
   Neutralino.filesystem
     .writeFile("/tmp/keld-benches-neutralino-painted", "painted")
     .catch(() => {});

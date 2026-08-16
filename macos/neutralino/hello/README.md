@@ -25,6 +25,12 @@ npx --yes @neutralinojs/neu update --latest
 npx --yes @neutralinojs/neu build --release --macos-bundle --embed-resources
 ```
 
+Before packaging, verify the KEL-64 launch seam remains focus-first:
+
+```bash
+./test-keld-bench-focus.sh
+```
+
 Official output (gitignored `dist/`):
 
 - `dist/neutralino-hello/neutralino-hello-mac_arm64.app` — Mach-O (embedded resources)
@@ -48,4 +54,8 @@ See [`../../../MEASUREMENTS.md`](../../../MEASUREMENTS.md) (2026-08-14).
 Paint marker: `/tmp/keld-benches-neutralino-painted`.
 
 For the shared KEL-64 oracle, the harness supplies `KELD_BENCH_URL`; the fixture
-reads it through `os.getEnv` and navigates to that loopback URL when present.
+reads it through `os.getEnv`, awaits the documented native `window.focus` call,
+then navigates to that loopback URL. This makes the canonical document's
+double-rAF beacon attest an actually focused window rather than merely a
+foreground app process. When the variable is absent, normal bundled-page startup
+is unchanged.

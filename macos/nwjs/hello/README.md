@@ -32,3 +32,20 @@ Weigh the assembled `.app` (runtime + `app.nw`), not the SDK zip.
 
 For the shared KEL-64 oracle, the harness supplies `KELD_BENCH_URL`; the page
 navigates to that loopback URL when present and keeps the bundled page otherwise.
+
+NW.js 0.13 and later enforce single-instance routing despite the deprecated
+`single-instance` manifest property. Each KEL-64 sample therefore needs an
+isolated profile, otherwise a later launch forwards to the prior instance rather
+than creating the measured app process:
+
+```bash
+macos/harness/.build/keld-macos-bench \
+  --app 'NW.js=/absolute/NWJS Hello.app' \
+  --app-arg 'NW.js=--user-data-dir=/tmp/keld-nwjs-profile-{token}' \
+  --app-build-command 'NW.js=<exact assembly command>' \
+  --output /tmp/nwjs-kel64.json
+```
+
+The profile directory is benchmark-scoped disposable state; remove only the
+explicit `/tmp/keld-nwjs-profile-*` directories after the run has fully cleaned
+up its NW.js process tree.
