@@ -1,18 +1,17 @@
 diff --git a/crates/keld-wv/src/bench_trace.rs b/crates/keld-wv/src/bench_trace.rs
 new file mode 100644
-index 0000000..0f8508a
+index 0000000..5623eba
 --- /dev/null
 +++ b/crates/keld-wv/src/bench_trace.rs
-@@ -0,0 +1,192 @@
+@@ -0,0 +1,291 @@
 +//! Benchmark-only startup stage tracing for the macOS hello adapter.
 +//!
 +//! This module is compiled only by the public benchmark recipe patch. The
 +//! normal Keld source tree does not contain it and production launches remain
 +//! unaffected. When `KELD_BENCH_STARTUP_TRACE` names a harness-owned private
-+//! path, the adapter writes one nonce-bound record after WebView construction.
++//! path, the adapter writes one nonce-bound record after `WebView` construction.
 +
 +use std::env;
-+use std::fmt::Write as _;
 +use std::fs::OpenOptions;
 +use std::io::Write;
 +use std::path::PathBuf;
@@ -54,6 +53,89 @@ index 0000000..0f8508a
 +    stages: [Option<u64>; 4],
 +}
 +
++impl StartupTrace {
++    fn new(path: PathBuf, token: String) -> Self {
++        Self {
++            path,
++            token,
++            started: Instant::now(),
++            stages: [None; 4],
++        }
++    }
++
++    fn record_elapsed(&mut self, stage: Stage, elapsed_ns: u64) -> Result<(), WvError> {
++        let index = stage.index();
++        if self.stages[index].is_some() {
++            return Err(WvError::EventLoop(String::from(
++                "KELD-BENCH: startup stage was recorded twice",
++            )));
++        }
++        if index > 0 {
++            let previous = self.stages[index - 1].ok_or_else(|| {
++                WvError::EventLoop(String::from(
++                    "KELD-BENCH: startup stage order is incomplete",
++                ))
++            })?;
++            if elapsed_ns <= previous {
++                return Err(WvError::EventLoop(String::from(
++                    "KELD-BENCH: startup stages did not advance monotonically",
++                )));
++            }
++        }
++        self.stages[index] = Some(elapsed_ns);
++        Ok(())
++    }
++
++    fn record(&mut self, stage: Stage) -> Result<(), WvError> {
++        let elapsed = if stage.index() == 0 {
++            0
++        } else {
++            u64::try_from(self.started.elapsed().as_nanos()).map_err(|_| {
++                WvError::EventLoop(String::from("KELD-BENCH: startup duration overflowed u64"))
++            })?
++        };
++        self.record_elapsed(stage, elapsed)
++    }
++
++    fn format_record(&self) -> Result<String, WvError> {
++        let [
++            Some(wv_run_entered),
++            Some(event_loop_created),
++            Some(window_built),
++            Some(webview_built),
++        ] = self.stages
++        else {
++            return Err(WvError::EventLoop(String::from(
++                "KELD-BENCH: startup trace is incomplete",
++            )));
++        };
++        Ok(format!(
++            "version=1\ntoken={}\nwv_run_entered_ns={wv_run_entered}\n\
++             event_loop_created_ns={event_loop_created}\nwindow_built_ns={window_built}\n\
++             webview_built_ns={webview_built}\n",
++            self.token
++        ))
++    }
++
++    fn write(&self) -> Result<(), WvError> {
++        let text = self.format_record()?;
++        let mut file = OpenOptions::new()
++            .write(true)
++            .create_new(true)
++            .open(&self.path)
++            .map_err(|error| {
++                WvError::EventLoop(format!(
++                    "KELD-BENCH: could not create startup trace: {error}"
++                ))
++            })?;
++        file.write_all(text.as_bytes()).map_err(|error| {
++            WvError::EventLoop(format!(
++                "KELD-BENCH: could not write startup trace: {error}"
++            ))
++        })
++    }
++}
++
 +/// Reads the opt-in adapter configuration before any stage is recorded.
 +///
 +/// # Errors
@@ -69,12 +151,9 @@ index 0000000..0f8508a
 +        env::var("KELD_BENCH_TOKEN"),
 +    ) {
 +        (Err(env::VarError::NotPresent), _) => None,
-+        (Ok(path), Ok(token)) if !path.is_empty() && !token.is_empty() => Some(StartupTrace {
-+            path: PathBuf::from(path),
-+            token,
-+            started: Instant::now(),
-+            stages: [None; 4],
-+        }),
++        (Ok(path), Ok(token)) if !path.is_empty() && !token.is_empty() => {
++            Some(StartupTrace::new(PathBuf::from(path), token))
++        }
 +        _ => {
 +            return Err(WvError::EventLoop(String::from(
 +                "KELD-BENCH: startup tracing requires both KELD_BENCH_STARTUP_TRACE and KELD_BENCH_TOKEN",
@@ -99,39 +178,13 @@ index 0000000..0f8508a
 +    let Some(lock) = STARTUP_TRACE.get() else {
 +        return Ok(());
 +    };
-+    let mut state = lock.lock().map_err(|_| {
++    let mut guard = lock.lock().map_err(|_| {
 +        WvError::EventLoop(String::from("KELD-BENCH: startup trace lock was poisoned"))
 +    })?;
-+    let Some(trace) = state.as_mut() else {
++    let Some(trace) = guard.as_mut() else {
 +        return Ok(());
 +    };
-+    let index = stage.index();
-+    if trace.stages[index].is_some() {
-+        return Err(WvError::EventLoop(String::from(
-+            "KELD-BENCH: startup stage was recorded twice",
-+        )));
-+    }
-+    let elapsed = if index == 0 {
-+        0
-+    } else {
-+        u64::try_from(trace.started.elapsed().as_nanos()).map_err(|_| {
-+            WvError::EventLoop(String::from("KELD-BENCH: startup duration overflowed u64"))
-+        })?
-+    };
-+    if index > 0 {
-+        let previous = trace.stages[index - 1].ok_or_else(|| {
-+            WvError::EventLoop(String::from(
-+                "KELD-BENCH: startup stage order is incomplete",
-+            ))
-+        })?;
-+        if elapsed <= previous {
-+            return Err(WvError::EventLoop(String::from(
-+                "KELD-BENCH: startup stages did not advance monotonically",
-+            )));
-+        }
-+    }
-+    trace.stages[index] = Some(elapsed);
-+    Ok(())
++    trace.record(stage)
 +}
 +
 +/// Writes the completed trace before the first page can signal the harness.
@@ -151,66 +204,102 @@ index 0000000..0f8508a
 +    let Some(trace) = state.as_ref() else {
 +        return Ok(());
 +    };
-+    let [
-+        Some(wv_run_entered),
-+        Some(event_loop_created),
-+        Some(window_built),
-+        Some(webview_built),
-+    ] = trace.stages
-+    else {
-+        return Err(WvError::EventLoop(String::from(
-+            "KELD-BENCH: startup trace is incomplete",
-+        )));
-+    };
-+    let mut text = String::new();
-+    writeln!(text, "version=1").map_err(|_| {
-+        WvError::EventLoop(String::from("KELD-BENCH: could not format startup trace"))
-+    })?;
-+    writeln!(text, "token={}", trace.token).map_err(|_| {
-+        WvError::EventLoop(String::from("KELD-BENCH: could not format startup trace"))
-+    })?;
-+    writeln!(text, "wv_run_entered_ns={wv_run_entered}").map_err(|_| {
-+        WvError::EventLoop(String::from("KELD-BENCH: could not format startup trace"))
-+    })?;
-+    writeln!(text, "event_loop_created_ns={event_loop_created}").map_err(|_| {
-+        WvError::EventLoop(String::from("KELD-BENCH: could not format startup trace"))
-+    })?;
-+    writeln!(text, "window_built_ns={window_built}").map_err(|_| {
-+        WvError::EventLoop(String::from("KELD-BENCH: could not format startup trace"))
-+    })?;
-+    writeln!(text, "webview_built_ns={webview_built}").map_err(|_| {
-+        WvError::EventLoop(String::from("KELD-BENCH: could not format startup trace"))
-+    })?;
-+    let mut file = OpenOptions::new()
-+        .write(true)
-+        .create_new(true)
-+        .open(&trace.path)
-+        .map_err(|error| {
-+            WvError::EventLoop(format!(
-+                "KELD-BENCH: could not create startup trace: {error}"
-+            ))
-+        })?;
-+    file.write_all(text.as_bytes()).map_err(|error| {
-+        WvError::EventLoop(format!(
-+            "KELD-BENCH: could not write startup trace: {error}"
-+        ))
-+    })
++    trace.write()
 +}
-diff --git a/crates/keld-wv/src/lib.rs b/crates/keld-wv/src/lib.rs
-index ab7e0d2..8a18a29 100644
---- a/crates/keld-wv/src/lib.rs
-+++ b/crates/keld-wv/src/lib.rs
-@@ -12,3 +12,5 @@
-+#[cfg(target_os = "macos")]
-+mod bench_trace;
- mod engine;
- mod error;
- mod hello;
++
++#[cfg(test)]
++mod tests {
++    use std::fs;
++    use std::path::PathBuf;
++    use std::time::{SystemTime, UNIX_EPOCH};
++
++    use super::{Stage, StartupTrace};
++
++    fn unique_trace_path() -> PathBuf {
++        let nanos = SystemTime::now()
++            .duration_since(UNIX_EPOCH)
++            .expect("system clock is after UNIX_EPOCH")
++            .as_nanos();
++        std::env::temp_dir().join(format!(
++            "keld-startup-trace-ac1-{}-{nanos}.txt",
++            std::process::id()
++        ))
++    }
++
++    fn complete_trace(path: PathBuf, token: &str) -> StartupTrace {
++        let mut trace = StartupTrace::new(path, String::from(token));
++        trace
++            .record_elapsed(Stage::WvRunEntered, 0)
++            .expect("wv_run_entered");
++        trace
++            .record_elapsed(Stage::EventLoopCreated, 46_906_000)
++            .expect("event_loop_created");
++        trace
++            .record_elapsed(Stage::WindowBuilt, 95_141_000)
++            .expect("window_built");
++        trace
++            .record_elapsed(Stage::WebviewBuilt, 149_031_000)
++            .expect("webview_built");
++        trace
++    }
++
++    #[test]
++    fn valid_four_stages_format_one_nonce_bound_record() {
++        let trace = complete_trace(unique_trace_path(), "launch-nonce-ac1");
++        let record = trace.format_record().expect("complete trace");
++        assert_eq!(
++            record,
++            "version=1\n\
++             token=launch-nonce-ac1\n\
++             wv_run_entered_ns=0\n\
++             event_loop_created_ns=46906000\n\
++             window_built_ns=95141000\n\
++             webview_built_ns=149031000\n"
++        );
++    }
++
++    #[test]
++    fn valid_four_stages_write_exactly_one_file() {
++        let path = unique_trace_path();
++        let _ = fs::remove_file(&path);
++        let trace = complete_trace(path.clone(), "launch-nonce-ac1");
++        trace.write().expect("create the arm's trace");
++        let written = fs::read_to_string(&path).expect("read the arm's trace");
++        assert_eq!(written, trace.format_record().expect("complete trace"));
++        assert!(
++            fs::metadata(&path).expect("trace metadata").is_file(),
++            "the arm must emit a regular trace file"
++        );
++        fs::remove_file(&path).expect("cleanup");
++    }
++
++    #[test]
++    fn incomplete_stages_cannot_publish_a_record() {
++        let mut trace = StartupTrace::new(unique_trace_path(), String::from("launch-nonce-ac1"));
++        trace
++            .record_elapsed(Stage::WvRunEntered, 0)
++            .expect("wv_run_entered");
++        trace
++            .record_elapsed(Stage::EventLoopCreated, 1)
++            .expect("event_loop_created");
++        trace
++            .record_elapsed(Stage::WindowBuilt, 2)
++            .expect("window_built");
++        let err = trace
++            .format_record()
++            .expect_err("webview_built is required");
++        assert!(
++            err.to_string()
++                .contains("KELD-BENCH: startup trace is incomplete"),
++            "incomplete trace must fail closed, got {err}"
++        );
++    }
++}
 diff --git a/crates/keld-wv/src/hello/mod.rs b/crates/keld-wv/src/hello/mod.rs
-index 61c8f8a..ba53742 100644
+index f5a144d..df9075a 100644
 --- a/crates/keld-wv/src/hello/mod.rs
 +++ b/crates/keld-wv/src/hello/mod.rs
-@@ -31,9 +31,25 @@ pub const DEFAULT_HTML: &str = r#"<!DOCTYPE html>
+@@ -30,9 +30,25 @@ pub const DEFAULT_HTML: &str = r#"<!DOCTYPE html>
  /// Creation spec for the hello slice: `title`, inline HTML, default 960×640.
  #[must_use]
  pub(crate) fn hello_spec(title: &str, html: &str) -> WebviewSpec {
@@ -237,7 +326,8 @@ index 61c8f8a..ba53742 100644
          ..WebviewSpec::default()
      }
  }
-@@ -43,3 +59,7 @@ pub(crate) fn hello_spec(title: &str, html: &str) -> WebviewSpec {
+@@ -43,6 +59,10 @@ pub(crate) fn hello_spec(title: &str, html: &str) -> WebviewSpec {
+ ///
  /// Returns [`WvError`] if the platform backend is unavailable or window/webview creation fails.
  pub fn run(title: &str, html: &str) -> Result<(), WvError> {
 +    #[cfg(target_os = "macos")]
@@ -247,22 +337,47 @@ index 61c8f8a..ba53742 100644
      let spec = hello_spec(title, html);
      #[cfg(target_os = "macos")]
      {
+diff --git a/crates/keld-wv/src/lib.rs b/crates/keld-wv/src/lib.rs
+index ab7e0d2..8a18a29 100644
+--- a/crates/keld-wv/src/lib.rs
++++ b/crates/keld-wv/src/lib.rs
+@@ -9,6 +9,8 @@
+ //!
+ //! Platform backends may use `unsafe` (see crate `AGENTS.md`).
+ 
++#[cfg(target_os = "macos")]
++mod bench_trace;
+ mod engine;
+ mod error;
+ mod hello;
 diff --git a/crates/keld-wv/src/wkwebview/mod.rs b/crates/keld-wv/src/wkwebview/mod.rs
-index d268b7b..d3967ab 100644
+index d268b7b..075e472 100644
 --- a/crates/keld-wv/src/wkwebview/mod.rs
 +++ b/crates/keld-wv/src/wkwebview/mod.rs
-@@ -144,3 +144,3 @@ impl WebEngine for WkWebViewEngine {
+@@ -142,7 +142,7 @@ impl WebEngine for WkWebViewEngine {
+             .with_closable(true)
+             .build(event_loop)
              .map_err(|e| WvError::Window(e.to_string()))?;
-+        crate::bench_trace::record(crate::bench_trace::Stage::WindowBuilt)?;
 -
++        crate::bench_trace::record(crate::bench_trace::Stage::WindowBuilt)?;
          // Developer extras are debug-only until keld-guard owns `web.devtools`.
-@@ -159,3 +159,4 @@ impl WebEngine for WkWebViewEngine {
+         let builder = wry::WebViewBuilder::new();
+         #[cfg(debug_assertions)]
+@@ -157,7 +157,8 @@ impl WebEngine for WkWebViewEngine {
+         let webview = builder
+             .build(&window)
              .map_err(|e| WvError::Webview(e.to_string()))?;
+-
 +        crate::bench_trace::record(crate::bench_trace::Stage::WebviewBuilt)?;
 +        crate::bench_trace::flush()?;
--
          let id = self.next_id;
-@@ -222,2 +223,3 @@ pub fn run_hello(spec: &WebviewSpec) -> Result<(), WvError> {
+         self.next_id += 1;
+         self.views.insert(id, View { window, webview });
+@@ -220,6 +221,7 @@ impl WkWebViewEngineExt for WkWebViewEngine {}
+ /// Returns [`WvError`] if window or webview creation fails.
+ pub fn run_hello(spec: &WebviewSpec) -> Result<(), WvError> {
      let mut engine = WkWebViewEngine::new();
 +    crate::bench_trace::record(crate::bench_trace::Stage::EventLoopCreated)?;
      engine.create(spec)?;
+     engine.run_until_closed()
+ }
