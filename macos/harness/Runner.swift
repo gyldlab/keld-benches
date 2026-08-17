@@ -59,10 +59,20 @@ private struct StartupTraceOutput {
         guard Darwin.chmod(directoryURL.path, 0o700) == 0 else {
             throw HarnessError.io("could not make the startup-trace directory private")
         }
+        return try reserve(
+            directoryURL: directoryURL,
+            environmentVariable: environmentVariable,
+            token: token
+        )
+    }
+
+    static func reserve(
+        directoryURL: URL,
+        environmentVariable: String,
+        token: String
+    ) throws -> Self {
         let fileURL = directoryURL.appendingPathComponent("trace-v1.txt")
-        guard !FileManager.default.fileExists(atPath: fileURL.path) else {
-            throw HarnessError.measurement("startup trace path unexpectedly already exists")
-        }
+        try requireVacantStartupTracePath(fileURL)
         return Self(
             directoryURL: directoryURL,
             fileURL: fileURL,
@@ -89,8 +99,27 @@ private struct StartupTraceOutput {
               information.st_size <= 4_096 else {
             throw HarnessError.measurement("startup trace has an invalid file type or size")
         }
-        let data = try Data(contentsOf: fileURL, options: .mappedIfSafe)
+        let data: Data
+        do {
+            data = try Data(contentsOf: fileURL, options: .mappedIfSafe)
+        } catch {
+            throw HarnessError.measurement(
+                "startup trace is unreadable; the arm cannot consume a previous or damaged file"
+            )
+        }
         return try parseStartupTrace(data, expectedToken: token)
+    }
+}
+
+private func requireVacantStartupTracePath(_ fileURL: URL) throws {
+    var information = stat()
+    if Darwin.lstat(fileURL.path, &information) == 0 {
+        throw HarnessError.measurement("startup trace path unexpectedly already exists")
+    }
+    guard errno == ENOENT else {
+        throw HarnessError.measurement(
+            "startup trace path could not be reserved: \(String(cString: strerror(errno)))"
+        )
     }
 }
 
@@ -5548,11 +5577,112 @@ private func requireStartupTraceMeasurementFailure(
     }
 }
 
+/// KEL-64 AC3: a missing, unreadable, or pre-existing reserved path must fail
+/// closed as a typed measurement error and must not publish a previous arm's
+/// record.
+private func validateStartupTracePathContract() throws {
+    let token = "launch-nonce-ac1"
+    let accepted = keldAC1AcceptedStartupTraceRecord(token: token)
+    let previousArmToken = "previous-arm-nonce"
+    let previousArmRecord = keldAC1AcceptedStartupTraceRecord(token: previousArmToken)
+
+    let missing = try StartupTraceOutput.create(
+        environmentVariable: "KELD_BENCH_STARTUP_TRACE",
+        token: token
+    )
+    defer { missing.remove() }
+    try requireStartupTracePathMeasurementFailure(
+        defect: "missing trace path",
+        expectedMessage: "was not written"
+    ) {
+        try missing.readEvidence()
+    }
+
+    let unreadable = try StartupTraceOutput.create(
+        environmentVariable: "KELD_BENCH_STARTUP_TRACE",
+        token: token
+    )
+    defer {
+        _ = Darwin.chmod(unreadable.fileURL.path, 0o600)
+        unreadable.remove()
+    }
+    try Data(accepted.utf8).write(to: unreadable.fileURL, options: .withoutOverwriting)
+    guard Darwin.chmod(unreadable.fileURL.path, 0) == 0 else {
+        throw HarnessError.measurement("self-test failed: could not make the startup-trace file unreadable")
+    }
+    try requireStartupTracePathMeasurementFailure(
+        defect: "unreadable trace path",
+        expectedMessage: "unreadable"
+    ) {
+        try unreadable.readEvidence()
+    }
+
+    let plantedDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keld-startup-trace-ac3-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(
+        at: plantedDirectory,
+        withIntermediateDirectories: false,
+        attributes: [.posixPermissions: 0o700]
+    )
+    defer {
+        try? FileManager.default.removeItem(at: plantedDirectory)
+    }
+    let plantedFile = plantedDirectory.appendingPathComponent("trace-v1.txt")
+    try Data(previousArmRecord.utf8).write(to: plantedFile, options: .withoutOverwriting)
+    try requireStartupTracePathMeasurementFailure(
+        defect: "pre-existing trace path",
+        expectedMessage: "already exists"
+    ) {
+        let reserved = try StartupTraceOutput.reserve(
+            directoryURL: plantedDirectory,
+            environmentVariable: "KELD_BENCH_STARTUP_TRACE",
+            token: previousArmToken
+        )
+        let evidence = try reserved.readEvidence()
+        throw HarnessError.measurement(
+            "self-test failed: pre-existing trace path consumed a previous arm's record (\(evidence.webviewBuiltMilliseconds) ms)"
+        )
+    }
+}
+
+private func requireStartupTracePathMeasurementFailure(
+    defect: String,
+    expectedMessage: String,
+    operation: () throws -> StartupTraceEvidence
+) throws {
+    do {
+        _ = try operation()
+        throw HarnessError.measurement(
+            "self-test failed: \(defect) was accepted and would publish a startup trace"
+        )
+    } catch let error as HarnessError {
+        guard case .measurement(let message) = error else {
+            throw HarnessError.measurement(
+                "self-test failed: \(defect) was not a typed measurement failure: \(error)"
+            )
+        }
+        if message.hasPrefix("self-test failed:") { throw error }
+        try require(
+            message.contains("startup trace") && message.contains(expectedMessage),
+            "\(defect) must remain an actionable startup-trace measurement failure; got \(message)"
+        )
+        try require(
+            publicFailureCode(error) == "measurement_failure",
+            "\(defect) must not publish a public result besides measurement_failure"
+        )
+    } catch {
+        throw HarnessError.measurement(
+            "self-test failed: \(defect) threw an unexpected error: \(error)"
+        )
+    }
+}
+
 @MainActor
 private func runSelfTests(html: Data) async throws {
     try validateForegroundTransitionContract()
     try validatePublicEvidenceRedaction()
     try validateStartupTraceRejectionContract()
+    try validateStartupTracePathContract()
     let executableBinding = try LoadedExecutableBinding()
     let loadedExecutable = executableBinding.url
     let selfTestRepository = gitSnapshot(containing: loadedExecutable.deletingLastPathComponent())
