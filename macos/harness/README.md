@@ -78,7 +78,9 @@ path is a typed measurement failure and must not consume a previous arm's
 record. A valid four-stage record cannot accept a hidden, unfocused,
 malformed, stale, or timed-out beacon, and cannot become the paint score.
 Reported performance scores come only from trace-disabled arms; a traced-arm
-latency published as the score fails the self-test. It also tests
+latency published as the score fails the self-test. If Keld-owned construction
+does not explain the p90 tail, recommending `optimize keld-wv window build`
+fails the self-test. It also tests
 the missing-beacon timeout, parsers/statistics, fail-closed Git-status mapping,
 raw-blob rejection of changes hidden by clean filters or `assume-unchanged`,
 output-collision isolation, a byte-for-byte rebuild from a pinned immutable
@@ -110,6 +112,14 @@ records and must not enter `summaries`. Pair a trace-disabled score arm with a
 trace-enabled diagnostic arm in one session; the existing rotating-first-app
 order alternates who leads each round. The runner still refuses `--publish`
 when any arm is traced.
+
+KEL-64 AC6 records the attribution decision from the already-captured spec §7
+dataset (no new live GUI run). `webview_built` p90 is 168.192 ms against a
+392.408 ms beacon p90; the post-webview residual p90 is 215.243 ms, so
+construction does not explain the tail. The committed record is
+[`macos/keld/hello/kel64-startup-attribution.json`](../keld/hello/kel64-startup-attribution.json):
+no product optimisation, limitation `external_webkit_scheduling`. A report that
+recommends `optimize keld-wv window build` on that residual fails `--self-test`.
 
 ## Keld and Tauri
 

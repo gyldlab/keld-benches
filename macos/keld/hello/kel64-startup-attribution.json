@@ -1,0 +1,26 @@
+{
+  "decision": {
+    "constructionExplainsP90Tail": false,
+    "limitation": "external_webkit_scheduling",
+    "productOptimisationJustified": false,
+    "recommendedAction": "record external/runtime scheduling limitation; no product optimisation"
+  },
+  "evidence": {
+    "beaconMedianMs": 352.211,
+    "beaconP90Ms": 392.408,
+    "keldSourceCommit": "59e0987696d874f7f12120d5fc1a7fabe5b79aa7",
+    "maximumBeaconMs": 739.960,
+    "maximumBeaconResidualMs": 601.311,
+    "maximumBeaconWebviewBuiltMs": 138.650,
+    "recipeCommit": "258756c051fb951590d69d16fbad96f85c605d8b",
+    "residualMedianMs": 197.656,
+    "residualP90Ms": 215.243,
+    "tracedArmSampleCount": 11,
+    "webviewBuiltMedianMs": 149.031,
+    "webviewBuiltP90Ms": 168.192
+  },
+  "evidenceKind": "spec-section-7-paired-diagnostic-not-a-published-score",
+  "kind": "kel64-macos-startup-attribution-decision",
+  "recordedAtUtc": "2026-08-17T00:26:55Z",
+  "schemaVersion": 1
+}
