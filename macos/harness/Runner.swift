@@ -2449,19 +2449,62 @@ private func metricSummary(_ values: [Double]) -> MetricSummary {
     )
 }
 
+private func isScoreBearingArm(_ app: AppSpec) -> Bool {
+    app.startupTraceEnvironmentVariable == nil
+}
+
+/// Score-bearing samples are successful, untraced, and from a trace-disabled arm.
+/// A traced-arm latency must never enter these rows.
+private func scoreBearingSamples(app: AppSpec, samples: [SampleRecord]) -> [SampleRecord] {
+    guard isScoreBearingArm(app) else { return [] }
+    return samples.filter { sample in
+        sample.label == app.label
+            && sample.status == "ok"
+            && sample.startupTrace == nil
+    }
+}
+
+private func publishedScoreValues(_ summary: MetricSummary) -> [Double] {
+    [summary.median, summary.p90NearestRank, summary.minimum, summary.maximum]
+        .compactMap { $0 }
+}
+
+private func publishedPerformanceScores(_ summaries: [AppSummary]) -> [Double] {
+    summaries.flatMap { summary in
+        publishedScoreValues(summary.doubleRafPaintOpportunityProxyMilliseconds)
+            + publishedScoreValues(summary.totalCoalitionRssKiB)
+    }
+}
+
 private func summarize(apps: [AppSpec], samples: [SampleRecord]) -> [AppSummary] {
     apps.map { app in
         let appSamples = samples.filter { $0.label == app.label }
         let successful = appSamples.filter { $0.status == "ok" }
+        let scored = scoreBearingSamples(app: app, samples: samples)
         return AppSummary(
             label: app.label,
             successfulSamples: successful.count,
             failedSamples: appSamples.count - successful.count,
             doubleRafPaintOpportunityProxyMilliseconds: metricSummary(
-                successful.compactMap(\.doubleRafPaintOpportunityProxyMilliseconds)
+                scored.compactMap(\.doubleRafPaintOpportunityProxyMilliseconds)
             ),
-            totalCoalitionRssKiB: metricSummary(successful.compactMap { $0.coalition.map { Double($0.totalRssKiB) } })
+            totalCoalitionRssKiB: metricSummary(scored.compactMap { $0.coalition.map { Double($0.totalRssKiB) } })
         )
+    }
+}
+
+/// Round-robin with a rotating first app so paired score and trace arms
+/// alternate who leads each round without a fixed order bias.
+private func rotatingFirstAppIndex(round: Int, offset: Int, appCount: Int) -> Int {
+    (round + offset) % appCount
+}
+
+private func pairedArmSchedule(appCount: Int, rounds: Int) -> [Int] {
+    guard appCount > 0, rounds > 0 else { return [] }
+    return (0..<rounds).flatMap { round in
+        (0..<appCount).map { offset in
+            rotatingFirstAppIndex(round: round, offset: offset, appCount: appCount)
+        }
     }
 }
 
@@ -5826,6 +5869,161 @@ private func requireTraceCannotRescueBeacon(
     )
 }
 
+/// KEL-64 AC4: reported performance scores come only from trace-disabled arms.
+/// Publishing a traced-arm latency as the score must fail this test.
+private func validateStartupTraceScoreIsolationContract() throws {
+    try require(
+        pairedArmSchedule(appCount: 2, rounds: 2) == [0, 1, 1, 0],
+        "paired score and trace arms must rotate who leads each round"
+    )
+
+    let scoreLabel = "Keld"
+    let tracedLabel = "Keld traced"
+    let scorePaint = 111.0
+    let tracedPaint = 999_999.0
+    let scoreRss: UInt64 = 12_345
+    let tracedRss: UInt64 = 888_888
+    let scoreApp = scoreContractApp(label: scoreLabel, startupTraceEnvironmentVariable: nil)
+    let tracedApp = scoreContractApp(
+        label: tracedLabel,
+        startupTraceEnvironmentVariable: "KELD_BENCH_STARTUP_TRACE"
+    )
+    let acceptedTrace = StartupTraceEvidence(
+        wvRunEnteredMilliseconds: 0,
+        eventLoopCreatedMilliseconds: Double(46_906_000) / 1_000_000,
+        windowBuiltMilliseconds: Double(95_141_000) / 1_000_000,
+        webviewBuiltMilliseconds: Double(149_031_000) / 1_000_000
+    )
+    let samples = [
+        scoreContractSample(
+            label: scoreLabel,
+            paintMilliseconds: scorePaint,
+            rssKiB: scoreRss,
+            startupTrace: nil
+        ),
+        scoreContractSample(
+            label: tracedLabel,
+            paintMilliseconds: tracedPaint,
+            rssKiB: tracedRss,
+            startupTrace: acceptedTrace
+        ),
+    ]
+    let summaries = summarize(apps: [scoreApp, tracedApp], samples: samples)
+    let published = publishedPerformanceScores(summaries)
+    try require(
+        summaries.contains { $0.label == scoreLabel },
+        "trace-disabled score arm must remain in the published summaries"
+    )
+    try require(
+        published.contains(scorePaint) && published.contains(Double(scoreRss)),
+        "trace-disabled arm paint and RSS must remain the published scores; got \(published)"
+    )
+    try require(
+        !published.contains(tracedPaint) && !published.contains(Double(tracedRss)),
+        "traced-arm latency was published as the score: \(published)"
+    )
+    guard let tracedSummary = summaries.first(where: { $0.label == tracedLabel }) else {
+        throw HarnessError.measurement(
+            "self-test failed: traced diagnostic arm disappeared from summaries"
+        )
+    }
+    try require(
+        tracedSummary.successfulSamples == 1
+            && tracedSummary.doubleRafPaintOpportunityProxyMilliseconds.sampleCount == 0
+            && tracedSummary.totalCoalitionRssKiB.sampleCount == 0,
+        "traced arms are attribution evidence only and must not contribute score samples"
+    )
+}
+
+private func scoreContractApp(
+    label: String,
+    startupTraceEnvironmentVariable: String?
+) -> AppSpec {
+    AppSpec(
+        label: label,
+        bundleURL: URL(fileURLWithPath: "/tmp/keld-ac4-missing.app"),
+        bundleFileIdentity: FileIdentity(device: 0, inode: 0),
+        argumentTemplates: ["--hello"],
+        buildCommand: nil,
+        startupTraceEnvironmentVariable: startupTraceEnvironmentVariable
+    )
+}
+
+private func scoreContractCoalition(totalRssKiB: UInt64) -> CoalitionEvidence {
+    let context = PublicEvidenceContext(t0MonotonicNanoseconds: 1_000_000)
+    let snapshot = CoalitionSnapshot(
+        identity: CoalitionIdentity(
+            id: 1,
+            name: "score-contract",
+            bundleIdentifier: nil,
+            activeCount: 1
+        ),
+        lifecycleCounters: CoalitionLifecycleCounters(tasksStarted: 1, tasksExited: 0),
+        processes: [
+            ProcessMeasurement(
+                pid: 2,
+                parentPid: 1,
+                startIdentity: "score-contract",
+                uniqueId: 3,
+                rssKiB: totalRssKiB,
+                classification: "host",
+                commandSha256: String(repeating: "a", count: 64)
+            )
+        ],
+        rssByClassificationKiB: ["host": totalRssKiB],
+        totalRssKiB: totalRssKiB,
+        observedMonotonicNanoseconds: 2_000_000
+    )
+    return CoalitionEvidence(snapshot, context: context)
+}
+
+private func scoreContractSample(
+    label: String,
+    paintMilliseconds: Double,
+    rssKiB: UInt64,
+    startupTrace: StartupTraceEvidence?
+) -> SampleRecord {
+    SampleRecord(
+        globalOrdinal: 1,
+        round: 1,
+        appOrdinal: 1,
+        label: label,
+        status: "ok",
+        error: nil,
+        launchedProcessIdentity: nil,
+        launchServicesASNResolved: nil,
+        launchServicesOriginalPidPresent: nil,
+        originalPidMatchesReturnedPidCoalition: nil,
+        launchCallbackOffsetMilliseconds: nil,
+        applicationWasActiveAtLaunchCallback: true,
+        applicationWasActiveAtBeacon: true,
+        foreground: ForegroundEvidence(
+            observerInstalledBeforeLaunch: true,
+            anchorGenerationCaptured: true,
+            targetGenerationCaptured: true,
+            targetActivatedBeforeBeacon: true,
+            transitionUninterruptedBeforeBeacon: true,
+            exactAnchorRestoredAfterCleanup: true,
+            reasonCode: nil
+        ),
+        hostConditionBeforeLaunch: HostConditionEvidence(
+            lowPowerModeEnabled: false,
+            thermalState: "nominal"
+        ),
+        hostConditionAfterCleanup: HostConditionEvidence(
+            lowPowerModeEnabled: false,
+            thermalState: "nominal"
+        ),
+        beacon: nil,
+        doubleRafPaintOpportunityProxyMilliseconds: paintMilliseconds,
+        startupTrace: startupTrace,
+        stableCoalitionObservations: 3,
+        coalition: scoreContractCoalition(totalRssKiB: rssKiB),
+        serverEvents: [],
+        cleanup: nil
+    )
+}
+
 @MainActor
 private func runSelfTests(html: Data) async throws {
     try validateForegroundTransitionContract()
@@ -5833,6 +6031,7 @@ private func runSelfTests(html: Data) async throws {
     try validateStartupTraceRejectionContract()
     try validateStartupTracePathContract()
     try await validateStartupTraceBeaconIndependenceContract(html: html)
+    try validateStartupTraceScoreIsolationContract()
     let executableBinding = try LoadedExecutableBinding()
     let loadedExecutable = executableBinding.url
     let selfTestRepository = gitSnapshot(containing: loadedExecutable.deletingLastPathComponent())
@@ -6826,7 +7025,11 @@ private func runBenchmark(options: RunnerOptions, htmlURL: URL, html: Data) asyn
         // Rotate the first app each round. Every app receives one sample per
         // round, but persistent thermal/order bias is not assigned to one label.
         for offset in 0..<options.apps.count {
-            let appIndex = (round + offset) % options.apps.count
+            let appIndex = rotatingFirstAppIndex(
+                round: round,
+                offset: offset,
+                appCount: options.apps.count
+            )
             let spec = options.apps[appIndex]
             globalOrdinal += 1
             FileHandle.standardError.write(Data("[\(globalOrdinal)/\(options.runsPerApp * options.apps.count)] \(spec.label), round \(round + 1)\n".utf8))
