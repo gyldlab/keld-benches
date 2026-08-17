@@ -498,3 +498,30 @@ Raw samples: [`windows/bench/windows-first-paint-kel65-direct-com.json`](./windo
 * Every arm's absolutes sit ~110–120 ms below the 2026-08-14 session (Electron
   included), which is exactly why cross-session absolutes are banned in this
   file. Within-session ordering is the signal.
+
+## KEL-64 macOS startup attribution decision (2026-08-17)
+
+Not a published score. The paired diagnostic included trace-enabled arms, so
+these numbers must not enter a leaderboard row. Evidence is the already-recorded
+spec §7 dataset from the 2026-08-17 Finder-anchored session (Keld source
+[`59e0987696d874f7f12120d5fc1a7fabe5b79aa7`](https://github.com/gyldlab/keld/commit/59e0987696d874f7f12120d5fc1a7fabe5b79aa7),
+recipe
+[`258756c051fb951590d69d16fbad96f85c605d8b`](https://github.com/gyldlab/keld-benches/commit/258756c051fb951590d69d16fbad96f85c605d8b));
+no new live GUI run was taken for this decision.
+
+Fixture: [`macos/keld/hello/`](./macos/keld/hello/). Machine-readable record:
+[`macos/keld/hello/kel64-startup-attribution.json`](./macos/keld/hello/kel64-startup-attribution.json).
+
+| Diagnostic (trace-enabled arm, n=11) | Median / p90 | What it bounds |
+|---|---:|---|
+| External valid double-rAF beacon | **352.211 / 392.408 ms** | End-to-end contract; not compositor completion. |
+| `webview_built` | **149.031 / 168.192 ms** | Keld wry/WebKit webview-construction boundary. |
+| Beacon after `webview_built` | **197.656 / 215.243 ms** | Post-construction WebKit process/navigation/canonical-page residual. |
+
+The 739.960 ms maximum reached `webview_built` at 138.650 ms, leaving a
+601.311 ms post-webview residual. Construction p90 (168.192 ms) does not
+explain the beacon p90 (392.408 ms): residual p90 is larger than construction
+p90, so the tail is an **external/WebKit scheduling limitation**. **No product
+optimisation** of `keld-wv` window/webview build is justified by this slice.
+A harness report that recommends `optimize keld-wv window build` on this
+residual fails `macos/harness` `--self-test`.

@@ -2508,6 +2508,209 @@ private func pairedArmSchedule(appCount: Int, rounds: Int) -> [Int] {
     }
 }
 
+private let kel64StartupAttributionRecordRelativePath = "macos/keld/hello/kel64-startup-attribution.json"
+private let kel64StartupAttributionKind = "kel64-macos-startup-attribution-decision"
+private let kel64ExternalWebKitSchedulingLimitation = "external_webkit_scheduling"
+private let kel64OptimizeKeldWvWindowBuildAction = "optimize keld-wv window build"
+private let kel64NoProductOptimisationAction =
+    "record external/runtime scheduling limitation; no product optimisation"
+private let kel64ConstructionExplainsAction =
+    "keld-owned construction explains the p90 tail; any optimisation needs a separate spec"
+
+/// Spec §7 recorded values from the 2026-08-17 paired diagnostic (n=11, nearest-rank p90).
+/// Not a published score: the session included trace-enabled arms.
+private enum Kel64SpecSection7 {
+    static let keldSourceCommit = "59e0987696d874f7f12120d5fc1a7fabe5b79aa7"
+    static let recipeCommit = "258756c051fb951590d69d16fbad96f85c605d8b"
+    static let tracedArmSampleCount = 11
+    static let webviewBuiltMedianMs = 149.031
+    static let webviewBuiltP90Ms = 168.192
+    static let beaconMedianMs = 352.211
+    static let beaconP90Ms = 392.408
+    static let residualMedianMs = 197.656
+    static let residualP90Ms = 215.243
+    static let maximumBeaconMs = 739.960
+    static let maximumBeaconWebviewBuiltMs = 138.650
+    static let maximumBeaconResidualMs = 601.311
+}
+
+private struct StartupAttributionEvidence: Codable, Equatable {
+    let keldSourceCommit: String
+    let recipeCommit: String
+    let tracedArmSampleCount: Int
+    let webviewBuiltMedianMs: Double
+    let webviewBuiltP90Ms: Double
+    let beaconMedianMs: Double
+    let beaconP90Ms: Double
+    let residualMedianMs: Double
+    let residualP90Ms: Double
+    let maximumBeaconMs: Double
+    let maximumBeaconWebviewBuiltMs: Double
+    let maximumBeaconResidualMs: Double
+}
+
+private struct StartupAttributionDecision: Codable, Equatable {
+    let constructionExplainsP90Tail: Bool
+    let productOptimisationJustified: Bool
+    let limitation: String?
+    let recommendedAction: String
+}
+
+private struct StartupAttributionRecord: Codable, Equatable {
+    let schemaVersion: Int
+    let kind: String
+    let evidenceKind: String
+    let recordedAtUtc: String
+    let evidence: StartupAttributionEvidence
+    let decision: StartupAttributionDecision
+}
+
+private func residualIsPostWebview(webviewBuiltP90Ms: Double, residualP90Ms: Double) -> Bool {
+    residualP90Ms >= webviewBuiltP90Ms
+}
+
+private func recommendsOptimizeKeldWvWindowBuild(_ action: String) -> Bool {
+    let lowered = action.lowercased()
+    return lowered.contains("optimize keld-wv window build")
+        || lowered.contains("optimise keld-wv window build")
+}
+
+private func requireSpecSection7Duration(_ actual: Double, _ expected: Double, _ name: String) throws {
+    try require(
+        abs(actual - expected) < 0.0005,
+        "\(name) must be the spec §7 value \(expected); got \(actual)"
+    )
+}
+
+/// Construction explains the p90 tail iff post-webview residual p90 is strictly
+/// below Keld-owned `webview_built` p90. Otherwise the tail is external/WebKit
+/// scheduling and product optimisation is not justified.
+private func decideStartupAttribution(
+    evidence: StartupAttributionEvidence
+) throws -> StartupAttributionDecision {
+    let durations = [
+        evidence.webviewBuiltMedianMs,
+        evidence.webviewBuiltP90Ms,
+        evidence.beaconMedianMs,
+        evidence.beaconP90Ms,
+        evidence.residualMedianMs,
+        evidence.residualP90Ms,
+        evidence.maximumBeaconMs,
+        evidence.maximumBeaconWebviewBuiltMs,
+        evidence.maximumBeaconResidualMs,
+    ]
+    try require(
+        durations.allSatisfy { $0.isFinite && $0 >= 0 },
+        "attribution durations must be finite and non-negative"
+    )
+    try require(
+        evidence.webviewBuiltP90Ms > 0 && evidence.beaconP90Ms > 0,
+        "webview_built and beacon p90 must be positive"
+    )
+    if residualIsPostWebview(
+        webviewBuiltP90Ms: evidence.webviewBuiltP90Ms,
+        residualP90Ms: evidence.residualP90Ms
+    ) {
+        return StartupAttributionDecision(
+            constructionExplainsP90Tail: false,
+            productOptimisationJustified: false,
+            limitation: kel64ExternalWebKitSchedulingLimitation,
+            recommendedAction: kel64NoProductOptimisationAction
+        )
+    }
+    return StartupAttributionDecision(
+        constructionExplainsP90Tail: true,
+        productOptimisationJustified: true,
+        limitation: nil,
+        recommendedAction: kel64ConstructionExplainsAction
+    )
+}
+
+private func validateStartupAttributionRecord(_ record: StartupAttributionRecord) throws {
+    try require(record.schemaVersion == 1, "startup attribution schemaVersion must be 1")
+    try require(record.kind == kel64StartupAttributionKind, "startup attribution kind mismatch")
+    if residualIsPostWebview(
+        webviewBuiltP90Ms: record.evidence.webviewBuiltP90Ms,
+        residualP90Ms: record.evidence.residualP90Ms
+    ) {
+        try require(
+            !record.decision.productOptimisationJustified
+                && !recommendsOptimizeKeldWvWindowBuild(record.decision.recommendedAction),
+            "\(kel64OptimizeKeldWvWindowBuildAction) was recommended while residual is post-webview"
+        )
+        try require(
+            record.decision.limitation == kel64ExternalWebKitSchedulingLimitation,
+            "post-webview residual must be recorded as \(kel64ExternalWebKitSchedulingLimitation)"
+        )
+    }
+    let computed = try decideStartupAttribution(evidence: record.evidence)
+    try require(
+        record.decision == computed,
+        "committed attribution decision must match the evidence; got \(record.decision) expected \(computed)"
+    )
+}
+
+private func resolveStartupAttributionRecordURL() throws -> URL {
+    let executable = try loadedExecutableURL()
+    // Loaded executable: macos/harness/.build/keld-macos-bench
+    // three deletions → macos/; four deletions → repository root.
+    let candidates = [
+        URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent(kel64StartupAttributionRecordRelativePath),
+        executable.deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("keld/hello/kel64-startup-attribution.json"),
+        executable.deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent(kel64StartupAttributionRecordRelativePath),
+    ]
+    guard let match = candidates.first(where: { FileManager.default.fileExists(atPath: $0.path) }) else {
+        throw HarnessError.measurement(
+            "self-test failed: missing \(kel64StartupAttributionRecordRelativePath)"
+        )
+    }
+    return match.standardizedFileURL
+}
+
+private func loadStartupAttributionRecord() throws -> StartupAttributionRecord {
+    let url = try resolveStartupAttributionRecordURL()
+    let data: Data
+    do {
+        data = try Data(contentsOf: url)
+    } catch {
+        throw HarnessError.measurement(
+            "self-test failed: unreadable \(kel64StartupAttributionRecordRelativePath)"
+        )
+    }
+    do {
+        return try JSONDecoder().decode(StartupAttributionRecord.self, from: data)
+    } catch {
+        throw HarnessError.measurement(
+            "self-test failed: \(kel64StartupAttributionRecordRelativePath) is not a valid attribution record"
+        )
+    }
+}
+
+private func specSection7AttributionEvidence() -> StartupAttributionEvidence {
+    StartupAttributionEvidence(
+        keldSourceCommit: Kel64SpecSection7.keldSourceCommit,
+        recipeCommit: Kel64SpecSection7.recipeCommit,
+        tracedArmSampleCount: Kel64SpecSection7.tracedArmSampleCount,
+        webviewBuiltMedianMs: Kel64SpecSection7.webviewBuiltMedianMs,
+        webviewBuiltP90Ms: Kel64SpecSection7.webviewBuiltP90Ms,
+        beaconMedianMs: Kel64SpecSection7.beaconMedianMs,
+        beaconP90Ms: Kel64SpecSection7.beaconP90Ms,
+        residualMedianMs: Kel64SpecSection7.residualMedianMs,
+        residualP90Ms: Kel64SpecSection7.residualP90Ms,
+        maximumBeaconMs: Kel64SpecSection7.maximumBeaconMs,
+        maximumBeaconWebviewBuiltMs: Kel64SpecSection7.maximumBeaconWebviewBuiltMs,
+        maximumBeaconResidualMs: Kel64SpecSection7.maximumBeaconResidualMs
+    )
+}
+
 private func hostMetadata() -> HostMetadata {
     let processInfo = ProcessInfo.processInfo
     return HostMetadata(
@@ -5935,6 +6138,142 @@ private func validateStartupTraceScoreIsolationContract() throws {
     )
 }
 
+/// KEL-64 AC6: if construction does not explain the p90 tail, no product
+/// optimisation; a report that recommends optimizing keld-wv window build
+/// while residual is post-webview must fail.
+private func validateStartupAttributionDecisionContract() throws {
+    let specEvidence = specSection7AttributionEvidence()
+    try require(
+        residualIsPostWebview(
+            webviewBuiltP90Ms: specEvidence.webviewBuiltP90Ms,
+            residualP90Ms: specEvidence.residualP90Ms
+        ),
+        "spec §7 residual p90 must be post-webview so AC6 can refuse keld-wv optimisation"
+    )
+    let specDecision = try decideStartupAttribution(evidence: specEvidence)
+    try require(
+        !specDecision.constructionExplainsP90Tail
+            && !specDecision.productOptimisationJustified
+            && specDecision.limitation == kel64ExternalWebKitSchedulingLimitation
+            && specDecision.recommendedAction == kel64NoProductOptimisationAction,
+        "spec §7 must record an external/WebKit scheduling limit with no product optimisation"
+    )
+
+    let record = try loadStartupAttributionRecord()
+    let executableRelativeRecord = try loadedExecutableURL()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("keld/hello/kel64-startup-attribution.json")
+    try require(
+        FileManager.default.fileExists(atPath: executableRelativeRecord.path),
+        "attribution JSON must resolve from macos/harness/.build without depending on cwd"
+    )
+    try requireSpecSection7Duration(
+        record.evidence.webviewBuiltMedianMs,
+        Kel64SpecSection7.webviewBuiltMedianMs,
+        "webview_built median"
+    )
+    try requireSpecSection7Duration(
+        record.evidence.webviewBuiltP90Ms,
+        Kel64SpecSection7.webviewBuiltP90Ms,
+        "webview_built p90"
+    )
+    try requireSpecSection7Duration(
+        record.evidence.beaconMedianMs,
+        Kel64SpecSection7.beaconMedianMs,
+        "beacon median"
+    )
+    try requireSpecSection7Duration(
+        record.evidence.beaconP90Ms,
+        Kel64SpecSection7.beaconP90Ms,
+        "beacon p90"
+    )
+    try requireSpecSection7Duration(
+        record.evidence.residualMedianMs,
+        Kel64SpecSection7.residualMedianMs,
+        "residual median"
+    )
+    try requireSpecSection7Duration(
+        record.evidence.residualP90Ms,
+        Kel64SpecSection7.residualP90Ms,
+        "residual p90"
+    )
+    try requireSpecSection7Duration(
+        record.evidence.maximumBeaconMs,
+        Kel64SpecSection7.maximumBeaconMs,
+        "maximum beacon"
+    )
+    try requireSpecSection7Duration(
+        record.evidence.maximumBeaconWebviewBuiltMs,
+        Kel64SpecSection7.maximumBeaconWebviewBuiltMs,
+        "maximum-beacon webview_built"
+    )
+    try requireSpecSection7Duration(
+        record.evidence.maximumBeaconResidualMs,
+        Kel64SpecSection7.maximumBeaconResidualMs,
+        "maximum-beacon residual"
+    )
+    try require(
+        record.evidence.keldSourceCommit == Kel64SpecSection7.keldSourceCommit
+            && record.evidence.recipeCommit == Kel64SpecSection7.recipeCommit
+            && record.evidence.tracedArmSampleCount == Kel64SpecSection7.tracedArmSampleCount
+            && record.evidenceKind == "spec-section-7-paired-diagnostic-not-a-published-score",
+        "attribution record must pin spec §7 source/recipe commits and the non-score evidence kind"
+    )
+    try validateStartupAttributionRecord(record)
+
+    let defective = StartupAttributionRecord(
+        schemaVersion: record.schemaVersion,
+        kind: record.kind,
+        evidenceKind: record.evidenceKind,
+        recordedAtUtc: record.recordedAtUtc,
+        evidence: record.evidence,
+        decision: StartupAttributionDecision(
+            constructionExplainsP90Tail: true,
+            productOptimisationJustified: true,
+            limitation: nil,
+            recommendedAction: kel64OptimizeKeldWvWindowBuildAction
+        )
+    )
+    var defectiveFailed = false
+    do {
+        try validateStartupAttributionRecord(defective)
+    } catch HarnessError.measurement(let message) {
+        try require(
+            message.contains(kel64OptimizeKeldWvWindowBuildAction),
+            "defective keld-wv optimisation report must fail naming that action; got \(message)"
+        )
+        defectiveFailed = true
+    }
+    try require(
+        defectiveFailed,
+        "\(kel64OptimizeKeldWvWindowBuildAction) was recommended while residual is post-webview"
+    )
+
+    let constructionDominated = StartupAttributionEvidence(
+        keldSourceCommit: specEvidence.keldSourceCommit,
+        recipeCommit: specEvidence.recipeCommit,
+        tracedArmSampleCount: specEvidence.tracedArmSampleCount,
+        webviewBuiltMedianMs: 300,
+        webviewBuiltP90Ms: 300,
+        beaconMedianMs: 320,
+        beaconP90Ms: 320,
+        residualMedianMs: 20,
+        residualP90Ms: 20,
+        maximumBeaconMs: 320,
+        maximumBeaconWebviewBuiltMs: 300,
+        maximumBeaconResidualMs: 20
+    )
+    let constructionDecision = try decideStartupAttribution(evidence: constructionDominated)
+    try require(
+        constructionDecision.constructionExplainsP90Tail
+            && constructionDecision.productOptimisationJustified
+            && constructionDecision.limitation == nil,
+        "a construction-dominated synthetic tail must not collapse to a constant no-optimisation result"
+    )
+}
+
 private func scoreContractApp(
     label: String,
     startupTraceEnvironmentVariable: String?
@@ -6032,6 +6371,7 @@ private func runSelfTests(html: Data) async throws {
     try validateStartupTracePathContract()
     try await validateStartupTraceBeaconIndependenceContract(html: html)
     try validateStartupTraceScoreIsolationContract()
+    try validateStartupAttributionDecisionContract()
     let executableBinding = try LoadedExecutableBinding()
     let loadedExecutable = executableBinding.url
     let selfTestRepository = gitSnapshot(containing: loadedExecutable.deletingLastPathComponent())

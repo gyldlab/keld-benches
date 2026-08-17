@@ -45,3 +45,9 @@ present, Keld's existing `--hello` window uses that URL as its initial
 navigation. Without the environment variable, the checked-in inline hello is
 unchanged. The harness passes the unique run token in the URL and environment;
 Keld uses the same constant `Hello` native title as the Tauri arm.
+
+KEL-64 startup attribution for this recipe is the committed decision record
+[`kel64-startup-attribution.json`](./kel64-startup-attribution.json). It uses
+the spec §7 paired diagnostic (Keld `59e0987`, recipe `258756c`): construction
+does not explain the p90 tail, so there is no product optimisation from this
+slice. That JSON is not a published score.
