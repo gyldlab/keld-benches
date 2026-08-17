@@ -83,6 +83,22 @@ launches a disposable app that refuses graceful termination and spawns a child,
 then proves generation-bound hard cleanup drains the root, child, and WebKit
 helpers without leaking a process.
 
+## Startup attribution diagnostic
+
+`--app-startup-trace LABEL=ENVIRONMENT_VARIABLE` opts one trusted fixture into
+a non-scoring startup trace. The harness creates a unique private output path,
+passes it only through the named environment variable, and accepts exactly one
+nonce-bound v1 record with strictly ordered milestones. A missing, stale,
+malformed, duplicate, or out-of-order trace fails the arm after the normal
+double-rAF beacon is accepted. The emitted JSON adds only relative stage
+durations; it contains no path, nonce, or process identity.
+
+For Keld's committed adapter, use `KELD_BENCH_STARTUP_TRACE`. The fixture writes
+the trace after `keld-wv` enters, tao creates the event loop, tao/AppKit builds
+the native window, and wry/WebKit builds the webview. Trace-enabled arms are
+for diagnosis only and the runner refuses `--publish` with them; compare their
+results with separately built, trace-disabled score arms.
+
 ## Keld and Tauri
 
 Build Keld with the committed adapter recipe first; do not add the URL seam to

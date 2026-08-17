@@ -3,8 +3,8 @@ import CryptoKit
 import Darwin
 import Foundation
 
-let harnessSchemaVersion = 6
-let harnessVersion = "0.6.0"
+let harnessSchemaVersion = 7
+let harnessVersion = "0.7.0"
 
 @inline(__always)
 func monotonicNowNanoseconds() -> UInt64 {

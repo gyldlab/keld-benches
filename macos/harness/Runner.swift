@@ -39,6 +39,123 @@ struct AppSpec {
     let bundleFileIdentity: FileIdentity
     var argumentTemplates: [String]
     var buildCommand: String?
+    var startupTraceEnvironmentVariable: String?
+}
+
+private struct StartupTraceOutput {
+    let directoryURL: URL
+    let fileURL: URL
+    let environmentVariable: String
+    let token: String
+
+    static func create(environmentVariable: String, token: String) throws -> Self {
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("keld-startup-trace-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directoryURL,
+            withIntermediateDirectories: false,
+            attributes: [.posixPermissions: 0o700]
+        )
+        guard Darwin.chmod(directoryURL.path, 0o700) == 0 else {
+            throw HarnessError.io("could not make the startup-trace directory private")
+        }
+        let fileURL = directoryURL.appendingPathComponent("trace-v1.txt")
+        guard !FileManager.default.fileExists(atPath: fileURL.path) else {
+            throw HarnessError.measurement("startup trace path unexpectedly already exists")
+        }
+        return Self(
+            directoryURL: directoryURL,
+            fileURL: fileURL,
+            environmentVariable: environmentVariable,
+            token: token
+        )
+    }
+
+    func remove() {
+        do {
+            try FileManager.default.removeItem(at: directoryURL)
+        } catch {
+            writeDiagnostic("startup-trace temporary cleanup failed")
+        }
+    }
+
+    func readEvidence() throws -> StartupTraceEvidence {
+        var information = stat()
+        guard Darwin.lstat(fileURL.path, &information) == 0 else {
+            throw HarnessError.measurement("startup trace was not written by the traced fixture")
+        }
+        guard information.st_mode & S_IFMT == S_IFREG,
+              information.st_size > 0,
+              information.st_size <= 4_096 else {
+            throw HarnessError.measurement("startup trace has an invalid file type or size")
+        }
+        let data = try Data(contentsOf: fileURL, options: .mappedIfSafe)
+        return try parseStartupTrace(data, expectedToken: token)
+    }
+}
+
+struct StartupTraceEvidence: Codable, Equatable {
+    let wvRunEnteredMilliseconds: Double
+    let eventLoopCreatedMilliseconds: Double
+    let windowBuiltMilliseconds: Double
+    let webviewBuiltMilliseconds: Double
+}
+
+private func parseStartupTrace(_ data: Data, expectedToken: String) throws -> StartupTraceEvidence {
+    guard let text = String(data: data, encoding: .utf8), text.utf8.count == data.count else {
+        throw HarnessError.measurement("startup trace is not UTF-8")
+    }
+    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+    guard lines.count == 7, lines.last == "" else {
+        throw HarnessError.measurement("startup trace has an invalid record count")
+    }
+    let requiredKeys = [
+        "version",
+        "token",
+        "wv_run_entered_ns",
+        "event_loop_created_ns",
+        "window_built_ns",
+        "webview_built_ns",
+    ]
+    var fields: [String: String] = [:]
+    for (expectedKey, line) in zip(requiredKeys, lines.dropLast()) {
+        guard let separator = line.firstIndex(of: "=") else {
+            throw HarnessError.measurement("startup trace has a malformed field")
+        }
+        let key = String(line[..<separator])
+        let value = String(line[line.index(after: separator)...])
+        guard key == expectedKey, !value.isEmpty, fields[key] == nil else {
+            throw HarnessError.measurement("startup trace has an unknown, empty, or duplicate field")
+        }
+        fields[key] = value
+    }
+    guard fields.count == requiredKeys.count,
+          fields["version"] == "1",
+          fields["token"] == expectedToken else {
+        throw HarnessError.measurement("startup trace version or token does not match this arm")
+    }
+    func nanoseconds(_ key: String) throws -> UInt64 {
+        guard let value = fields[key], let parsed = UInt64(value) else {
+            throw HarnessError.measurement("startup trace \(key) is not an unsigned integer")
+        }
+        return parsed
+    }
+    let wvRunEntered = try nanoseconds("wv_run_entered_ns")
+    let eventLoopCreated = try nanoseconds("event_loop_created_ns")
+    let windowBuilt = try nanoseconds("window_built_ns")
+    let webviewBuilt = try nanoseconds("webview_built_ns")
+    guard wvRunEntered == 0,
+          eventLoopCreated > wvRunEntered,
+          windowBuilt > eventLoopCreated,
+          webviewBuilt > windowBuilt else {
+        throw HarnessError.measurement("startup trace stages are incomplete or not strictly ordered")
+    }
+    return StartupTraceEvidence(
+        wvRunEnteredMilliseconds: 0,
+        eventLoopCreatedMilliseconds: Double(eventLoopCreated) / 1_000_000,
+        windowBuiltMilliseconds: Double(windowBuilt) / 1_000_000,
+        webviewBuiltMilliseconds: Double(webviewBuilt) / 1_000_000
+    )
 }
 
 struct FileIdentity: Equatable {
@@ -276,6 +393,7 @@ struct RunnerOptions {
     var apps: [AppSpec] = []
     var argumentTemplatesByLabel: [String: [String]] = [:]
     var buildCommandsByLabel: [String: String] = [:]
+    var startupTraceEnvironmentVariablesByLabel: [String: String] = [:]
     var runsPerApp = 11
     var timeoutSeconds = 30.0
     var cleanupTimeoutSeconds = 5.0
@@ -585,6 +703,7 @@ struct SampleRecord: Codable {
     let hostConditionAfterCleanup: HostConditionEvidence
     let beacon: BeaconEvidence?
     let doubleRafPaintOpportunityProxyMilliseconds: Double?
+    let startupTrace: StartupTraceEvidence?
     let stableCoalitionObservations: Int?
     let coalition: CoalitionEvidence?
     let serverEvents: [ServerEventEvidence]
@@ -1709,7 +1828,8 @@ private func launch(
     benchmarkURL: URL,
     token: String,
     measurementTimeoutNanoseconds: UInt64,
-    foregroundMonitor: ForegroundSampleMonitor
+    foregroundMonitor: ForegroundSampleMonitor,
+    startupTrace: StartupTraceOutput?
 ) async throws -> LaunchOutcome {
     let configuration = NSWorkspace.OpenConfiguration()
     configuration.createsNewApplicationInstance = true
@@ -1721,10 +1841,14 @@ private func launch(
         $0.replacingOccurrences(of: "{url}", with: benchmarkURL.absoluteString)
             .replacingOccurrences(of: "{token}", with: token)
     }
-    configuration.environment = [
+    var environment = [
         "KELD_BENCH_URL": benchmarkURL.absoluteString,
         "KELD_BENCH_TOKEN": token,
     ]
+    if let startupTrace {
+        environment[startupTrace.environmentVariable] = startupTrace.fileURL.path
+    }
+    configuration.environment = environment
     let workspace = NSWorkspace.shared
 
     return try await withCheckedThrowingContinuation { continuation in
@@ -1993,15 +2117,25 @@ private func runOneSample(
     var cleanupRecord: CleanupRecord?
     var cleanupPreparationError: String?
     var foregroundEvidence = ForegroundEvidence.notAttempted
+    var startupTraceOutput: StartupTraceOutput?
+    var startupTrace: StartupTraceEvidence?
+    defer { startupTraceOutput?.remove() }
 
     do {
+        if let environmentVariable = spec.startupTraceEnvironmentVariable {
+            startupTraceOutput = try StartupTraceOutput.create(
+                environmentVariable: environmentVariable,
+                token: token
+            )
+        }
         try server.activate(token: token)
         let outcome = try await launch(
             app: spec,
             benchmarkURL: benchmarkURL,
             token: token,
             measurementTimeoutNanoseconds: timeoutNanoseconds,
-            foregroundMonitor: foregroundMonitor
+            foregroundMonitor: foregroundMonitor,
+            startupTrace: startupTraceOutput
         )
         launchOutcome = outcome
         let rootPid = outcome.launchedPid
@@ -2024,6 +2158,9 @@ private func runOneSample(
         try foregroundMonitor.acceptBeacon(beacon, targetReportsActive: wasActiveAtBeacon == true)
         paintMilliseconds = Double(beacon.receivedMonotonicNanoseconds - outcome.t0Nanoseconds) / 1_000_000
         server.finish(token: token)
+        if let startupTraceOutput {
+            startupTrace = try startupTraceOutput.readEvidence()
+        }
 
         // Process enumeration invokes ps/launchctl/lsappinfo and therefore must
         // happen only after the externally timestamped beacon. It cannot
@@ -2211,6 +2348,7 @@ private func runOneSample(
             acceptedBeacon.map { BeaconEvidence($0, context: context) }
         },
         doubleRafPaintOpportunityProxyMilliseconds: paintMilliseconds,
+        startupTrace: startupTrace,
         stableCoalitionObservations: stableObservationCount,
         coalition: evidenceContext.flatMap { context in
             snapshot.map { CoalitionEvidence($0, context: context) }
@@ -3030,7 +3168,8 @@ private func parseOptions(_ arguments: [String]) throws -> RunnerOptions {
                 bundleURL: url,
                 bundleFileIdentity: try fileIdentity(at: url),
                 argumentTemplates: [],
-                buildCommand: nil
+                buildCommand: nil,
+                startupTraceEnvironmentVariable: nil
             ))
         case "--app-arg":
             index += 1
@@ -3054,6 +3193,24 @@ private func parseOptions(_ arguments: [String]) throws -> RunnerOptions {
             let command = String(value[value.index(after: separator)...])
             guard !command.isEmpty else { throw HarnessError.invalidArgument("build command must not be empty") }
             options.buildCommandsByLabel[label] = command
+        case "--app-startup-trace":
+            index += 1
+            guard index < arguments.count else {
+                throw HarnessError.invalidArgument("--app-startup-trace requires LABEL=ENVIRONMENT_VARIABLE")
+            }
+            let value = arguments[index]
+            guard let separator = value.firstIndex(of: "="), separator != value.startIndex else {
+                throw HarnessError.invalidArgument("--app-startup-trace requires LABEL=ENVIRONMENT_VARIABLE")
+            }
+            let label = String(value[..<separator])
+            let environmentVariable = String(value[value.index(after: separator)...])
+            guard isEnvironmentVariableName(environmentVariable) else {
+                throw HarnessError.invalidArgument("--app-startup-trace environment variable must be uppercase ASCII with underscores")
+            }
+            guard options.startupTraceEnvironmentVariablesByLabel[label] == nil else {
+                throw HarnessError.invalidArgument("duplicate --app-startup-trace label \(label)")
+            }
+            options.startupTraceEnvironmentVariablesByLabel[label] = environmentVariable
         case "--runs":
             index += 1
             guard index < arguments.count, let value = Int(arguments[index]), (1...1_000).contains(value) else {
@@ -3123,6 +3280,12 @@ private func parseOptions(_ arguments: [String]) throws -> RunnerOptions {
         }
         options.apps[appIndex].argumentTemplates = templates
     }
+    for (label, environmentVariable) in options.startupTraceEnvironmentVariablesByLabel {
+        guard let appIndex = options.apps.firstIndex(where: { $0.label == label }) else {
+            throw HarnessError.invalidArgument("--app-startup-trace refers to unknown app label \(label)")
+        }
+        options.apps[appIndex].startupTraceEnvironmentVariable = environmentVariable
+    }
     for appIndex in options.apps.indices {
         let label = options.apps[appIndex].label
         let embeddedCommand = Bundle(url: options.apps[appIndex].bundleURL)?
@@ -3135,6 +3298,11 @@ private func parseOptions(_ arguments: [String]) throws -> RunnerOptions {
     let unknownBuildLabels = Set(options.buildCommandsByLabel.keys).subtracting(options.apps.map(\.label))
     guard unknownBuildLabels.isEmpty else {
         throw HarnessError.invalidArgument("--app-build-command refers to unknown labels: \(unknownBuildLabels.sorted().joined(separator: ", "))")
+    }
+    let unknownTraceLabels = Set(options.startupTraceEnvironmentVariablesByLabel.keys)
+        .subtracting(options.apps.map(\.label))
+    guard unknownTraceLabels.isEmpty else {
+        throw HarnessError.invalidArgument("--app-startup-trace refers to unknown labels: \(unknownTraceLabels.sorted().joined(separator: ", "))")
     }
     return options
 }
@@ -3169,6 +3337,7 @@ private func printUsage() {
       --runs N                       Samples per app (default: 11)
       --app-arg LABEL=TEMPLATE        Replace that app's launch arguments; {url} and {token} expand per run
       --app-build-command LABEL=TEXT   Required exact build-command provenance for that app
+      --app-startup-trace LABEL=ENV    Collect a private fixture startup trace through ENV; diagnostic only
       --timeout-seconds N             Measurement deadline; launch ownership is never abandoned (default: 30)
       --cleanup-timeout-seconds N     Cleanup kill-switch deadline (default: 5)
       --stable-observations N         Consecutive stable coalition reads (default: 3)
@@ -3345,6 +3514,16 @@ private func isPublicArgumentTemplate(_ value: String) -> Bool {
 private func isPublicLabel(_ value: String) -> Bool {
     guard !value.isEmpty, value.utf8.count <= 64 else { return false }
     let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ._-")
+    return value.unicodeScalars.allSatisfy(allowed.contains)
+}
+
+private func isEnvironmentVariableName(_ value: String) -> Bool {
+    guard let first = value.unicodeScalars.first,
+          CharacterSet.uppercaseLetters.contains(first),
+          value.utf8.count <= 64 else {
+        return false
+    }
+    let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
     return value.unicodeScalars.allSatisfy(allowed.contains)
 }
 
@@ -4851,6 +5030,7 @@ private func validatePublicEvidenceRedaction() throws {
         ),
         beacon: BeaconEvidence(receipt, context: context),
         doubleRafPaintOpportunityProxyMilliseconds: 42,
+        startupTrace: nil,
         stableCoalitionObservations: 3,
         coalition: coalitionEvidence,
         serverEvents: [ServerEventEvidence(event, context: context)],
@@ -5032,7 +5212,8 @@ private func validateStubbornCleanupContract(
         bundleURL: appURL,
         bundleFileIdentity: try fileIdentity(at: appURL),
         argumentTemplates: [],
-        buildCommand: "self-test fixture"
+        buildCommand: "self-test fixture",
+        startupTraceEnvironmentVariable: nil
     )
     let token = UUID().uuidString.lowercased()
     let foregroundSession = try ForegroundSessionMonitor.capture()
@@ -5048,7 +5229,8 @@ private func validateStubbornCleanupContract(
             benchmarkURL: server.url(for: token),
             token: token,
             measurementTimeoutNanoseconds: 10_000_000_000,
-            foregroundMonitor: foregroundMonitor
+            foregroundMonitor: foregroundMonitor,
+            startupTrace: nil
         )
     } catch {
         server.finish(token: token)
@@ -5237,6 +5419,102 @@ private func validateStubbornCleanupContract(
 private func runSelfTests(html: Data) async throws {
     try validateForegroundTransitionContract()
     try validatePublicEvidenceRedaction()
+    let traceToken = "2033cc90-5d05-4e84-8a9f-509686dd7d52"
+    let validStartupTrace = Data((
+        "version=1\n"
+            + "token=\(traceToken)\n"
+            + "wv_run_entered_ns=0\n"
+            + "event_loop_created_ns=1\n"
+            + "window_built_ns=2\n"
+            + "webview_built_ns=3\n"
+    ).utf8)
+    try require(
+        try parseStartupTrace(validStartupTrace, expectedToken: traceToken)
+            == StartupTraceEvidence(
+                wvRunEnteredMilliseconds: 0,
+                eventLoopCreatedMilliseconds: 0.000_001,
+                windowBuiltMilliseconds: 0.000_002,
+                webviewBuiltMilliseconds: 0.000_003
+            ),
+        "startup-trace parser must preserve ordered stage durations"
+    )
+    let wrongTokenStartupTrace = Data((
+        "version=1\n"
+            + "token=wrong-token\n"
+            + "wv_run_entered_ns=0\n"
+            + "event_loop_created_ns=1\n"
+            + "window_built_ns=2\n"
+            + "webview_built_ns=3\n"
+    ).utf8)
+    try require(
+        (try? parseStartupTrace(wrongTokenStartupTrace, expectedToken: traceToken)) == nil,
+        "startup-trace parser must reject a trace from another arm"
+    )
+    let unorderedStartupTrace = Data((
+        "version=1\n"
+            + "token=\(traceToken)\n"
+            + "wv_run_entered_ns=0\n"
+            + "window_built_ns=2\n"
+            + "event_loop_created_ns=1\n"
+            + "webview_built_ns=3\n"
+    ).utf8)
+    try require(
+        (try? parseStartupTrace(unorderedStartupTrace, expectedToken: traceToken)) == nil,
+        "startup-trace parser must reject out-of-order stage fields"
+    )
+    let duplicateStageStartupTrace = Data((
+        "version=1\n"
+            + "token=\(traceToken)\n"
+            + "wv_run_entered_ns=0\n"
+            + "wv_run_entered_ns=1\n"
+            + "window_built_ns=2\n"
+            + "webview_built_ns=3\n"
+    ).utf8)
+    try require(
+        (try? parseStartupTrace(duplicateStageStartupTrace, expectedToken: traceToken)) == nil,
+        "startup-trace parser must reject a duplicated stage"
+    )
+    let nonMonotonicStartupTrace = Data((
+        "version=1\n"
+            + "token=\(traceToken)\n"
+            + "wv_run_entered_ns=0\n"
+            + "event_loop_created_ns=2\n"
+            + "window_built_ns=2\n"
+            + "webview_built_ns=3\n"
+    ).utf8)
+    try require(
+        (try? parseStartupTrace(nonMonotonicStartupTrace, expectedToken: traceToken)) == nil,
+        "startup-trace parser must reject non-monotonic stage durations"
+    )
+    let incompleteStartupTrace = Data((
+        "version=1\n"
+            + "token=\(traceToken)\n"
+            + "wv_run_entered_ns=0\n"
+            + "event_loop_created_ns=1\n"
+            + "window_built_ns=2\n"
+    ).utf8)
+    try require(
+        (try? parseStartupTrace(incompleteStartupTrace, expectedToken: traceToken)) == nil,
+        "startup-trace parser must reject an incomplete trace"
+    )
+    let missingTraceOutput = try StartupTraceOutput.create(
+        environmentVariable: "KELD_BENCH_STARTUP_TRACE",
+        token: traceToken
+    )
+    defer { missingTraceOutput.remove() }
+    try require(
+        (try? missingTraceOutput.readEvidence()) == nil,
+        "startup-trace reader must reject a missing trace file"
+    )
+    try require(
+        !FileManager.default.fileExists(atPath: missingTraceOutput.fileURL.path),
+        "startup-trace output path must begin non-existent"
+    )
+    try require(
+        isEnvironmentVariableName("KELD_BENCH_STARTUP_TRACE")
+            && !isEnvironmentVariableName("keld_bench_startup_trace"),
+        "startup-trace environment variable names must remain constrained"
+    )
     let executableBinding = try LoadedExecutableBinding()
     let loadedExecutable = executableBinding.url
     let selfTestRepository = gitSnapshot(containing: loadedExecutable.deletingLastPathComponent())
@@ -5763,7 +6041,8 @@ private func runSelfTests(html: Data) async throws {
                 bundleURL: bundleRoot,
                 bundleFileIdentity: try fileIdentity(at: bundleRoot),
                 argumentTemplates: [],
-                buildCommand: "test"
+                buildCommand: "test",
+                startupTraceEnvironmentVariable: nil
             )]
         )
         throw HarnessError.measurement("self-test failed: output inside a measured bundle was accepted")
@@ -6191,6 +6470,11 @@ private func runSelfTests(html: Data) async throws {
 private func runBenchmark(options: RunnerOptions, htmlURL: URL, html: Data) async throws -> BenchmarkOutcome {
     guard !options.apps.isEmpty else {
         throw HarnessError.invalidArgument("at least one --app is required")
+    }
+    guard !(options.publish && options.apps.contains { $0.startupTraceEnvironmentVariable != nil }) else {
+        throw HarnessError.invalidArgument(
+            "--app-startup-trace is diagnostic-only; run trace-disabled arms before requesting --publish"
+        )
     }
     guard try kernelLaunchOwnership(for: getpid()) != nil else {
         throw HarnessError.measurement(
