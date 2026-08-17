@@ -158,6 +158,31 @@ private func parseStartupTrace(_ data: Data, expectedToken: String) throws -> St
     )
 }
 
+/// Canonical nonce-bound v1 record emitted by the Keld AC1 recorder tests.
+private func keldAC1AcceptedStartupTraceRecord(token: String) -> String {
+    "version=1\n"
+        + "token=\(token)\n"
+        + "wv_run_entered_ns=0\n"
+        + "event_loop_created_ns=46906000\n"
+        + "window_built_ns=95141000\n"
+        + "webview_built_ns=149031000\n"
+}
+
+/// Writes a fixture record onto the reserved per-arm path and reads it the
+/// same way `runOneSample` does after the external beacon is accepted.
+private func evaluateStartupTraceAfterAcceptedBeacon(
+    record: String,
+    expectedToken: String
+) throws -> StartupTraceEvidence {
+    let output = try StartupTraceOutput.create(
+        environmentVariable: "KELD_BENCH_STARTUP_TRACE",
+        token: expectedToken
+    )
+    defer { output.remove() }
+    try Data(record.utf8).write(to: output.fileURL, options: .withoutOverwriting)
+    return try output.readEvidence()
+}
+
 struct FileIdentity: Equatable {
     let device: UInt64
     let inode: UInt64
@@ -5415,91 +5440,62 @@ private func validateStubbornCleanupContract(
     )
 }
 
-@MainActor
-private func runSelfTests(html: Data) async throws {
-    try validateForegroundTransitionContract()
-    try validatePublicEvidenceRedaction()
-    let traceToken = "2033cc90-5d05-4e84-8a9f-509686dd7d52"
-    let validStartupTrace = Data((
-        "version=1\n"
-            + "token=\(traceToken)\n"
-            + "wv_run_entered_ns=0\n"
-            + "event_loop_created_ns=1\n"
-            + "window_built_ns=2\n"
-            + "webview_built_ns=3\n"
-    ).utf8)
-    try require(
-        try parseStartupTrace(validStartupTrace, expectedToken: traceToken)
-            == StartupTraceEvidence(
-                wvRunEnteredMilliseconds: 0,
-                eventLoopCreatedMilliseconds: 0.000_001,
-                windowBuiltMilliseconds: 0.000_002,
-                webviewBuiltMilliseconds: 0.000_003
-            ),
-        "startup-trace parser must preserve ordered stage durations"
+/// KEL-64 AC2: a wrong nonce, duplicate stage, omitted stage, or non-monotonic
+/// timestamp must be a typed startup-trace measurement failure. Each negative
+/// mutates the accepted AC1 recorder record; accepting that defect fails the test.
+private func validateStartupTraceRejectionContract() throws {
+    let token = "launch-nonce-ac1"
+    let accepted = keldAC1AcceptedStartupTraceRecord(token: token)
+    let acceptedEvidence = StartupTraceEvidence(
+        wvRunEnteredMilliseconds: 0,
+        eventLoopCreatedMilliseconds: Double(46_906_000) / 1_000_000,
+        windowBuiltMilliseconds: Double(95_141_000) / 1_000_000,
+        webviewBuiltMilliseconds: Double(149_031_000) / 1_000_000
     )
-    let wrongTokenStartupTrace = Data((
-        "version=1\n"
-            + "token=wrong-token\n"
-            + "wv_run_entered_ns=0\n"
-            + "event_loop_created_ns=1\n"
-            + "window_built_ns=2\n"
-            + "webview_built_ns=3\n"
-    ).utf8)
     try require(
-        (try? parseStartupTrace(wrongTokenStartupTrace, expectedToken: traceToken)) == nil,
-        "startup-trace parser must reject a trace from another arm"
+        try evaluateStartupTraceAfterAcceptedBeacon(record: accepted, expectedToken: token)
+            == acceptedEvidence,
+        "startup-trace evaluation must preserve the accepted AC1 four-stage record"
     )
-    let unorderedStartupTrace = Data((
-        "version=1\n"
-            + "token=\(traceToken)\n"
-            + "wv_run_entered_ns=0\n"
-            + "window_built_ns=2\n"
-            + "event_loop_created_ns=1\n"
-            + "webview_built_ns=3\n"
-    ).utf8)
-    try require(
-        (try? parseStartupTrace(unorderedStartupTrace, expectedToken: traceToken)) == nil,
-        "startup-trace parser must reject out-of-order stage fields"
+
+    try requireStartupTraceMeasurementFailure(
+        record: accepted.replacingOccurrences(of: "token=\(token)", with: "token=wrong-nonce"),
+        expectedToken: token,
+        defect: "wrong nonce"
     )
-    let duplicateStageStartupTrace = Data((
-        "version=1\n"
-            + "token=\(traceToken)\n"
-            + "wv_run_entered_ns=0\n"
-            + "wv_run_entered_ns=1\n"
-            + "window_built_ns=2\n"
-            + "webview_built_ns=3\n"
-    ).utf8)
-    try require(
-        (try? parseStartupTrace(duplicateStageStartupTrace, expectedToken: traceToken)) == nil,
-        "startup-trace parser must reject a duplicated stage"
+    try requireStartupTraceMeasurementFailure(
+        record: accepted.replacingOccurrences(
+            of: "event_loop_created_ns=46906000",
+            with: "wv_run_entered_ns=46906000"
+        ),
+        expectedToken: token,
+        defect: "duplicate stage"
     )
-    let nonMonotonicStartupTrace = Data((
-        "version=1\n"
-            + "token=\(traceToken)\n"
-            + "wv_run_entered_ns=0\n"
-            + "event_loop_created_ns=2\n"
-            + "window_built_ns=2\n"
-            + "webview_built_ns=3\n"
-    ).utf8)
-    try require(
-        (try? parseStartupTrace(nonMonotonicStartupTrace, expectedToken: traceToken)) == nil,
-        "startup-trace parser must reject non-monotonic stage durations"
+    try requireStartupTraceMeasurementFailure(
+        record: accepted.replacingOccurrences(of: "webview_built_ns=149031000\n", with: ""),
+        expectedToken: token,
+        defect: "omitted stage"
     )
-    let incompleteStartupTrace = Data((
-        "version=1\n"
-            + "token=\(traceToken)\n"
-            + "wv_run_entered_ns=0\n"
-            + "event_loop_created_ns=1\n"
-            + "window_built_ns=2\n"
-    ).utf8)
-    try require(
-        (try? parseStartupTrace(incompleteStartupTrace, expectedToken: traceToken)) == nil,
-        "startup-trace parser must reject an incomplete trace"
+    try requireStartupTraceMeasurementFailure(
+        record: accepted.replacingOccurrences(
+            of: "webview_built_ns=149031000",
+            with: "webview_built_ns=95141000"
+        ),
+        expectedToken: token,
+        defect: "non-monotonic timestamps"
     )
+    try requireStartupTraceMeasurementFailure(
+        record: accepted.replacingOccurrences(
+            of: "event_loop_created_ns=46906000\nwindow_built_ns=95141000",
+            with: "window_built_ns=95141000\nevent_loop_created_ns=46906000"
+        ),
+        expectedToken: token,
+        defect: "out-of-order stage fields"
+    )
+
     let missingTraceOutput = try StartupTraceOutput.create(
         environmentVariable: "KELD_BENCH_STARTUP_TRACE",
-        token: traceToken
+        token: token
     )
     defer { missingTraceOutput.remove() }
     try require(
@@ -5515,6 +5511,48 @@ private func runSelfTests(html: Data) async throws {
             && !isEnvironmentVariableName("keld_bench_startup_trace"),
         "startup-trace environment variable names must remain constrained"
     )
+}
+
+private func requireStartupTraceMeasurementFailure(
+    record: String,
+    expectedToken: String,
+    defect: String
+) throws {
+    do {
+        _ = try evaluateStartupTraceAfterAcceptedBeacon(
+            record: record,
+            expectedToken: expectedToken
+        )
+        throw HarnessError.measurement(
+            "self-test failed: \(defect) was accepted and would publish a startup trace"
+        )
+    } catch let error as HarnessError {
+        guard case .measurement(let message) = error else {
+            throw HarnessError.measurement(
+                "self-test failed: \(defect) was not a typed measurement failure: \(error)"
+            )
+        }
+        if message.hasPrefix("self-test failed:") { throw error }
+        try require(
+            message.contains("startup trace"),
+            "\(defect) must remain a startup-trace measurement failure; got \(message)"
+        )
+        try require(
+            publicFailureCode(error) == "measurement_failure",
+            "\(defect) must not publish a public result besides measurement_failure"
+        )
+    } catch {
+        throw HarnessError.measurement(
+            "self-test failed: \(defect) threw an unexpected error: \(error)"
+        )
+    }
+}
+
+@MainActor
+private func runSelfTests(html: Data) async throws {
+    try validateForegroundTransitionContract()
+    try validatePublicEvidenceRedaction()
+    try validateStartupTraceRejectionContract()
     let executableBinding = try LoadedExecutableBinding()
     let loadedExecutable = executableBinding.url
     let selfTestRepository = gitSnapshot(containing: loadedExecutable.deletingLastPathComponent())

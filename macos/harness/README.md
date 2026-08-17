@@ -69,7 +69,11 @@ macos/harness/.build/keld-macos-bench --self-test
 ```
 
 The self-test exercises the real port-zero server and proves missing, wrong,
-stale, duplicate, and wrong-phase requests cannot complete a run. It also tests
+stale, duplicate, and wrong-phase requests cannot complete a run. It mutates the
+accepted Keld AC1 four-stage record and proves a wrong nonce, duplicate stage,
+omitted stage, or non-monotonic timestamp is a typed startup-trace measurement
+failure; accepting that defect fails the test, and the external beacon path
+must not publish the trace. It also tests
 the missing-beacon timeout, parsers/statistics, fail-closed Git-status mapping,
 raw-blob rejection of changes hidden by clean filters or `assume-unchanged`,
 output-collision isolation, a byte-for-byte rebuild from a pinned immutable
