@@ -2652,13 +2652,17 @@ private func validateStartupAttributionRecord(_ record: StartupAttributionRecord
 
 private func resolveStartupAttributionRecordURL() throws -> URL {
     let executable = try loadedExecutableURL()
+    // Loaded executable: macos/harness/.build/keld-macos-bench
+    // three deletions → macos/; four deletions → repository root.
     let candidates = [
         URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent(kel64StartupAttributionRecordRelativePath),
         executable.deletingLastPathComponent()
             .deletingLastPathComponent()
+            .deletingLastPathComponent()
             .appendingPathComponent("keld/hello/kel64-startup-attribution.json"),
         executable.deletingLastPathComponent()
+            .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent(kel64StartupAttributionRecordRelativePath),
@@ -6156,6 +6160,15 @@ private func validateStartupAttributionDecisionContract() throws {
     )
 
     let record = try loadStartupAttributionRecord()
+    let executableRelativeRecord = try loadedExecutableURL()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("keld/hello/kel64-startup-attribution.json")
+    try require(
+        FileManager.default.fileExists(atPath: executableRelativeRecord.path),
+        "attribution JSON must resolve from macos/harness/.build without depending on cwd"
+    )
     try requireSpecSection7Duration(
         record.evidence.webviewBuiltMedianMs,
         Kel64SpecSection7.webviewBuiltMedianMs,
