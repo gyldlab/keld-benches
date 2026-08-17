@@ -68,7 +68,7 @@ index 0000000..0f8508a
 +        env::var("KELD_BENCH_STARTUP_TRACE"),
 +        env::var("KELD_BENCH_TOKEN"),
 +    ) {
-+        (Err(env::VarError::NotPresent), Err(env::VarError::NotPresent)) => None,
++        (Err(env::VarError::NotPresent), _) => None,
 +        (Ok(path), Ok(token)) if !path.is_empty() && !token.is_empty() => Some(StartupTrace {
 +            path: PathBuf::from(path),
 +            token,
