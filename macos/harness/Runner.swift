@@ -212,6 +212,27 @@ private func evaluateStartupTraceAfterAcceptedBeacon(
     return try output.readEvidence()
 }
 
+private struct TracedArmPublication: Equatable {
+    let paintMilliseconds: Double?
+    let valid: Bool
+}
+
+/// A valid startup trace is attribution evidence only. It cannot accept a
+/// beacon, supply the paint score, or complete a focus/foreground contract.
+private func evaluateTracedArmPublication(
+    beaconPaintMilliseconds: Double?,
+    beaconAccepted: Bool,
+    focusAccepted: Bool,
+    foregroundComplete: Bool,
+    startupTrace: StartupTraceEvidence?
+) -> TracedArmPublication {
+    _ = startupTrace
+    return TracedArmPublication(
+        paintMilliseconds: beaconAccepted ? beaconPaintMilliseconds : nil,
+        valid: beaconAccepted && focusAccepted && foregroundComplete
+    )
+}
+
 struct FileIdentity: Equatable {
     let device: UInt64
     let inode: UInt64
@@ -2401,7 +2422,13 @@ private func runOneSample(
         beacon: evidenceContext.flatMap { context in
             acceptedBeacon.map { BeaconEvidence($0, context: context) }
         },
-        doubleRafPaintOpportunityProxyMilliseconds: paintMilliseconds,
+        doubleRafPaintOpportunityProxyMilliseconds: evaluateTracedArmPublication(
+            beaconPaintMilliseconds: paintMilliseconds,
+            beaconAccepted: acceptedBeacon != nil,
+            focusAccepted: wasActiveAtBeacon == true,
+            foregroundComplete: foregroundEvidence.isCompleteForPublication,
+            startupTrace: startupTrace
+        ).paintMilliseconds,
         startupTrace: startupTrace,
         stableCoalitionObservations: stableObservationCount,
         coalition: evidenceContext.flatMap { context in
@@ -5677,12 +5704,135 @@ private func requireStartupTracePathMeasurementFailure(
     }
 }
 
+/// KEL-64 AC5: a valid four-stage trace must not accept a hidden, unfocused,
+/// malformed, stale, or timed-out beacon, and must not become the paint score.
+@MainActor
+private func validateStartupTraceBeaconIndependenceContract(html: Data) async throws {
+    let token = UUID().uuidString.lowercased()
+    let accepted = keldAC1AcceptedStartupTraceRecord(token: token)
+    let trace = try evaluateStartupTraceAfterAcceptedBeacon(record: accepted, expectedToken: token)
+    try require(
+        trace.webviewBuiltMilliseconds == Double(149_031_000) / 1_000_000,
+        "AC5 must start from a valid AC1 four-stage record"
+    )
+
+    let server = try LoopbackBeaconServer(html: html)
+    defer { server.stop() }
+    try server.activate(token: token)
+    try require(
+        try rawHTTPStatus(port: server.port, target: "/run/\(token)/hello.html?token=\(token)") == 200,
+        "AC5 HTML must load before the invalid-beacon controls"
+    )
+
+    let beaconPrefix = "/beacon.gif?token=\(token)&phase=double-raf&"
+    let hiddenStatus = try rawHTTPStatus(
+        port: server.port,
+        target: beaconPrefix + "client_now_ms=12&script_start_ms=1&raf1_ms=8&raf2_ms=10&visibility=hidden&focus=false"
+    )
+    try require(hiddenStatus == 422, "hidden beacon must stay rejected beside a valid startup trace")
+    try requireTraceCannotRescueBeacon(
+        trace: trace,
+        defect: "hidden beacon",
+        beaconAccepted: false,
+        focusAccepted: false,
+        foregroundComplete: false
+    )
+
+    let unfocusedStatus = try rawHTTPStatus(
+        port: server.port,
+        target: beaconPrefix + "client_now_ms=12&script_start_ms=1&raf1_ms=8&raf2_ms=10&visibility=visible&focus=false"
+    )
+    try require(unfocusedStatus == 422, "unfocused beacon must stay rejected beside a valid startup trace")
+    try requireTraceCannotRescueBeacon(
+        trace: trace,
+        defect: "unfocused beacon",
+        beaconAccepted: false,
+        focusAccepted: false,
+        foregroundComplete: true
+    )
+
+    let malformedStatus = try rawHTTPStatus(
+        port: server.port,
+        request: "GET /beacon.gif?token=\(token)&phase=double-raf\r\n\r\n"
+    )
+    try require(malformedStatus == 400, "malformed beacon must stay rejected beside a valid startup trace")
+    try requireTraceCannotRescueBeacon(
+        trace: trace,
+        defect: "malformed beacon",
+        beaconAccepted: false,
+        focusAccepted: true,
+        foregroundComplete: true
+    )
+
+    let stale = UUID().uuidString.lowercased()
+    try server.activate(token: stale)
+    let staleStatus = try rawHTTPStatus(
+        port: server.port,
+        target: "/beacon.gif?token=\(token)&phase=double-raf&client_now_ms=12&script_start_ms=1&raf1_ms=8&raf2_ms=10&visibility=visible&focus=true"
+    )
+    try require(staleStatus == 410, "stale beacon must stay rejected beside a valid startup trace")
+    try requireTraceCannotRescueBeacon(
+        trace: trace,
+        defect: "stale beacon",
+        beaconAccepted: false,
+        focusAccepted: true,
+        foregroundComplete: true
+    )
+
+    let timedOut = UUID().uuidString.lowercased()
+    try server.activate(token: timedOut)
+    do {
+        _ = try await server.awaitBeacon(
+            token: timedOut,
+            deadlineNanoseconds: monotonicNowNanoseconds() + 20_000_000
+        )
+        throw HarnessError.measurement("self-test failed: timed-out beacon was accepted beside a valid startup trace")
+    } catch HarnessError.timeout {
+        try requireTraceCannotRescueBeacon(
+            trace: trace,
+            defect: "timed-out beacon",
+            beaconAccepted: false,
+            focusAccepted: true,
+            foregroundComplete: true
+        )
+    } catch {
+        throw HarnessError.measurement(
+            "self-test failed: timed-out beacon control returned the wrong error: \(error)"
+        )
+    }
+}
+
+private func requireTraceCannotRescueBeacon(
+    trace: StartupTraceEvidence,
+    defect: String,
+    beaconAccepted: Bool,
+    focusAccepted: Bool,
+    foregroundComplete: Bool
+) throws {
+    let evaluation = evaluateTracedArmPublication(
+        beaconPaintMilliseconds: trace.webviewBuiltMilliseconds,
+        beaconAccepted: beaconAccepted,
+        focusAccepted: focusAccepted,
+        foregroundComplete: foregroundComplete,
+        startupTrace: trace
+    )
+    try require(
+        !evaluation.valid,
+        "\(defect) must keep the arm invalid even with a valid startup trace"
+    )
+    try require(
+        evaluation.paintMilliseconds == nil,
+        "\(defect) must not publish stage durations as the paint score"
+    )
+}
+
 @MainActor
 private func runSelfTests(html: Data) async throws {
     try validateForegroundTransitionContract()
     try validatePublicEvidenceRedaction()
     try validateStartupTraceRejectionContract()
     try validateStartupTracePathContract()
+    try await validateStartupTraceBeaconIndependenceContract(html: html)
     let executableBinding = try LoadedExecutableBinding()
     let loadedExecutable = executableBinding.url
     let selfTestRepository = gitSnapshot(containing: loadedExecutable.deletingLastPathComponent())
