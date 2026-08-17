@@ -77,7 +77,8 @@ must not publish the trace. A missing, unreadable, or pre-existing reserved
 path is a typed measurement failure and must not consume a previous arm's
 record. A valid four-stage record cannot accept a hidden, unfocused,
 malformed, stale, or timed-out beacon, and cannot become the paint score.
-It also tests
+Reported performance scores come only from trace-disabled arms; a traced-arm
+latency published as the score fails the self-test. It also tests
 the missing-beacon timeout, parsers/statistics, fail-closed Git-status mapping,
 raw-blob rejection of changes hidden by clean filters or `assume-unchanged`,
 output-collision isolation, a byte-for-byte rebuild from a pinned immutable
@@ -104,8 +105,11 @@ durations; it contains no path, nonce, or process identity.
 For Keld's committed adapter, use `KELD_BENCH_STARTUP_TRACE`. The fixture writes
 the trace after `keld-wv` enters, tao creates the event loop, tao/AppKit builds
 the native window, and wry/WebKit builds the webview. Trace-enabled arms are
-for diagnosis only and the runner refuses `--publish` with them; compare their
-results with separately built, trace-disabled score arms.
+attribution evidence only: their beacon and RSS values remain on the raw sample
+records and must not enter `summaries`. Pair a trace-disabled score arm with a
+trace-enabled diagnostic arm in one session; the existing rotating-first-app
+order alternates who leads each round. The runner still refuses `--publish`
+when any arm is traced.
 
 ## Keld and Tauri
 
