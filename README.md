@@ -31,10 +31,22 @@ Fixtures are organized **by operating system first**, then framework:
 | [`macos/neutralino/hello/`](./macos/neutralino/hello/) | **sources + measured** | Neutralino 6.9.0 embedded arm64 + wrapped `.app` (2026-08-14) |
 | [`macos/nwjs/hello/`](./macos/nwjs/hello/) | **app sources + measured** | NW.js 0.114.1 normal flavor; runtime zip not committed (2026-08-14) |
 | [`macos/electrobun/hello/`](./macos/electrobun/hello/) | **sources + measured** | Electrobun 1.18.1 stable zstd / extracted `.app` (2026-08-14) |
-| [`windows/*/hello/`](./windows/) | stub READMEs | Windows packs (Electron / WebView2 / Win installers) |
+| [`windows/*/hello/`](./windows/) | **sources + measured** (2026-08-13/15) | Six framework hellos; see `MEASUREMENTS.md` Windows section |
+| [`windows/bench/`](./windows/bench/) | **harness + results** | First-paint / RSS oracle (`Measure-FirstPaint.ps1`) + negative controls |
+| [`windows/winui/hello/`](./windows/winui/hello/) | contract only | Windows native floor (Win32/WinUI + WebView2) — app not implemented |
 | [`linux/*/hello/`](./linux/) | stub READMEs | Linux packs (AppImage / deb / etc.) |
+| [`linux/gtk4/hello/`](./linux/gtk4/hello/) | contract only | Linux native floor (GTK4 + WebKitGTK) — app not implemented |
 
-There is **no** Swift tree under `windows/` or `linux/` (macOS-only native floors).
+Native floors are per-OS: Swift under `macos/` only, Win32/WinUI under
+`windows/` only, GTK4 under `linux/` only.
+
+## Measurement standard
+
+Harnesses, result documents, and result naming follow the **metric-runner
+contract** — see [`HARNESS-CONTRACT.md`](./HARNESS-CONTRACT.md) and the
+versioned schema + metric registry in [`schema/`](./schema/)
+(`python3 schema/check.py` validates everything). One interface per OS
+harness, one result shape, immutable result files.
 
 **Agents MUST** place new fixtures under the OS folder for the machine / pack they
 actually ran. **MUST NOT** dump OS-agnostic apps at the repo root. When linking

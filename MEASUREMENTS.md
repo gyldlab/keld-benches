@@ -12,12 +12,12 @@
 | [`macos/neutralino/hello/`](./macos/neutralino/hello/) | Neutralino | yes | Measured 2026-08-14 |
 | [`macos/nwjs/hello/`](./macos/nwjs/hello/) | NW.js (Chromium + Node) | yes (app sources; runtime zip not committed) | Measured 2026-08-14 |
 | [`macos/electrobun/hello/`](./macos/electrobun/hello/) | Electrobun (system webview + Bun) | yes | Measured 2026-08-14 |
-| [`windows/electron/hello/`](./windows/electron/hello/) | Electron (Chromium + Node) | stub | WebView2 / Win packs |
-| [`windows/tauri/hello/`](./windows/tauri/hello/) | Tauri 2 (WebView2) | stub | same |
-| [`windows/wails/hello/`](./windows/wails/hello/) | Wails (WebView2) | stub | same |
-| [`windows/neutralino/hello/`](./windows/neutralino/hello/) | Neutralino | stub | same |
-| [`windows/nwjs/hello/`](./windows/nwjs/hello/) | NW.js (Chromium + Node) | stub | same |
-| [`windows/electrobun/hello/`](./windows/electrobun/hello/) | Electrobun | stub | same |
+| [`windows/electron/hello/`](./windows/electron/hello/) | Electron (Chromium + Node) | yes | Measured 2026-08-13/15 |
+| [`windows/tauri/hello/`](./windows/tauri/hello/) | Tauri 2 (WebView2) | yes | Measured 2026-08-13/15 |
+| [`windows/wails/hello/`](./windows/wails/hello/) | Wails (WebView2) | yes | Measured 2026-08-13 |
+| [`windows/neutralino/hello/`](./windows/neutralino/hello/) | Neutralino | yes | Measured 2026-08-13 |
+| [`windows/nwjs/hello/`](./windows/nwjs/hello/) | NW.js (Chromium + Node) | yes | Measured 2026-08-13 |
+| [`windows/electrobun/hello/`](./windows/electrobun/hello/) | Electrobun | yes | Measured 2026-08-13 — invalid row, window never opened; do not cite |
 | [`linux/electron/hello/`](./linux/electron/hello/) | Electron (Chromium + Node) | stub | AppImage / deb / etc. |
 | [`linux/tauri/hello/`](./linux/tauri/hello/) | Tauri 2 (WebKitGTK) | stub | same |
 | [`linux/wails/hello/`](./linux/wails/hello/) | Wails (WebKitGTK) | stub | same |
@@ -398,8 +398,16 @@ Supersedes the ad-hoc figures in the previous section. Those were measured with 
 throwaway fixed-port beacon that was reverted afterwards, so nobody could re-run
 them. This run used the committed harness at
 [`windows/bench/Measure-FirstPaint.ps1`](./windows/bench/Measure-FirstPaint.ps1);
-raw per-run samples with SHAs, exe hashes and versions are in
+raw per-run samples with SHAs, exe hashes and versions were written to
 [`windows/bench/windows-first-paint.json`](./windows/bench/windows-first-paint.json).
+
+> **Evidence caveat (2026-08-21):** the committed `windows-first-paint.json`
+> was later **overwritten by a 2026-08-15 median-of-7 session**
+> (keld @ `f28d696`), so the raw samples for THIS 2026-08-14 table are no
+> longer at `main`'s tip (git history only). This overwrite is why result
+> files are now immutable and session-named — see
+> [`HARNESS-CONTRACT.md`](./HARNESS-CONTRACT.md) §4 and
+> [`windows/bench/CONTRACT.md`](./windows/bench/CONTRACT.md).
 
 | Stack | first paint | main RSS | helper RSS | total RSS | procs |
 |---|---|---|---|---|---|

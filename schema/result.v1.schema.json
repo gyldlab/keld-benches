@@ -1,0 +1,334 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/gyldlab/keld-benches/main/schema/result.v1.schema.json",
+  "title": "keld-benches result document v1",
+  "description": "One measurement session for exactly one metric contract on one OS, one machine, one cache-state class. Metric identity comes from schema/metrics.v1.json (the registry owns WHICH metrics exist; this schema owns the SHAPE every result shares). Cross-session absolutes are not comparable; comparisons are valid only within one document.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "metric",
+    "cache_state",
+    "session",
+    "environment",
+    "provenance",
+    "arms",
+    "publication"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "description": "Bump only with a new schema/result.vN.schema.json file. Consumers reject unknown versions; they never guess."
+    },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "unit"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$",
+          "description": "A contract id registered in schema/metrics.v1.json (e.g. PAINT-OPPORTUNITY, MEM-IDLE, IPC-RTT). Adding a metric extends the registry, not this schema."
+        },
+        "unit": {
+          "type": "string",
+          "description": "Must equal the registry unit for this id (e.g. 'ms', 'KiB', 'us', 'bytes', 'boolean')."
+        },
+        "registry_version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Version of schema/metrics.vN.json the harness read the contract from."
+        }
+      }
+    },
+    "cache_state": {
+      "enum": ["boot-cold", "fresh-process", "warm-cache", "renderer-warm"],
+      "description": "Cache-state class per docs/research/49 §3.1. Never pool samples across classes; one document = one class."
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_utc", "finished_utc", "requested_samples", "interleaving"],
+      "properties": {
+        "started_utc": { "type": "string", "format": "date-time" },
+        "finished_utc": { "type": "string", "format": "date-time" },
+        "requested_samples": { "type": "integer", "minimum": 1 },
+        "interleaving": {
+          "enum": ["none", "round-robin-randomized"],
+          "description": "Publication requires round-robin-randomized (balanced randomized interleaving by round). 'none' (arm-by-arm) marks the document diagnostic."
+        },
+        "label": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "Short kebab-case session label used in the result filename (e.g. 'kel65-direct-com')."
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os", "hardware", "power"],
+      "properties": {
+        "os": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version", "build"],
+          "properties": {
+            "name": { "enum": ["macos", "windows", "linux"] },
+            "version": { "type": "string" },
+            "build": { "type": "string", "description": "OS build/kernel identifier (e.g. '25F80', '10.0.26200.0', '6.12.0-generic')." }
+          }
+        },
+        "hardware": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cpu", "arch"],
+          "properties": {
+            "cpu": { "type": "string", "description": "e.g. 'Apple M4'" },
+            "arch": { "type": "string", "description": "e.g. 'arm64', 'x86_64'" },
+            "ram_bytes": { "type": "integer", "minimum": 0 },
+            "machine_label": { "type": "string", "description": "Stable operator label for 'same machine' checks; never a hostname or serial." }
+          }
+        },
+        "power": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ac_power", "low_power_mode"],
+          "properties": {
+            "ac_power": { "type": "boolean" },
+            "low_power_mode": { "type": "boolean" },
+            "thermal_state": { "type": "string", "description": "e.g. 'nominal'. Publication requires nominal at both session boundaries." }
+          }
+        },
+        "engine": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "type": "string", "description": "Shared web engine of the session where one exists (e.g. 'WebView2 Evergreen', 'WebKit', 'WebKitGTK')." },
+            "version": { "type": "string" }
+          }
+        },
+        "display": { "type": "string", "description": "Fixed display configuration during the session." },
+        "toolchains": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "version"],
+            "properties": {
+              "name": { "type": "string" },
+              "version": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bench_sha", "harness"],
+      "properties": {
+        "bench_sha": {
+          "$ref": "#/$defs/gitSha",
+          "description": "Immutable gyldlab/keld-benches commit the harness and fixtures were read from. Scoreboard rows cite this, never 'main'."
+        },
+        "bench_tree_state": {
+          "enum": ["clean", "dirty", "unavailable"],
+          "description": "Publication requires clean."
+        },
+        "keld_sha": {
+          "oneOf": [{ "$ref": "#/$defs/gitSha" }, { "type": "null" }],
+          "description": "gyldlab/keld commit for the keld arm; null when no keld arm ran."
+        },
+        "harness": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path"],
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^(macos|windows|linux)/bench/",
+              "description": "Repo-relative harness entry point (e.g. 'windows/bench/Measure-FirstPaint.ps1'). Never an absolute path."
+            },
+            "sha256": { "$ref": "#/$defs/sha256", "description": "SHA-256 of the harness entry-point file, when the harness is a compiled artifact use the binary hash." },
+            "version": { "type": "string" }
+          }
+        },
+        "fixtures": {
+          "type": "array",
+          "description": "Every fixture tree that produced a measured artifact.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path"],
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^(macos|windows|linux)/[a-z0-9-]+/",
+                "description": "OS-qualified repo-relative fixture path (e.g. 'windows/tauri/hello')."
+              },
+              "sha": { "$ref": "#/$defs/gitSha", "description": "Commit the fixture tree was built from, when it differs from bench_sha." }
+            }
+          }
+        },
+        "payload_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "Hash of the canonical rendered payload (e.g. the generated hello HTML) proving byte-identical content across arms."
+        }
+      }
+    },
+    "arms": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/arm" }
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseline_arm", "candidate_arm", "ratio_ci95", "threshold", "verdict"],
+      "description": "Paired regression verdict per docs/research/49 §5: FAIL when the lower 95% CI of candidate/baseline exceeds threshold; PASS when the upper CI is at or below it; INCONCLUSIVE otherwise.",
+      "properties": {
+        "baseline_arm": { "type": "string" },
+        "candidate_arm": { "type": "string" },
+        "ratio_ci95": { "$ref": "#/$defs/interval" },
+        "threshold": { "type": "number", "exclusiveMinimum": 1, "description": "1.05 encodes the >5% regression rule." },
+        "verdict": { "enum": ["PASS", "FAIL", "INCONCLUSIVE"] },
+        "method": { "type": "string", "description": "e.g. 'paired bootstrap, 10000 resamples, by round'." }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy_version", "requested", "eligible", "reasons"],
+      "description": "Mirrors the macOS KEL-64 harness publication block. eligible=false documents remain valid diagnostics; they must not feed scoreboard 'vs' cells.",
+      "properties": {
+        "policy_version": { "type": "integer", "minimum": 1 },
+        "requested": { "type": "boolean" },
+        "eligible": { "type": "boolean" },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code"],
+            "properties": {
+              "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+              "label": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "gitSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+    "interval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lower", "upper"],
+      "properties": {
+        "lower": { "type": "number" },
+        "upper": { "type": "number" }
+      }
+    },
+    "statistics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["valid_samples", "median"],
+      "properties": {
+        "valid_samples": { "type": "integer", "minimum": 0 },
+        "median": { "oneOf": [{ "type": "number" }, { "type": "null" }] },
+        "p90": { "oneOf": [{ "type": "number" }, { "type": "null" }], "description": "Nearest-rank; only when sample count supports it." },
+        "p99": { "oneOf": [{ "type": "number" }, { "type": "null" }], "description": "Nearest-rank; only when sample count supports it." },
+        "min": { "oneOf": [{ "type": "number" }, { "type": "null" }] },
+        "max": { "oneOf": [{ "type": "number" }, { "type": "null" }] },
+        "bootstrap_ci95": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lower", "upper", "resamples"],
+          "description": "95% bootstrap CI of the median. No normal-distribution assumption.",
+          "properties": {
+            "lower": { "type": "number" },
+            "upper": { "type": "number" },
+            "resamples": { "type": "integer", "minimum": 1000 }
+          }
+        }
+      }
+    },
+    "arm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arm_id", "framework", "samples", "statistics"],
+      "properties": {
+        "arm_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "Stable arm name (e.g. 'keld', 'tauri', 'electron', 'swift-appkit')."
+        },
+        "framework": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "type": "string" },
+            "version": { "type": "string" }
+          }
+        },
+        "fixture_path": {
+          "type": "string",
+          "pattern": "^(macos|windows|linux)/[a-z0-9-]+/",
+          "description": "OS-qualified fixture path for this arm. Omitted only for arms measured from an external repo (the current keld gap; see HARNESS-CONTRACT.md)."
+        },
+        "artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sha256"],
+          "properties": {
+            "sha256": { "$ref": "#/$defs/sha256", "description": "Hash of the measured Release artifact (exe / app bundle main binary)." },
+            "basename": { "type": "string", "description": "Executable basename only; never an absolute or home path." },
+            "version": { "oneOf": [{ "type": "string" }, { "type": "null" }] }
+          }
+        },
+        "lane": {
+          "type": "string",
+          "description": "Comparison lane (e.g. 'wkwebview', 'chromium', 'webview2'). Documents must not be used to build cross-lane 'vs' cells."
+        },
+        "role": {
+          "enum": ["score", "diagnostic"],
+          "default": "score",
+          "description": "Diagnostic arms (e.g. trace-enabled builds, incomplete enumerations) never enter publication comparisons."
+        },
+        "samples": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["run", "valid"],
+            "properties": {
+              "run": { "type": "integer", "minimum": 1 },
+              "value": {
+                "oneOf": [{ "type": "number" }, { "type": "boolean" }, { "type": "null" }],
+                "description": "The metric value in metric.unit; null when invalid. Boolean only for gate metrics (SEC-*, LIFE-GENERATION)."
+              },
+              "valid": { "type": "boolean" },
+              "reject_reason": {
+                "oneOf": [{ "type": "string" }, { "type": "null" }],
+                "description": "Fail-closed reason (nonce mismatch, timeout, process exited, membership churn, ...). Required content when valid=false."
+              },
+              "diagnostics": {
+                "type": "object",
+                "description": "Named non-scoring observations for this run (e.g. window_visible_ms, main_rss_kb, helper_rss_kb, processes, spawn_wall_utc_ms). Diagnostics never substitute for the metric value.",
+                "additionalProperties": { "oneOf": [{ "type": "number" }, { "type": "string" }, { "type": "boolean" }, { "type": "null" }] }
+              }
+            }
+          }
+        },
+        "statistics": { "$ref": "#/$defs/statistics" }
+      }
+    }
+  }
+}
