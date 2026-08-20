@@ -1,0 +1,450 @@
+{
+  "schema_version": 1,
+  "metric": {
+    "id": "PAINT-OPPORTUNITY",
+    "unit": "ms",
+    "registry_version": 1
+  },
+  "cache_state": "fresh-process",
+  "session": {
+    "started_utc": "2026-08-15T15:30:00Z",
+    "finished_utc": "2026-08-15T15:41:06.5045077Z",
+    "requested_samples": 7,
+    "interleaving": "none",
+    "label": "kel65-direct-com",
+    "notes": "Converted from pre-contract windows/bench/windows-first-paint-kel65-direct-com.json to illustrate the v1 document shape. Arms ran sequentially (arm-by-arm), so the comparison block is diagnostic, not publishable."
+  },
+  "environment": {
+    "os": {
+      "name": "windows",
+      "version": "Microsoft Windows 11 Home Single Language",
+      "build": "10.0.26200.0"
+    },
+    "hardware": {
+      "cpu": "x64 laptop (see MEASUREMENTS.md Windows section)",
+      "arch": "AMD64",
+      "machine_label": "windows-bench-2026"
+    },
+    "power": {
+      "ac_power": true,
+      "low_power_mode": false
+    },
+    "engine": {
+      "name": "WebView2 Evergreen",
+      "version": "151.0.4129.78"
+    },
+    "toolchains": [
+      {
+        "name": "rustc",
+        "version": "1.93.0-x86_64-pc-windows-msvc"
+      },
+      {
+        "name": "node",
+        "version": "25.2.1"
+      }
+    ]
+  },
+  "provenance": {
+    "bench_sha": "39bab061951283901023a34e885de41d432e3483",
+    "bench_tree_state": "dirty",
+    "keld_sha": "39be9cc0af49aad9c70485d1d295e0a498687ae9",
+    "harness": {
+      "path": "windows/bench/Measure-FirstPaint.ps1"
+    }
+  },
+  "arms": [
+    {
+      "arm_id": "keld",
+      "framework": {
+        "name": "Keld",
+        "version": "agent/kel-65-webview2-direct-com"
+      },
+      "lane": "webview2",
+      "role": "score",
+      "samples": [
+        {
+          "run": 1,
+          "value": 651,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 166,
+            "main_rss_kb": 19460,
+            "helper_rss_kb": 337992,
+            "processes": 7,
+            "spawn_wall_utc_ms": 1786808323156
+          }
+        },
+        {
+          "run": 2,
+          "value": 469,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 28,
+            "main_rss_kb": 19468,
+            "helper_rss_kb": 341372,
+            "processes": 7,
+            "spawn_wall_utc_ms": 1786808330953
+          }
+        },
+        {
+          "run": 3,
+          "value": 492,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 28,
+            "main_rss_kb": 19452,
+            "helper_rss_kb": 337344,
+            "processes": 7,
+            "spawn_wall_utc_ms": 1786808337809
+          }
+        },
+        {
+          "run": 4,
+          "value": 472,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 29,
+            "main_rss_kb": 19552,
+            "helper_rss_kb": 337180,
+            "processes": 7,
+            "spawn_wall_utc_ms": 1786808344698
+          }
+        },
+        {
+          "run": 5,
+          "value": 460,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 29,
+            "main_rss_kb": 21860,
+            "helper_rss_kb": 337188,
+            "processes": 7,
+            "spawn_wall_utc_ms": 1786808351488
+          }
+        },
+        {
+          "run": 6,
+          "value": 466,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 29,
+            "main_rss_kb": 21688,
+            "helper_rss_kb": 337584,
+            "processes": 7,
+            "spawn_wall_utc_ms": 1786808358339
+          }
+        },
+        {
+          "run": 7,
+          "value": 434,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 30,
+            "main_rss_kb": 21752,
+            "helper_rss_kb": 337616,
+            "processes": 7,
+            "spawn_wall_utc_ms": 1786808365097
+          }
+        }
+      ],
+      "statistics": {
+        "valid_samples": 7,
+        "median": 469,
+        "p90": 651,
+        "min": 434,
+        "max": 651,
+        "bootstrap_ci95": {
+          "lower": 460,
+          "upper": 492,
+          "resamples": 10000
+        }
+      },
+      "artifact": {
+        "sha256": "4165B97FCF1DCA310CAC8CB7B6A1535C4391D9738580AC9DB22BD84C1081DF78",
+        "basename": "keld-host.exe",
+        "version": null
+      }
+    },
+    {
+      "arm_id": "tauri",
+      "framework": {
+        "name": "Tauri",
+        "version": "2.11.5"
+      },
+      "lane": "webview2",
+      "role": "score",
+      "samples": [
+        {
+          "run": 1,
+          "value": 749,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 268,
+            "main_rss_kb": 26800,
+            "helper_rss_kb": 337600,
+            "processes": 7,
+            "spawn_wall_utc_ms": 1786808371857
+          }
+        },
+        {
+          "run": 2,
+          "value": 483,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 29,
+            "main_rss_kb": 26796,
+            "helper_rss_kb": 334328,
+            "processes": 7,
+            "spawn_wall_utc_ms": 1786808378964
+          }
+        },
+        {
+          "run": 3,
+          "value": 478,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 30,
+            "main_rss_kb": 26900,
+            "helper_rss_kb": 337292,
+            "processes": 7,
+            "spawn_wall_utc_ms": 1786808385753
+          }
+        },
+        {
+          "run": 4,
+          "value": 479,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 30,
+            "main_rss_kb": 26680,
+            "helper_rss_kb": 334772,
+            "processes": 7,
+            "spawn_wall_utc_ms": 1786808392543
+          }
+        },
+        {
+          "run": 5,
+          "value": 502,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 30,
+            "main_rss_kb": 26752,
+            "helper_rss_kb": 334376,
+            "processes": 7,
+            "spawn_wall_utc_ms": 1786808399339
+          }
+        },
+        {
+          "run": 6,
+          "value": 466,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 30,
+            "main_rss_kb": 26752,
+            "helper_rss_kb": 335000,
+            "processes": 7,
+            "spawn_wall_utc_ms": 1786808406145
+          }
+        },
+        {
+          "run": 7,
+          "value": 471,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 29,
+            "main_rss_kb": 26852,
+            "helper_rss_kb": 337056,
+            "processes": 7,
+            "spawn_wall_utc_ms": 1786808412939
+          }
+        }
+      ],
+      "statistics": {
+        "valid_samples": 7,
+        "median": 479,
+        "p90": 749,
+        "min": 466,
+        "max": 749,
+        "bootstrap_ci95": {
+          "lower": 471,
+          "upper": 502,
+          "resamples": 10000
+        }
+      },
+      "fixture_path": "windows/tauri/hello",
+      "artifact": {
+        "sha256": "6BC908212EB0BAD30FD4E5F0B0BF8755233CB0A1C950248B31C6FAB60260DE35",
+        "basename": "tauri-hello.exe",
+        "version": "0.1.0"
+      }
+    },
+    {
+      "arm_id": "electron",
+      "framework": {
+        "name": "Electron",
+        "version": "43.4.0"
+      },
+      "lane": "chromium",
+      "role": "score",
+      "samples": [
+        {
+          "run": 1,
+          "value": 921,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 289,
+            "main_rss_kb": 91412,
+            "helper_rss_kb": 218696,
+            "processes": 4,
+            "spawn_wall_utc_ms": 1786808420131
+          }
+        },
+        {
+          "run": 2,
+          "value": 272,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 123,
+            "main_rss_kb": 88928,
+            "helper_rss_kb": 214764,
+            "processes": 4,
+            "spawn_wall_utc_ms": 1786808427301
+          }
+        },
+        {
+          "run": 3,
+          "value": 260,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 121,
+            "main_rss_kb": 89140,
+            "helper_rss_kb": 219136,
+            "processes": 4,
+            "spawn_wall_utc_ms": 1786808433841
+          }
+        },
+        {
+          "run": 4,
+          "value": 275,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 141,
+            "main_rss_kb": 88864,
+            "helper_rss_kb": 221176,
+            "processes": 4,
+            "spawn_wall_utc_ms": 1786808440369
+          }
+        },
+        {
+          "run": 5,
+          "value": 264,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 122,
+            "main_rss_kb": 91668,
+            "helper_rss_kb": 214572,
+            "processes": 4,
+            "spawn_wall_utc_ms": 1786808446926
+          }
+        },
+        {
+          "run": 6,
+          "value": 288,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 122,
+            "main_rss_kb": 91552,
+            "helper_rss_kb": 217696,
+            "processes": 4,
+            "spawn_wall_utc_ms": 1786808453443
+          }
+        },
+        {
+          "run": 7,
+          "value": 278,
+          "valid": true,
+          "reject_reason": null,
+          "diagnostics": {
+            "window_visible_ms": 123,
+            "main_rss_kb": 88872,
+            "helper_rss_kb": 214604,
+            "processes": 4,
+            "spawn_wall_utc_ms": 1786808459976
+          }
+        }
+      ],
+      "statistics": {
+        "valid_samples": 7,
+        "median": 275,
+        "p90": 921,
+        "min": 260,
+        "max": 921,
+        "bootstrap_ci95": {
+          "lower": 264,
+          "upper": 288,
+          "resamples": 10000
+        }
+      },
+      "fixture_path": "windows/electron/hello",
+      "artifact": {
+        "sha256": "C880B977C68CA13C48926E2548DD3BAD649844D66863CE504D29BAA3600F3100",
+        "basename": "Electron Hello.exe",
+        "version": "1.0.0"
+      }
+    }
+  ],
+  "comparison": {
+    "baseline_arm": "tauri",
+    "candidate_arm": "keld",
+    "ratio_ci95": {
+      "lower": 0.9163,
+      "upper": 1.0
+    },
+    "threshold": 1.05,
+    "verdict": "PASS",
+    "method": "paired bootstrap of median ratio by run index, 10000 resamples (diagnostic: arms were not interleaved)"
+  },
+  "publication": {
+    "policy_version": 1,
+    "requested": false,
+    "eligible": false,
+    "reasons": [
+      {
+        "code": "PRE_CONTRACT_HARNESS",
+        "label": "harness predates the metric-runner contract"
+      },
+      {
+        "code": "ARMS_NOT_INTERLEAVED",
+        "label": "arm-by-arm execution; policy requires round-robin-randomized"
+      },
+      {
+        "code": "SAMPLES_BELOW_POLICY",
+        "label": "7 samples; gui-paint-rss policy requires 30 paired rounds"
+      },
+      {
+        "code": "SOURCE_TREE_PATCHED",
+        "label": "beacon spliced into product sources at -Prepare time; keld tree not clean"
+      }
+    ]
+  }
+}

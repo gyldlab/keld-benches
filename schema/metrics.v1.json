@@ -1,0 +1,174 @@
+{
+  "registry_version": 1,
+  "description": "Metric contract registry for keld-benches. Source of truth for WHICH metrics exist, their units, oracles, budgets, and sample policy. Encodes the named contracts of Keld docs/research/49-falsifiable-bench-and-test-ladder.md (falsifiable scoreboard §1, cache-state classes §3.1, sample policy §5). Adding a metric = adding one entry here; the result document shape (schema/result.v1.schema.json) does not change. Correctness/security gates precede performance: a faster run that fails a required gate is invalid.",
+  "cache_states": {
+    "boot-cold": "First launch after reboot / clean VM snapshot; one sample per boot.",
+    "fresh-process": "Complete prior process coalition removed; fresh profile; OS caches uncontrolled.",
+    "warm-cache": "One unscored priming launch, then fresh processes using the same profile.",
+    "renderer-warm": "Navigation / second window in an existing process; separate metric class."
+  },
+  "sample_policy": {
+    "spawn": { "valid_samples_per_state": 100, "pairing": "paired rounds" },
+    "gui-paint-rss": { "valid_samples_per_state": 30, "pairing": "paired rounds" },
+    "ipc": { "sessions_min": 20, "calls_per_session": 100000, "pairing": "block-bootstrap by session" },
+    "crash-recovery": { "valid_samples_per_state": 30, "pairing": "independent cycles" }
+  },
+  "regression_rule": {
+    "threshold_ratio": 1.05,
+    "fail": "lower 95% CI of candidate/baseline ratio exceeds threshold",
+    "pass": "upper 95% CI is at or below threshold",
+    "inconclusive": "interval crosses threshold; rerun or waive in writing"
+  },
+  "metrics": [
+    {
+      "id": "SEC-HELLO",
+      "kind": "gate",
+      "unit": "boolean",
+      "oracle": "Bad frame/token -> typed host error or close; no token bytes returned; listener/host survives.",
+      "budget": null,
+      "cache_states": ["fresh-process"],
+      "sample_class": "crash-recovery",
+      "status": "required"
+    },
+    {
+      "id": "SEC-GUARD",
+      "kind": "gate",
+      "unit": "boolean",
+      "oracle": "Authenticated denied call emits KELD-GUARD*; handler count remains zero; OS side effect absent.",
+      "budget": null,
+      "cache_states": ["fresh-process"],
+      "sample_class": "crash-recovery",
+      "status": "required"
+    },
+    {
+      "id": "LIFE-GENERATION",
+      "kind": "gate",
+      "unit": "boolean",
+      "oracle": "Crash revokes old generation before a new endpoint/token; stale token fails.",
+      "budget": null,
+      "cache_states": ["fresh-process"],
+      "sample_class": "crash-recovery",
+      "status": "required"
+    },
+    {
+      "id": "BUN-READY",
+      "kind": "duration",
+      "unit": "ms",
+      "oracle": "Parent clock: spawn request -> child entry -> authenticated HELLO -> first valid app reply.",
+      "budget": null,
+      "cache_states": ["boot-cold", "fresh-process", "warm-cache"],
+      "sample_class": "spawn",
+      "status": "unmeasured"
+    },
+    {
+      "id": "HOST-START",
+      "kind": "duration",
+      "unit": "ms",
+      "oracle": "Launcher -> host main / event-loop readiness.",
+      "budget": null,
+      "cache_states": ["boot-cold", "fresh-process", "warm-cache"],
+      "sample_class": "spawn",
+      "status": "diagnostic",
+      "note": "Diagnostic, not paint."
+    },
+    {
+      "id": "NATIVE-WINDOW",
+      "kind": "duration",
+      "unit": "ms",
+      "oracle": "Real mapped/key/visible native window (titled HWND on Windows).",
+      "budget": null,
+      "cache_states": ["boot-cold", "fresh-process", "warm-cache"],
+      "sample_class": "gui-paint-rss",
+      "status": "diagnostic",
+      "note": "Presentation policy, not paint; not comparable across frameworks."
+    },
+    {
+      "id": "WEB-CONTENT",
+      "kind": "gate",
+      "unit": "boolean",
+      "oracle": "Canonical page accepted with nonce/focus/visibility proof.",
+      "budget": null,
+      "cache_states": ["boot-cold", "fresh-process", "warm-cache", "renderer-warm"],
+      "sample_class": "gui-paint-rss",
+      "status": "required",
+      "note": "Required before any PAINT-OPPORTUNITY sample is accepted."
+    },
+    {
+      "id": "PAINT-OPPORTUNITY",
+      "kind": "duration",
+      "unit": "ms",
+      "oracle": "External nested-rAF (double requestAnimationFrame) image beacon on one monotonic clock armed before spawn. Proxy, not scanout. Never PageLoadEvent::Finished (gyldlab/keld#10). Stale/foreign/duplicate/single-rAF beacons fail closed.",
+      "budget": { "op": "<=", "value": 300, "unit": "ms" },
+      "cache_states": ["boot-cold", "fresh-process", "warm-cache", "renderer-warm"],
+      "sample_class": "gui-paint-rss",
+      "status": "active",
+      "implementations": {
+        "windows": "windows/bench/Measure-FirstPaint.ps1 (pre-contract; see windows/bench/CONTRACT.md)",
+        "macos": "KEL-64 harness (feature branch, macos/harness -> macos/bench on merge)",
+        "linux": "none"
+      }
+    },
+    {
+      "id": "IPC-RTT",
+      "kind": "duration",
+      "unit": "us",
+      "oracle": "Persistent authenticated CALL->REPLY; handshake excluded and reported separately.",
+      "budget": { "op": "<=", "value": 100, "unit": "us", "percentile": "p99" },
+      "cache_states": ["fresh-process", "warm-cache"],
+      "sample_class": "ipc",
+      "status": "unmeasured"
+    },
+    {
+      "id": "IPC-BULK",
+      "kind": "throughput",
+      "unit": "bytes_per_s",
+      "oracle": "Bytes validated end-to-end; copy count and transport named. 64 KiB / 1 MiB / 16 MiB inline; larger only in a future measured shm lane.",
+      "budget": null,
+      "cache_states": ["warm-cache"],
+      "sample_class": "ipc",
+      "status": "future"
+    },
+    {
+      "id": "MEM-IDLE",
+      "kind": "memory",
+      "unit": "KiB",
+      "oracle": "Keld-owned RSS, engine helpers, total coalition/tree, and private dirty reported separately (diagnostics block per run). Condition-based stability after ready/paint, never a fixed sleep.",
+      "budget": { "op": "<=", "value": 92160, "unit": "KiB", "scope": "keld-owned processes only" },
+      "cache_states": ["fresh-process", "warm-cache"],
+      "sample_class": "gui-paint-rss",
+      "status": "active",
+      "note": "The scored value is the Keld-owned (main) RSS; helper/total/private-dirty are per-run diagnostics so lanes are never blended."
+    },
+    {
+      "id": "CRASH-RECOVERY",
+      "kind": "duration",
+      "unit": "ms",
+      "oracle": "Kill -> revoke -> fresh HELLO -> first successful call; window continuity independently observed.",
+      "budget": null,
+      "cache_states": ["fresh-process"],
+      "sample_class": "crash-recovery",
+      "status": "unmeasured"
+    },
+    {
+      "id": "DISK",
+      "kind": "size",
+      "unit": "bytes",
+      "oracle": "Raw host / runtime / engine-in-bundle / wrapping / compressed artifact measured as separate lanes; never blended into one number.",
+      "budget": null,
+      "cache_states": ["fresh-process"],
+      "sample_class": "gui-paint-rss",
+      "status": "active",
+      "note": "Existing MEASUREMENTS.md disk tables predate this registry; new disk results use one document per lane."
+    },
+    {
+      "id": "PACK-UPDATE",
+      "kind": "duration",
+      "unit": "ms",
+      "oracle": "Installed bytes/time; signed update size/apply/rollback outcome.",
+      "budget": null,
+      "cache_states": ["boot-cold", "fresh-process"],
+      "sample_class": "spawn",
+      "status": "future"
+    }
+  ]
+}
