@@ -107,8 +107,18 @@ function Invoke-Runner([string]$Runner, [string]$Project, [string]$Mode, [string
     $env:KELD_BENCH_MODE = $Mode
     $env:KELD_BENCH_FAULT = $FaultMode
     try {
-        $lines = & $Runner 2>&1
-        $code = $LASTEXITCODE
+        # A deliberate negative control exits non-zero after emitting its marker.
+        # Keep that native status observable so callers can prove the marker before
+        # deciding whether the run is valid; `Stop` would throw before capture.
+        $previousErrorAction = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $lines = & $Runner 2>&1
+            $code = $LASTEXITCODE
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorAction
+        }
         return [pscustomobject]@{ ExitCode = $code; Text = (($lines | ForEach-Object { $_.ToString() }) -join "`n") }
     }
     finally {
