@@ -188,7 +188,7 @@ if (-not $OutFile.StartsWith($resultRoot, [StringComparison]::OrdinalIgnoreCase)
     throw "benchmark output must stay under $resultRoot"
 }
 $rawFile = $OutFile -replace '\.json$', '.raw.json'
-if (Test-Path -LiteralPath $OutFile -or Test-Path -LiteralPath $rawFile) {
+if ((Test-Path -LiteralPath $OutFile) -or (Test-Path -LiteralPath $rawFile)) {
     throw "refusing to overwrite immutable benchmark output $OutFile"
 }
 
