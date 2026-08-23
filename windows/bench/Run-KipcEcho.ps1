@@ -84,7 +84,7 @@ with open(sys.argv[2], encoding="utf-8") as result_file:
     result = json.load(result_file)
 errors = sorted(Draft202012Validator(schema).iter_errors(result), key=lambda error: error.json_path)
 if errors:
-    raise SystemExit(f"result.v1 validation failed at {errors[0].json_path}: {errors[0].message}")
+    raise SystemExit('result.v1 validation failed at {}: {}'.format(errors[0].json_path, errors[0].message))
 '@
     Invoke-Native 'python' @('-c', $program, $SchemaPath, $ResultPath) 'result.v1 validation'
 }
@@ -411,12 +411,16 @@ try {
             )
         }
     }
+    # Validate a temporary summary first.  An immutable result path must never
+    # contain a document that failed the contract gate.
+    $stagedSummary = Join-Path $work 'result.v1.json'
+    Write-Utf8NoBom $stagedSummary ($summary | ConvertTo-Json -Depth 16)
+    Invoke-Native 'python' @((Join-Path $BenchRepo 'schema\check.py')) 'result schema contract check'
+    Test-ResultV1 (Join-Path $BenchRepo 'schema\result.v1.schema.json') $stagedSummary
+    $resultText = Get-Content -Raw -LiteralPath $stagedSummary | ConvertFrom-Json
+    if ($resultText.metric.id -ne 'IPC-RTT' -or $resultText.publication.eligible) { throw 'result summary semantic validation failed' }
     Write-Utf8NoBom $rawFile ($raw | ConvertTo-Json -Depth 16)
     Write-Utf8NoBom $OutFile ($summary | ConvertTo-Json -Depth 16)
-    Invoke-Native 'python' @((Join-Path $BenchRepo 'schema\check.py')) 'result schema contract check'
-    Test-ResultV1 (Join-Path $BenchRepo 'schema\result.v1.schema.json') $OutFile
-    $resultText = Get-Content -Raw -LiteralPath $OutFile | ConvertFrom-Json
-    if ($resultText.metric.id -ne 'IPC-RTT' -or $resultText.publication.eligible) { throw 'result summary semantic validation failed' }
     Write-Host "KEL-99 diagnostic complete: $relativeResult"
     Write-Host "raw output: $relativeRaw"
     Write-Host ("p50={0:N3} us p99={1:N3} us ({2} calls; publication ineligible)" -f ([double]$p50Ns / 1000.0), ([double]$p99Ns / 1000.0), $sorted.Count)
