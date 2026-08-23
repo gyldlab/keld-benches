@@ -232,6 +232,7 @@ try {
         if ($negative.ExitCode -eq 0 -or $negative.Text -notmatch 'KELD-99-EXPECTED-FAIL:') {
             throw "negative control $Fault was not rejected by the live fixture: $($negative.Text)"
         }
+        Write-Output $negative.Text
         throw "negative control $Fault correctly rejected; no benchmark result was written"
     }
 

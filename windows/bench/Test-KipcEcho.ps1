@@ -26,7 +26,10 @@ foreach ($fault in @('bad-token', 'wrong-response')) {
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $output = & $run -KeldRepo $KeldRepo -BenchRepo $BenchRepo -Fault $fault 2>&1
+        # The harness correctly throws after a rejected control.  Execute it in a
+        # child PowerShell so the test can assert its exit status and marker instead
+        # of inheriting its terminating-error preference.
+        $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $run -KeldRepo $KeldRepo -BenchRepo $BenchRepo -Fault $fault 2>&1
         $code = $LASTEXITCODE
     }
     finally {
