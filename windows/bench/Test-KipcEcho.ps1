@@ -23,13 +23,16 @@ function Assert([bool]$Condition, [string]$Name, [string]$Detail = '') {
 }
 
 foreach ($fault in @('bad-token', 'wrong-response')) {
+    $outputName = "test-$fault-$([Guid]::NewGuid().ToString('N')).json"
+    $outFile = Join-Path $BenchRepo "windows\bench\results\ipc-rtt\$outputName"
+    $rawFile = $outFile -replace '\.json$', '.raw.json'
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
         # The harness correctly throws after a rejected control.  Execute it in a
         # child PowerShell so the test can assert its exit status and marker instead
         # of inheriting its terminating-error preference.
-        $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $run -KeldRepo $KeldRepo -BenchRepo $BenchRepo -Fault $fault 2>&1
+        $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $run -KeldRepo $KeldRepo -BenchRepo $BenchRepo -Fault $fault -OutFile $outFile 2>&1
         $code = $LASTEXITCODE
     }
     finally {
@@ -39,6 +42,7 @@ foreach ($fault in @('bad-token', 'wrong-response')) {
     Assert ($code -ne 0) "$fault exits nonzero" $text
     Assert ($text -match 'KELD-99-EXPECTED-FAIL:') "$fault emits the explicit client failure marker" $text
     Assert ($text -notmatch 'KEL-99 diagnostic complete:') "$fault cannot write a timing result" $text
+    Assert ((-not (Test-Path -LiteralPath $outFile)) -and (-not (Test-Path -LiteralPath $rawFile))) "$fault leaves no output files"
 }
 
 if ($failures -gt 0) { exit 1 }
