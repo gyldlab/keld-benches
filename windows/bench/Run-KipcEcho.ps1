@@ -78,9 +78,9 @@ import json
 import sys
 from jsonschema import Draft202012Validator
 
-with open(sys.argv[1], encoding="utf-8") as schema_file:
+with open(sys.argv[1]) as schema_file:
     schema = json.load(schema_file)
-with open(sys.argv[2], encoding="utf-8") as result_file:
+with open(sys.argv[2]) as result_file:
     result = json.load(result_file)
 errors = sorted(Draft202012Validator(schema).iter_errors(result), key=lambda error: error.json_path)
 if errors:
