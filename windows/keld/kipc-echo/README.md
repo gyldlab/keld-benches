@@ -36,6 +36,11 @@ that session, but they cannot pass or fail Keld's 100 microsecond architecture
 budget, compare Rust to Bun, establish Windows/Linux parity, attribute
 allocation/copy cost, or justify a protocol optimisation.
 
+KEL-7 is a design-and-evidence survey, not a same-machine competitor baseline;
+these results therefore record the current Windows product slice only. They
+must not be presented as a Keld-versus-KEL-7 ratio or as evidence for a fifth
+Keld unique.
+
 `Test-KipcEcho.ps1` runs two real negative controls:
 
 - a wrong HELLO token must fail before any timing result;
