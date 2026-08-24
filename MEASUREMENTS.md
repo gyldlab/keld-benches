@@ -421,7 +421,7 @@ raw samples produce these corrected medians:
 | **Keld†** <!-- raw-median source=windows-first-paint.json arm=keld fields=first_paint_ms,main_rss_kb,helper_rss_kb,processes --> | **573 ms** | **23,068 KB** | 351,472 KB | 7 |
 | Tauri 2.11.5† <!-- raw-median source=windows-first-paint.json arm=tauri fields=first_paint_ms,main_rss_kb,helper_rss_kb,processes --> | 589 ms | 28,256 KB | 352,316 KB | 7 |
 
-† Corrected: median-index bug; see this repair PR. This table does not reconstruct or
+† Corrected: median-index bug; see PR #10. This table does not reconstruct or
 replace the unrecoverable 2026-08-14 raw cited below.
 
 | Stack | first paint | main RSS | helper RSS | total RSS | procs |
@@ -487,7 +487,7 @@ Run A — new backend (`keld` branch `agent/kel-65-webview2-direct-com` @ `39be9
 | **Keld (direct COM)†** <!-- raw-median source=windows-first-paint-kel65-direct-com.json arm=keld fields=first_paint_ms,main_rss_kb,processes --> | **469 ms** | **19,552 KB** | 7 |
 | Tauri 2.11.5† <!-- raw-median source=windows-first-paint-kel65-direct-com.json arm=tauri fields=first_paint_ms,main_rss_kb,processes --> | 479 ms | 26,796 KB | 7 |
 
-† Corrected: median-index bug; see this repair PR.
+† Corrected: median-index bug; see PR #10.
 
 Run B — baseline backend (`keld` main @ `137633f`, wry):
 
@@ -497,7 +497,7 @@ Run B — baseline backend (`keld` main @ `137633f`, wry):
 | **Keld (wry)†** <!-- raw-median source=windows-first-paint-kel65-baseline.json arm=keld fields=first_paint_ms,main_rss_kb,processes --> | **467 ms** | **21,972 KB** | 7 |
 | Tauri 2.11.5† <!-- raw-median source=windows-first-paint-kel65-baseline.json arm=tauri fields=first_paint_ms,main_rss_kb,processes --> | 490 ms | 26,760 KB | 7 |
 
-† Corrected: median-index bug; see this repair PR.
+† Corrected: median-index bug; see PR #10.
 
 Raw samples: [`windows/bench/windows-first-paint-kel65-direct-com.json`](./windows/bench/windows-first-paint-kel65-direct-com.json),
 [`windows/bench/windows-first-paint-kel65-baseline.json`](./windows/bench/windows-first-paint-kel65-baseline.json),
@@ -510,7 +510,7 @@ SmartScreen isolation from those same committed raws:
 | ON† <!-- raw-median source=windows-first-paint-kel65-direct-com.json arm=keld fields=first_paint_ms --> | 469 ms |
 | OFF† <!-- raw-median source=windows-first-paint-kel66-smartscreen-off.json arm=keld fields=first_paint_ms --> | 453 ms |
 
-† Corrected: median-index bug; see this repair PR.
+† Corrected: median-index bug; see PR #10.
 
 ### Honest reading
 
