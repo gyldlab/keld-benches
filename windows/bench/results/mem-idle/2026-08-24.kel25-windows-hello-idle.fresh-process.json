@@ -1,0 +1,240 @@
+{
+    "schema_version":  1,
+    "metric":  {
+                   "id":  "MEM-IDLE",
+                   "unit":  "KiB",
+                   "registry_version":  1
+               },
+    "cache_state":  "fresh-process",
+    "session":  {
+                    "started_utc":  "2026-08-24T15:30:00.0000000+00:00",
+                    "finished_utc":  "2026-08-24T15:30:28.7995791Z",
+                    "requested_samples":  5,
+                    "interleaving":  "none",
+                    "label":  "kel25-windows-hello-idle",
+                    "notes":  "Idle RSS of the stock `keld create` hello app driven through the shipping `keld dev` path on a real Windows 11 desktop. The SCORED value is the Keld-owned main-process (keld.exe) working set, per metrics.v1.json MEM-IDLE (\"The scored value is the Keld-owned (main) RSS\"). Every other lane is a per-run diagnostic and is never blended: bun child, WebView2 engine helpers (6 processes), keld_processes_ws_kib (host+bun, the scope architecture 01 section 5 uses for its \u003c=90 MB budget), and the whole descendant tree. Stability is condition-based bounded drift (\u003e=6 consecutive tree totals within 1% of the window mean), never a fixed sleep; the harness ships a negative control that rejects a drifting series and accepts a flat one. NOT a verdict against any budget: 5 samples vs the 30 the gui-paint-rss sample policy requires."
+                },
+    "environment":  {
+                        "os":  {
+                                   "name":  "windows",
+                                   "version":  "Microsoft Windows 11 Home Single Language",
+                                   "build":  "10.0.26200"
+                               },
+                        "hardware":  {
+                                         "cpu":  "AMD Ryzen 7 5800H with Radeon Graphics",
+                                         "arch":  "AMD64",
+                                         "ram_bytes":  16522567680,
+                                         "machine_label":  "windows-local-2026-08-24"
+                                     },
+                        "power":  {
+                                      "ac_power":  true,
+                                      "low_power_mode":  false,
+                                      "thermal_state":  "unknown"
+                                  },
+                        "engine":  {
+                                       "name":  "WebView2 Evergreen",
+                                       "version":  "151.0.4129.101"
+                                   },
+                        "toolchains":  [
+                                           {
+                                               "name":  "rustc",
+                                               "version":  "rustc 1.97.1 (8bab26f4f 2026-07-14)"
+                                           },
+                                           {
+                                               "name":  "bun",
+                                               "version":  "1.4.0+34cbb9a40"
+                                           },
+                                           {
+                                               "name":  "keld-host",
+                                               "version":  "0.0.1"
+                                           },
+                                           {
+                                               "name":  "keld-cli",
+                                               "version":  "0.0.1"
+                                           }
+                                       ]
+                    },
+    "provenance":  {
+                       "bench_sha":  "6b99cc976057c1dba52267aedb85ee88c5eca574",
+                       "bench_tree_state":  "clean",
+                       "keld_sha":  "58708bb4bb498148cc5e80d9ef9bedfaddaa47b9",
+                       "harness":  {
+                                       "path":  "windows/bench/Measure-KeldIdleRss.ps1",
+                                       "sha256":  "d85650d0a4a41cd3794eb2852d251f21f2acfd6fe25b008235419348bc45c0e8",
+                                       "version":  "kel25-mem-idle-v1"
+                                   }
+                   },
+    "arms":  [
+                 {
+                     "arm_id":  "keld",
+                     "framework":  {
+                                       "name":  "Keld host-owned hello (keld dev)",
+                                       "version":  "0.0.1"
+                                   },
+                     "lane":  "webview2",
+                     "role":  "diagnostic",
+                     "artifact":  {
+                                      "sha256":  "df2b05b664c31ab21bedb4dc5d4f0aa73f606aa0fc90e1ff0d70b9a097ec161f",
+                                      "basename":  "keld.exe",
+                                      "version":  "0.0.1"
+                                  },
+                     "samples":  [
+                                     {
+                                         "run":  1,
+                                         "value":  20440,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "host_ws_kib":  20440,
+                                                             "host_private_kib":  3700,
+                                                             "bun_ws_kib":  22588,
+                                                             "bun_private_kib":  89108,
+                                                             "bun_process_count":  1,
+                                                             "engine_ws_kib":  332840,
+                                                             "engine_private_kib":  169024,
+                                                             "engine_process_count":  6,
+                                                             "keld_processes_ws_kib":  43028,
+                                                             "tree_ws_kib":  386008,
+                                                             "native_window_ms":  614,
+                                                             "settle_ms":  4267,
+                                                             "drift_observed":  0.001709,
+                                                             "stability_samples":  12,
+                                                             "counter":  "Process.WorkingSet64 (Windows working set; RSS analogue), PrivateMemorySize64 for private"
+                                                         }
+                                     },
+                                     {
+                                         "run":  2,
+                                         "value":  20552,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "host_ws_kib":  20552,
+                                                             "host_private_kib":  3784,
+                                                             "bun_ws_kib":  22576,
+                                                             "bun_private_kib":  89044,
+                                                             "bun_process_count":  1,
+                                                             "engine_ws_kib":  319816,
+                                                             "engine_private_kib":  160652,
+                                                             "engine_process_count":  6,
+                                                             "keld_processes_ws_kib":  43128,
+                                                             "tree_ws_kib":  373084,
+                                                             "native_window_ms":  505,
+                                                             "settle_ms":  2228,
+                                                             "drift_observed":  0.003011,
+                                                             "stability_samples":  7,
+                                                             "counter":  "Process.WorkingSet64 (Windows working set; RSS analogue), PrivateMemorySize64 for private"
+                                                         }
+                                     },
+                                     {
+                                         "run":  3,
+                                         "value":  20488,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "host_ws_kib":  20488,
+                                                             "host_private_kib":  3696,
+                                                             "bun_ws_kib":  22572,
+                                                             "bun_private_kib":  89044,
+                                                             "bun_process_count":  1,
+                                                             "engine_ws_kib":  318924,
+                                                             "engine_private_kib":  161860,
+                                                             "engine_process_count":  6,
+                                                             "keld_processes_ws_kib":  43060,
+                                                             "tree_ws_kib":  372120,
+                                                             "native_window_ms":  537,
+                                                             "settle_ms":  2222,
+                                                             "drift_observed":  0.003372,
+                                                             "stability_samples":  7,
+                                                             "counter":  "Process.WorkingSet64 (Windows working set; RSS analogue), PrivateMemorySize64 for private"
+                                                         }
+                                     },
+                                     {
+                                         "run":  4,
+                                         "value":  20520,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "host_ws_kib":  20520,
+                                                             "host_private_kib":  3708,
+                                                             "bun_ws_kib":  22548,
+                                                             "bun_private_kib":  88724,
+                                                             "bun_process_count":  1,
+                                                             "engine_ws_kib":  319044,
+                                                             "engine_private_kib":  160768,
+                                                             "engine_process_count":  6,
+                                                             "keld_processes_ws_kib":  43068,
+                                                             "tree_ws_kib":  372256,
+                                                             "native_window_ms":  518,
+                                                             "settle_ms":  2250,
+                                                             "drift_observed":  0.003103,
+                                                             "stability_samples":  7,
+                                                             "counter":  "Process.WorkingSet64 (Windows working set; RSS analogue), PrivateMemorySize64 for private"
+                                                         }
+                                     },
+                                     {
+                                         "run":  5,
+                                         "value":  20528,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "host_ws_kib":  20528,
+                                                             "host_private_kib":  3744,
+                                                             "bun_ws_kib":  22576,
+                                                             "bun_private_kib":  89112,
+                                                             "bun_process_count":  1,
+                                                             "engine_ws_kib":  320112,
+                                                             "engine_private_kib":  164244,
+                                                             "engine_process_count":  6,
+                                                             "keld_processes_ws_kib":  43104,
+                                                             "tree_ws_kib":  373344,
+                                                             "native_window_ms":  509,
+                                                             "settle_ms":  2253,
+                                                             "drift_observed":  0.003179,
+                                                             "stability_samples":  7,
+                                                             "counter":  "Process.WorkingSet64 (Windows working set; RSS analogue), PrivateMemorySize64 for private"
+                                                         }
+                                     }
+                                 ],
+                     "statistics":  {
+                                        "valid_samples":  5,
+                                        "median":  20520,
+                                        "p90":  null,
+                                        "p99":  null,
+                                        "min":  20440,
+                                        "max":  20552,
+                                        "bootstrap_ci95":  {
+                                                               "lower":  20440,
+                                                               "upper":  20552,
+                                                               "resamples":  10000
+                                                           }
+                                    }
+                 }
+             ],
+    "publication":  {
+                        "policy_version":  1,
+                        "requested":  false,
+                        "eligible":  false,
+                        "reasons":  [
+                                        {
+                                            "code":  "SAMPLES_BELOW_POLICY",
+                                            "label":  "5 valid samples; gui-paint-rss policy requires 30 per cache state"
+                                        },
+                                        {
+                                            "code":  "NO_PAIRED_ARM",
+                                            "label":  "Keld-only diagnostic; no Tauri/Electron/native Windows arm measured in this session"
+                                        },
+                                        {
+                                            "code":  "ARMS_NOT_INTERLEAVED",
+                                            "label":  "Single arm, interleaving=none; publication requires balanced randomized interleaving by round"
+                                        },
+                                        {
+                                            "code":  "THERMAL_STATE_UNVERIFIED",
+                                            "label":  "Windows thermal state recorded as unknown"
+                                        },
+                                        {
+                                            "code":  "NO_COMMITTED_KELD_FIXTURE",
+                                            "label":  "The keld arm is built from the external gyldlab/keld repo at keld_sha; keld-benches has no committed windows/keld/hello fixture (HARNESS-CONTRACT.md top-priority gap), so fixture_path is omitted"
+                                        }
+                                    ]
+                    }
+}
