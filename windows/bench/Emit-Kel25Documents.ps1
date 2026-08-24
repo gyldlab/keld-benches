@@ -150,7 +150,9 @@ foreach ($r in $rss) {
       host_ws_kib=[double]$d.host_ws_kib; host_private_kib=[double]$d.host_private_kib
       bun_ws_kib=[double]$d.bun_ws_kib; bun_private_kib=[double]$d.bun_private_kib; bun_process_count=[int]$d.bun_process_count
       engine_ws_kib=[double]$d.engine_ws_kib; engine_private_kib=[double]$d.engine_private_kib; engine_process_count=[int]$d.engine_process_count
-      keld_processes_ws_kib=[double]$d.keld_processes_ws_kib; tree_ws_kib=[double]$d.tree_ws_kib
+      keld_processes_ws_kib=[double]$d.keld_processes_ws_kib
+      keld_processes_private_kib=([double]$d.host_private_kib + [double]$d.bun_private_kib)
+      tree_ws_kib=[double]$d.tree_ws_kib
       native_window_ms=[double]$d.native_window_ms; settle_ms=[double]$d.settle_ms
       drift_observed=[double]$d.drift_observed; stability_samples=[int]$d.stability_samples
       census_stable=[bool]$d.census_stable; counter=[string]$d.counter } } }
@@ -161,7 +163,7 @@ Write-NoBom (Join-Path $BenchRepo 'windows\bench\results\mem-idle\2026-08-24.kel
   cache_state='fresh-process'
   session=[ordered]@{ started_utc=$startUtc; finished_utc=$finishUtc; requested_samples=30; interleaving='none'
     label='kel25-windows-fixture-idle-30'
-    notes='Idle RSS of the COMMITTED windows/keld/hello fixture through the shipping keld dev path, 30 fresh-process runs (the gui-paint-rss sample-policy count). SCORED value is the Keld-owned main-process (keld.exe) working set per metrics.v1.json MEM-IDLE. Every other lane is a per-run diagnostic and is never blended: bun child, WebView2 engine helpers, keld_processes_ws_kib (host+bun, the scope architecture 01 section 5 uses for its <=92160 KiB budget), and the whole descendant tree. Stability requires BOTH bounded drift (6 consecutive tree totals within 1% of the window mean) AND an identical process-class census across that window with a non-zero engine count. The census condition was added after a 30-run session produced one byte-stable but INCOMPLETE tree (55,336 KiB, engine_process_count=0, against a ~372,000 KiB median) that drift alone accepted; adding it also cut host-lane stdev from 986 to 69 KiB and engine-lane stdev from 59,139 to 3,376 KiB, so membership churn had been contaminating many samples rather than one. Raw run records: results/mem-idle/2026-08-24.kel25-windows-fixture-idle-30.fresh-process.raw.json. NOT a budget verdict: single arm, not interleaved, thermal state unknown.' }
+    notes='Idle RSS of the COMMITTED windows/keld/hello fixture through the shipping keld dev path, 30 fresh-process runs (the gui-paint-rss sample-policy count). SCORED value is the Keld-owned main-process (keld.exe) working set per metrics.v1.json MEM-IDLE. Every other lane is a per-run diagnostic and is never blended: bun child, WebView2 engine helpers, keld_processes_ws_kib (host+bun, the scope architecture 01 section 5 uses for its <=92160 KiB budget), and the whole descendant tree. Stability requires BOTH bounded drift (6 consecutive tree totals within 1% of the window mean) AND an identical process-class census across that window with a non-zero engine count. The census condition was added after a 30-run session produced one byte-stable but INCOMPLETE tree (55,336 KiB, engine_process_count=0, against a ~372,000 KiB median) that drift alone accepted; adding it also cut host-lane stdev from 986 to 69 KiB and engine-lane stdev from 59,139 to 3,376 KiB, so membership churn had been contaminating many samples rather than one. Raw run records: results/mem-idle/2026-08-24.kel25-windows-fixture-idle-30.fresh-process.raw.json. THE BUDGET VERDICT IS UNDETERMINED, AND NOT BECAUSE OF SAMPLE COUNT. metrics.v1.json sets the MEM-IDLE budget at <=92160 KiB scoped "keld-owned processes only" but never names WHICH memory counter, and the four defensible readings of these same 30 runs do not agree: host working set 22,704 KiB (PASS, +75% headroom); host+bun working set 45,150 KiB (PASS, +51%); host private commit 3,912 KiB (PASS, +96%); host+bun PRIVATE COMMIT 92,332 KiB — FAIL, with 27 of 30 runs over budget (min 92,040, max 92,652). The registry is also internally inconsistent about scope: the budget says "processes" (plural, host+bun) while the note directs the scored value to "the Keld-owned (main) RSS" (singular, host only). This document scores host working set because that is the note explicit scoring instruction, which happens to be the single most flattering of the four readings; every other lane is recorded per-run above so no reader has to take that choice on trust, and no reader can quote a PASS without seeing the FAIL. Naming the counter in metrics.v1.json is a registry decision, not something a measurement session should settle by picking one. NOT a budget verdict for the additional usual reasons: single arm, not interleaved, thermal state unknown.' }
   environment=(New-Env)
   provenance=[ordered]@{ bench_sha=$benchSha; bench_tree_state=$treeState; keld_sha=$keldSha
     harness=[ordered]@{ path=$rssHarness; sha256=$rssSha; version='kel25-mem-idle-v2-census' }
@@ -174,7 +176,10 @@ Write-NoBom (Join-Path $BenchRepo 'windows\bench\results\mem-idle\2026-08-24.kel
     statistics=[ordered]@{ valid_samples=$rssValid.Count; median=(Get-Median $hostVals); p90=(Get-NearestRank $hostVals 0.90); p99=$null
       min=($hostVals|Measure-Object -Minimum).Minimum; max=($hostVals|Measure-Object -Maximum).Maximum
       bootstrap_ci95=(Get-BootstrapCi95 $hostVals) } })
-  publication=[ordered]@{ policy_version=1; requested=$false; eligible=$false; reasons=$COMMON } })
+  publication=[ordered]@{ policy_version=1; requested=$false; eligible=$false
+    reasons=($COMMON + @(
+      [ordered]@{ code='COUNTER_UNSPECIFIED'; label='metrics.v1.json sets a <=92160 KiB budget but does not name the memory counter; on these same 30 runs host+bun working set is 45,150 KiB (PASS) while host+bun private commit is 92,332 KiB (FAIL, 27/30 over). The verdict is undetermined until the registry names the counter' }
+      [ordered]@{ code='REGISTRY_SCOPE_INCONSISTENT'; label='Budget scope says "keld-owned processes only" (plural, host+bun) while the metric note directs scoring "the Keld-owned (main) RSS" (singular, host only); the two select different quantities' })) } })
 
 # ============================================================ NATIVE-WINDOW ==
 $nwVals = @($rssValid | ForEach-Object { [double]$_.diagnostics.native_window_ms })
@@ -294,5 +299,25 @@ Write-NoBom (Join-Path $BenchRepo 'windows\bench\results\disk\2026-08-24.kel25-w
   -Label 'kel25-windows-bun-runtime' -AbsPath (Join-Path $env:USERPROFILE '.bun\bin\bun.exe') -Version '1.4.0' `
   -FrameworkName 'Bun runtime (pinned, not bundled today)' `
   -Notes 'RUNTIME lane only. The pinned Bun 1.4.0 Windows x64 executable as installed on this machine. Keld does NOT bundle this today (architecture 06 section 1 specifies a per-machine content-addressed download; keld-pack embedding is unimplemented), so it is its own lane and MUST NOT be added to the host lane to imply a shipped size. Independently corroborates the Bun 1.4.0 release-note Windows x64 binary-size figure.')
+
+# --- validate what we just wrote ---------------------------------------------
+# A harness that writes a document must prove the document is well-formed.
+# schema/check.py cannot do this: it validates the schema and schema/examples/
+# but never reads {os}/bench/results/, so a forged document with metric.id
+# "not a real metric" and publication.eligible=true passes it cleanly.
+$written = @(
+  'windows\bench\results\mem-idle\2026-08-24.kel25-windows-fixture-idle-30.fresh-process.json'
+  'windows\bench\results\native-window\2026-08-24.kel25-windows-fixture-native-window-30.fresh-process.json'
+  'windows\bench\results\paint-opportunity\2026-08-24.kel25-windows-keld-dev-paint-30.fresh-process.json'
+  'windows\bench\results\disk\2026-08-24.kel25-windows-host-exe.fresh-process.json'
+  'windows\bench\results\disk\2026-08-24.kel25-windows-cli-exe.fresh-process.json'
+  'windows\bench\results\disk\2026-08-24.kel25-windows-bun-runtime.fresh-process.json'
+) | ForEach-Object { Join-Path $BenchRepo $_ }
+
+$validator = Join-Path $BenchRepo 'windows\bench\validate_result_v1.py'
+& python $validator $BenchRepo @written
+if ($LASTEXITCODE -ne 0) {
+  throw "EMISSION FAILED VALIDATION: validate_result_v1.py exited $LASTEXITCODE. The documents on disk are not trustworthy; do not commit them."
+}
 
 Write-Output 'done'
