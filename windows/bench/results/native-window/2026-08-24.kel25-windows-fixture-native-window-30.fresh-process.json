@@ -8,11 +8,11 @@
     "cache_state":  "fresh-process",
     "session":  {
                     "started_utc":  "2026-08-24T15:47:00.0000000+00:00",
-                    "finished_utc":  "2026-08-24T15:55:35.5297859Z",
+                    "finished_utc":  "2026-08-24T18:28:27.5340110Z",
                     "requested_samples":  30,
                     "interleaving":  "none",
                     "label":  "kel25-windows-fixture-native-window-30",
-                    "notes":  "Parent-side wall time from process spawn to a real, visible, non-minimized titled HWND, measured against the COMMITTED windows/keld/hello fixture over 30 fresh-process runs. This is metrics.v1.json NATIVE-WINDOW, whose registry note says it is \"Presentation policy, not paint; not comparable across frameworks\". It is explicitly NOT PAINT-OPPORTUNITY: no image beacon, no double-rAF, no nonce. PAINT-OPPORTUNITY was deliberately not measured because its Windows harness -Prepare step splices a beacon into keld-wv product sources (reason code SOURCE_TREE_PATCHED), which would mean no committed SHA reproduces the measured binary. Do NOT compare this number against the committed 469 ms Windows first-paint row: different oracle, different thing."
+                    "notes":  "Parent-side wall time from spawn to a real, visible, non-minimized titled HWND, against the COMMITTED windows/keld/hello fixture over 30 fresh-process runs, from the same launches as the MEM-IDLE document. metrics.v1.json marks NATIVE-WINDOW \"Presentation policy, not paint; not comparable across frameworks\". It is explicitly NOT PAINT-OPPORTUNITY: no beacon, no double-rAF, no nonce. Do NOT compare against the committed 469 ms Windows first-paint row: different oracle. Note this differs from the native_window_ms diagnostic inside the PAINT-OPPORTUNITY document (759.5 ms median) because that harness copies the fixture into a FRESH temp directory per launch, a colder filesystem state than repeated launches from one stable project directory. Raw run records: results/mem-idle/2026-08-24.kel25-windows-fixture-idle-30.fresh-process.raw.json."
                 },
     "environment":  {
                         "os":  {
@@ -27,7 +27,7 @@
                                          "machine_label":  "windows-local-2026-08-24"
                                      },
                         "power":  {
-                                      "ac_power":  true,
+                                      "ac_power":  false,
                                       "low_power_mode":  false,
                                       "thermal_state":  "unknown"
                                   },
@@ -45,17 +45,13 @@
                                                "version":  "1.4.0+34cbb9a40"
                                            },
                                            {
-                                               "name":  "keld-host",
-                                               "version":  "0.0.1"
-                                           },
-                                           {
                                                "name":  "keld-cli",
                                                "version":  "0.0.1"
                                            }
                                        ]
                     },
     "provenance":  {
-                       "bench_sha":  "0d629ac2aafd04affdf52171a4c154d29f82e156",
+                       "bench_sha":  "29c4864ed9cdb68e332dfcef068dbf492afe2723",
                        "bench_tree_state":  "clean",
                        "keld_sha":  "58708bb4bb498148cc5e80d9ef9bedfaddaa47b9",
                        "harness":  {
@@ -66,7 +62,7 @@
                        "fixtures":  [
                                         {
                                             "path":  "windows/keld/hello/",
-                                            "sha":  "0d629ac2aafd04affdf52171a4c154d29f82e156"
+                                            "sha":  "29c4864ed9cdb68e332dfcef068dbf492afe2723"
                                         }
                                     ]
                    },
@@ -80,6 +76,11 @@
                      "fixture_path":  "windows/keld/hello/",
                      "lane":  "webview2",
                      "role":  "diagnostic",
+                     "artifact":  {
+                                      "sha256":  "df2b05b664c31ab21bedb4dc5d4f0aa73f606aa0fc90e1ff0d70b9a097ec161f",
+                                      "basename":  "keld.exe",
+                                      "version":  "0.0.1"
+                                  },
                      "samples":  [
                                      {
                                          "run":  1,
@@ -464,7 +465,7 @@
                         "reasons":  [
                                         {
                                             "code":  "NO_PAIRED_ARM",
-                                            "label":  "Keld-only session; no Tauri/Electron/WinUI Windows arm measured alongside it"
+                                            "label":  "Keld-only session; no Tauri/Electron/WinUI Windows arm measured alongside it on the same engine"
                                         },
                                         {
                                             "code":  "ARMS_NOT_INTERLEAVED",

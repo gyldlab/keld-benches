@@ -8,11 +8,11 @@
     "cache_state":  "fresh-process",
     "session":  {
                     "started_utc":  "2026-08-24T16:05:00.0000000+00:00",
-                    "finished_utc":  "2026-08-24T16:13:10.7931129Z",
+                    "finished_utc":  "2026-08-24T18:28:27.5340110Z",
                     "requested_samples":  30,
                     "interleaving":  "none",
                     "label":  "kel25-windows-keld-dev-paint-30",
-                    "notes":  "FIRST Keld PAINT-OPPORTUNITY measured WITHOUT patching Keld product source. windows/bench/CONTRACT.md item 3 records SOURCE_TREE_PATCHED because Measure-FirstPaint.ps1 -Prepare splices the beacon into crates/keld-wv/src/hello/mod.rs and rebuilds keld-host, so no committed SHA reproduces the measured binary; that entry names the fix as \"a committed windows/keld/hello/ fixture\". That fixture now exists and keld dev renders the fixture own index.html, so this harness copies the COMMITTED fixture to a temp directory per launch and injects the beacon there. Product source is untouched (source_patched=false on every sample) and the committed fixture stays byte-identical to keld create output. THE ORACLE IS SHARED, NOT KELD-SPECIFIC: the beacon is extracted verbatim from windows/bench/hello.template.html, the same double-rAF image beacon the tauri and electron arms bake in, with only __PORT__ and __NONCE__ substituted; its sha256 is recorded on every sample and was constant across all 30 runs. A harness that wrote its own beacon would grade Keld on a different exam than its competitors. Because a committed fixture is rewritten per launch with no rebuild, the nonce and port are PER-LAUNCH (30 distinct ports over 30 runs), which closes the hole Measure-FirstPaint.ps1 documents in its own header: it cannot \"distinguish a late beacon from run 3 arriving during run 4 of the same session\". SCOPE - READ BEFORE COMPARING: this measures the full keld dev developer flow (environment checks, echo server, supervised Bun child spawn, authenticated kipc echo, THEN window and paint). It is NOT the same scope as the committed 469 ms Windows first-paint row, which measured keld-host.exe alone and spawns no Bun child. Do not put these two numbers in the same column, and do not compare either against a Tauri or Electron hello without matching the scope first. ATTRIBUTION (same clock, same launch): of the 1,247.9 ms median, 759.5 ms (61%) is spawn to titled window and 492.6 ms (39%) is titled window to first composited frame. That second segment is the WebView2 CreateCoreWebView2Controller Chromium boot that architecture 01 section 5 already names as the floor, and it independently lands close to the committed 469 ms keld-host total, which is consistent with that total also being dominated by Chromium boot. The native_window_ms diagnostic here (759.5 ms median) is NOT comparable to the dedicated NATIVE-WINDOW document (505 ms median): this harness copies the fixture into a FRESH temp directory every launch, which is a colder filesystem state than running repeatedly from one stable project directory. NOT a budget verdict against the \u003c=300 ms row: single arm, not interleaved, thermal state unverified."
+                    "notes":  "FIRST Keld PAINT-OPPORTUNITY measured WITHOUT patching Keld product source. windows/bench/CONTRACT.md item 3 records SOURCE_TREE_PATCHED because Measure-FirstPaint.ps1 -Prepare splices the beacon into crates/keld-wv/src/hello/mod.rs and rebuilds keld-host, so no committed SHA reproduces the measured binary; that entry names the fix as a committed windows/keld/hello fixture. That fixture now exists and keld dev renders the fixture own index.html (crates/keld-cli/src/dev.rs load_dev_window_html reads it from disk per launch, inline NavTarget::Html, no rebuild), so this harness copies the COMMITTED fixture to a temp directory per launch and injects the beacon there. source_patched=false on every sample. THE ORACLE IS SHARED, NOT KELD-SPECIFIC: the beacon is extracted verbatim from windows/bench/hello.template.html, the same double-rAF image beacon the tauri and electron arms bake in, with only __PORT__ and __NONCE__ substituted; its sha256 is recorded per sample and was constant across all 30 runs. A harness that wrote its own beacon would grade Keld on a different exam than its competitors. Because a committed fixture is rewritten per launch with no rebuild, nonce and port are PER-LAUNCH (30 distinct ports over 30 runs), closing the hole Measure-FirstPaint.ps1 documents in its own header: it cannot distinguish a late beacon from run 3 arriving during run 4 of the same session. SCOPE, READ BEFORE COMPARING: this measures the full keld dev developer flow (environment checks, echo server, supervised Bun child spawn, authenticated kipc echo, THEN window and paint). It is NOT the scope of the committed 469 ms Windows first-paint row, which measured keld-host.exe alone and spawns no Bun child, and it is NOT scope-matched to a packaged Release competitor hello. ATTRIBUTION (same clock, same launch): of the 1,247.9 ms median, 759.5 ms (61%) is spawn to titled window and 492.6 ms (39%) is titled window to first composited frame. That second segment is the CreateCoreWebView2Controller Chromium boot architecture 01 section 5 already names as the floor, and it lands close to the committed 469 ms keld-host total, consistent with that total also being dominated by Chromium boot. NOT a budget verdict against the \u003c=300 ms row. The required WEB-CONTENT gate has no Windows result document, and the registry preamble states correctness/security gates precede performance. Raw run records: results/paint-opportunity/2026-08-24.kel25-windows-keld-dev-paint-30.fresh-process.raw.json."
                 },
     "environment":  {
                         "os":  {
@@ -51,9 +51,9 @@
                                        ]
                     },
     "provenance":  {
-                       "bench_sha":  "ed12e9f0340737c09f3daf854a8bee5b45f109c5",
+                       "bench_sha":  "29c4864ed9cdb68e332dfcef068dbf492afe2723",
                        "bench_tree_state":  "clean",
-                       "keld_sha":  "46b52331d4de36041a88f47db2d5ceeca8348d76",
+                       "keld_sha":  "58708bb4bb498148cc5e80d9ef9bedfaddaa47b9",
                        "harness":  {
                                        "path":  "windows/bench/Measure-KeldPaint.ps1",
                                        "sha256":  "69880c3162ee9e6f3bf0962b2417dd7620e0b384fb789aa25b40faaa0381390d",
@@ -62,7 +62,7 @@
                        "fixtures":  [
                                         {
                                             "path":  "windows/keld/hello/",
-                                            "sha":  "ed12e9f0340737c09f3daf854a8bee5b45f109c5"
+                                            "sha":  "29c4864ed9cdb68e332dfcef068dbf492afe2723"
                                         }
                                     ],
                        "payload_sha256":  "b43a343e645968cd561f12db0bc9a39a288357cfa8046806b21a393f49b74b19"
@@ -616,7 +616,7 @@
                         "reasons":  [
                                         {
                                             "code":  "NO_PAIRED_ARM",
-                                            "label":  "Keld-only session; no Tauri/Electron/WinUI arm measured alongside it on the same engine"
+                                            "label":  "Keld-only session; no Tauri/Electron/WinUI Windows arm measured alongside it on the same engine"
                                         },
                                         {
                                             "code":  "ARMS_NOT_INTERLEAVED",
@@ -628,7 +628,11 @@
                                         },
                                         {
                                             "code":  "SCOPE_NOT_HOST_ONLY",
-                                            "label":  "Measures the full keld dev flow including Bun spawn and kipc echo, not keld-host alone; not scope-matched to the committed 469 ms first-paint row or to a competitor hello without alignment"
+                                            "label":  "Measures the full keld dev flow including Bun spawn and kipc echo, not keld-host alone; not scope-matched to the committed 469 ms first-paint row nor to a packaged competitor hello"
+                                        },
+                                        {
+                                            "code":  "REQUIRED_GATE_UNMEASURED",
+                                            "label":  "WEB-CONTENT is status:required and is the stated prerequisite for accepting a PAINT-OPPORTUNITY sample; it has no Windows result document"
                                         }
                                     ]
                     }

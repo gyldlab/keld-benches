@@ -1,121 +1,118 @@
 {
-    "schema_version": 1,
-    "metric": {
-        "id": "DISK",
-        "unit": "bytes",
-        "registry_version": 1
-    },
-    "cache_state": "fresh-process",
-    "session": {
-        "started_utc": "2026-08-24T15:30:00.0000000+00:00",
-        "finished_utc": "2026-08-24T15:30:28.7995791Z",
-        "requested_samples": 1,
-        "interleaving": "none",
-        "label": "kel25-windows-cli-exe",
-        "notes": "CLI lane only. cargo build --release -p keld-cli at keld_sha. Developer tooling, NOT an installer and not a shipped app artifact; the macOS scoreboard row makes the same distinction (\"keld binary - devtools, not an installer\"). Never blend with the host lane."
-    },
-    "environment": {
-        "os": {
-            "name": "windows",
-            "version": "Microsoft Windows 11 Home Single Language",
-            "build": "10.0.26200"
-        },
-        "hardware": {
-            "cpu": "AMD Ryzen 7 5800H with Radeon Graphics",
-            "arch": "AMD64",
-            "ram_bytes": 16522567680,
-            "machine_label": "windows-local-2026-08-24"
-        },
-        "power": {
-            "ac_power": true,
-            "low_power_mode": false,
-            "thermal_state": "unknown"
-        },
-        "engine": {
-            "name": "WebView2 Evergreen",
-            "version": "151.0.4129.101"
-        },
-        "toolchains": [
-            {
-                "name": "rustc",
-                "version": "rustc 1.97.1 (8bab26f4f 2026-07-14)"
-            },
-            {
-                "name": "bun",
-                "version": "1.4.0+34cbb9a40"
-            },
-            {
-                "name": "keld-host",
-                "version": "0.0.1"
-            },
-            {
-                "name": "keld-cli",
-                "version": "0.0.1"
-            }
-        ]
-    },
-    "provenance": {
-        "bench_sha": "6b99cc976057c1dba52267aedb85ee88c5eca574",
-        "bench_tree_state": "clean",
-        "keld_sha": "58708bb4bb498148cc5e80d9ef9bedfaddaa47b9",
-        "harness": {
-            "path": "windows/bench/Measure-KeldIdleRss.ps1",
-            "sha256": "d85650d0a4a41cd3794eb2852d251f21f2acfd6fe25b008235419348bc45c0e8",
-            "version": "kel25-disk-v1-manual"
-        }
-    },
-    "arms": [
-        {
-            "arm_id": "keld",
-            "framework": {
-                "name": "Keld CLI binary (PE, release)",
-                "version": "0.0.1"
-            },
-            "role": "diagnostic",
-            "artifact": {
-                "sha256": "df2b05b664c31ab21bedb4dc5d4f0aa73f606aa0fc90e1ff0d70b9a097ec161f",
-                "basename": "keld.exe",
-                "version": "0.0.1"
-            },
-            "samples": [
-                {
-                    "run": 1,
-                    "value": 2573312,
-                    "valid": true,
-                    "reject_reason": null,
-                    "diagnostics": {
-                        "deterministic": true,
-                        "counter": "file size in bytes"
+    "schema_version":  1,
+    "metric":  {
+                   "id":  "DISK",
+                   "unit":  "bytes",
+                   "registry_version":  1
+               },
+    "cache_state":  "fresh-process",
+    "session":  {
+                    "started_utc":  "2026-08-24T15:47:00.0000000+00:00",
+                    "finished_utc":  "2026-08-24T18:28:27.5340110Z",
+                    "requested_samples":  1,
+                    "interleaving":  "none",
+                    "label":  "kel25-windows-cli-exe",
+                    "notes":  "CLI lane only. cargo build --release -p keld-cli at keld_sha. Developer tooling, NOT an installer and not a shipped app artifact; the macOS scoreboard row draws the same distinction. Never blend with the host lane."
+                },
+    "environment":  {
+                        "os":  {
+                                   "name":  "windows",
+                                   "version":  "Microsoft Windows 11 Home Single Language",
+                                   "build":  "10.0.26200"
+                               },
+                        "hardware":  {
+                                         "cpu":  "AMD Ryzen 7 5800H with Radeon Graphics",
+                                         "arch":  "AMD64",
+                                         "ram_bytes":  16522567680,
+                                         "machine_label":  "windows-local-2026-08-24"
+                                     },
+                        "power":  {
+                                      "ac_power":  false,
+                                      "low_power_mode":  false,
+                                      "thermal_state":  "unknown"
+                                  },
+                        "engine":  {
+                                       "name":  "WebView2 Evergreen",
+                                       "version":  "151.0.4129.101"
+                                   },
+                        "toolchains":  [
+                                           {
+                                               "name":  "rustc",
+                                               "version":  "rustc 1.97.1 (8bab26f4f 2026-07-14)"
+                                           },
+                                           {
+                                               "name":  "bun",
+                                               "version":  "1.4.0+34cbb9a40"
+                                           },
+                                           {
+                                               "name":  "keld-cli",
+                                               "version":  "0.0.1"
+                                           }
+                                       ]
+                    },
+    "provenance":  {
+                       "bench_sha":  "29c4864ed9cdb68e332dfcef068dbf492afe2723",
+                       "bench_tree_state":  "clean",
+                       "keld_sha":  "58708bb4bb498148cc5e80d9ef9bedfaddaa47b9",
+                       "harness":  {
+                                       "path":  "windows/bench/Emit-Kel25Documents.ps1",
+                                       "sha256":  "b23254a9f2f9c75762a7f9be69410e2c83746b2f8a865e20f1b2eaddc044bd3f",
+                                       "version":  "kel25-disk-v2-measured-here"
+                                   }
+                   },
+    "arms":  [
+                 {
+                     "arm_id":  "keld",
+                     "framework":  {
+                                       "name":  "Keld CLI binary (PE, release)",
+                                       "version":  "0.0.1"
+                                   },
+                     "role":  "diagnostic",
+                     "artifact":  {
+                                      "sha256":  "df2b05b664c31ab21bedb4dc5d4f0aa73f606aa0fc90e1ff0d70b9a097ec161f",
+                                      "basename":  "keld.exe",
+                                      "version":  "0.0.1"
+                                  },
+                     "samples":  [
+                                     {
+                                         "run":  1,
+                                         "value":  2573312,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "deterministic":  true,
+                                                             "counter":  "file size in bytes",
+                                                             "measured_by":  "Emit-Kel25Documents.ps1"
+                                                         }
+                                     }
+                                 ],
+                     "statistics":  {
+                                        "valid_samples":  1,
+                                        "median":  2573312,
+                                        "p90":  null,
+                                        "p99":  null,
+                                        "min":  2573312,
+                                        "max":  2573312
+                                    }
+                 }
+             ],
+    "publication":  {
+                        "policy_version":  1,
+                        "requested":  false,
+                        "eligible":  false,
+                        "reasons":  [
+                                        {
+                                            "code":  "SINGLE_LANE_DIAGNOSTIC",
+                                            "label":  "One disk lane, Keld only; DISK lanes are never blended and this session measured no competitor arm"
+                                        },
+                                        {
+                                            "code":  "NO_PAIRED_ARM",
+                                            "label":  "No Tauri/Electron/WinUI Windows disk arm measured in this session"
+                                        },
+                                        {
+                                            "code":  "DETERMINISTIC_SINGLE_SAMPLE",
+                                            "label":  "A file size is deterministic, so the gui-paint-rss 30-sample policy is not meaningful here; recorded as one sample rather than padded to look statistical"
+                                        }
+                                    ]
                     }
-                }
-            ],
-            "statistics": {
-                "valid_samples": 1,
-                "median": 2573312,
-                "p90": null,
-                "p99": null,
-                "min": 2573312,
-                "max": 2573312
-            }
-        }
-    ],
-    "publication": {
-        "policy_version": 1,
-        "requested": false,
-        "eligible": false,
-        "reasons": [
-            {
-                "code": "SINGLE_LANE_DIAGNOSTIC",
-                "label": "One disk lane, Keld only; DISK lanes are never blended and this session measured no competitor arm"
-            },
-            {
-                "code": "NO_PAIRED_ARM",
-                "label": "No Tauri/Electron/native Windows disk arm measured in this session"
-            },
-            {
-                "code": "NO_COMMITTED_KELD_FIXTURE",
-                "label": "Artifact is built from the external gyldlab/keld repo at keld_sha, not from a fixture in this repo; windows/keld/hello exists but is app source, not a build recipe for the host/cli binaries"
-            }
-        ]
-    }
 }

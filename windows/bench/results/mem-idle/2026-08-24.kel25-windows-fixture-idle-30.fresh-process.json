@@ -8,11 +8,11 @@
     "cache_state":  "fresh-process",
     "session":  {
                     "started_utc":  "2026-08-24T15:47:00.0000000+00:00",
-                    "finished_utc":  "2026-08-24T15:55:35.5297859Z",
+                    "finished_utc":  "2026-08-24T18:28:27.5340110Z",
                     "requested_samples":  30,
                     "interleaving":  "none",
                     "label":  "kel25-windows-fixture-idle-30",
-                    "notes":  "Idle RSS of the COMMITTED windows/keld/hello fixture driven through the shipping `keld dev` path on a real Windows 11 desktop, 30 fresh-process runs (the gui-paint-rss sample policy count). SCORED value is the Keld-owned main-process (keld.exe) working set per metrics.v1.json MEM-IDLE. All other lanes are per-run diagnostics and are never blended: bun child, WebView2 engine helpers, keld_processes_ws_kib (host+bun, the scope architecture 01 section 5 uses for its \u003c=90 MB budget), and the whole descendant tree. Stability requires BOTH bounded drift (6 consecutive tree totals within 1% of the window mean) AND an identical process-class census across that window with a non-zero engine count. The census condition was added after a 30-run session on 2026-08-24 produced one byte-stable but INCOMPLETE tree (55,336 KiB, engine_process_count=0, against a ~372,000 KiB median) that drift alone accepted; adding it also cut host-lane stdev from 986 KiB to 69 KiB and engine-lane stdev from 59,139 KiB to 3,376 KiB, so membership churn had been contaminating many samples, not just the one. Still NOT a budget verdict: single arm, not interleaved, thermal state unknown."
+                    "notes":  "Idle RSS of the COMMITTED windows/keld/hello fixture through the shipping keld dev path, 30 fresh-process runs (the gui-paint-rss sample-policy count). SCORED value is the Keld-owned main-process (keld.exe) working set per metrics.v1.json MEM-IDLE. Every other lane is a per-run diagnostic and is never blended: bun child, WebView2 engine helpers, keld_processes_ws_kib (host+bun, the scope architecture 01 section 5 uses for its \u003c=92160 KiB budget), and the whole descendant tree. Stability requires BOTH bounded drift (6 consecutive tree totals within 1% of the window mean) AND an identical process-class census across that window with a non-zero engine count. The census condition was added after a 30-run session produced one byte-stable but INCOMPLETE tree (55,336 KiB, engine_process_count=0, against a ~372,000 KiB median) that drift alone accepted; adding it also cut host-lane stdev from 986 to 69 KiB and engine-lane stdev from 59,139 to 3,376 KiB, so membership churn had been contaminating many samples rather than one. Raw run records: results/mem-idle/2026-08-24.kel25-windows-fixture-idle-30.fresh-process.raw.json. NOT a budget verdict: single arm, not interleaved, thermal state unknown."
                 },
     "environment":  {
                         "os":  {
@@ -27,7 +27,7 @@
                                          "machine_label":  "windows-local-2026-08-24"
                                      },
                         "power":  {
-                                      "ac_power":  true,
+                                      "ac_power":  false,
                                       "low_power_mode":  false,
                                       "thermal_state":  "unknown"
                                   },
@@ -45,17 +45,13 @@
                                                "version":  "1.4.0+34cbb9a40"
                                            },
                                            {
-                                               "name":  "keld-host",
-                                               "version":  "0.0.1"
-                                           },
-                                           {
                                                "name":  "keld-cli",
                                                "version":  "0.0.1"
                                            }
                                        ]
                     },
     "provenance":  {
-                       "bench_sha":  "0d629ac2aafd04affdf52171a4c154d29f82e156",
+                       "bench_sha":  "29c4864ed9cdb68e332dfcef068dbf492afe2723",
                        "bench_tree_state":  "clean",
                        "keld_sha":  "58708bb4bb498148cc5e80d9ef9bedfaddaa47b9",
                        "harness":  {
@@ -66,7 +62,7 @@
                        "fixtures":  [
                                         {
                                             "path":  "windows/keld/hello/",
-                                            "sha":  "0d629ac2aafd04affdf52171a4c154d29f82e156"
+                                            "sha":  "29c4864ed9cdb68e332dfcef068dbf492afe2723"
                                         }
                                     ]
                    },
@@ -829,7 +825,7 @@
                         "reasons":  [
                                         {
                                             "code":  "NO_PAIRED_ARM",
-                                            "label":  "Keld-only session; no Tauri/Electron/WinUI Windows arm measured alongside it"
+                                            "label":  "Keld-only session; no Tauri/Electron/WinUI Windows arm measured alongside it on the same engine"
                                         },
                                         {
                                             "code":  "ARMS_NOT_INTERLEAVED",
