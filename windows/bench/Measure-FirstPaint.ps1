@@ -72,6 +72,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Statistics.ps1')
 $template = Join-Path $PSScriptRoot 'hello.template.html'
 if (-not (Test-Path $template)) { throw "missing template: $template" }
 $templateText = [System.IO.File]::ReadAllText($template, [System.Text.Encoding]::UTF8)
@@ -344,11 +345,13 @@ $meta = [pscustomobject]@{
 foreach ($g in $samples | Group-Object arm) {
     $ok = @($g.Group | Where-Object { $_.first_paint_ms })
     if ($ok.Count -eq 0) { "{0,-9} NO VALID PAINT ({1} runs)" -f $g.Name, $g.Group.Count; continue }
-    $fp = @($ok.first_paint_ms | Sort-Object)
-    $mr = @($ok.main_rss_kb | Sort-Object)
-    $hr = @($ok.helper_rss_kb | Sort-Object)
+    $fp = @($ok.first_paint_ms)
+    $mr = @($ok.main_rss_kb)
+    $hr = @($ok.helper_rss_kb)
     "{0,-9} first_paint {1,6} ms | main {2,7} KB | helpers {3,8} KB | {4} procs | {5}/{6} valid" -f `
-        $g.Name, $fp[[int]($fp.Count / 2)], $mr[[int]($mr.Count / 2)], $hr[[int]($hr.Count / 2)],
+        $g.Name, (Get-Percentile -Values $fp -Percentile 0.5),
+        (Get-Percentile -Values $mr -Percentile 0.5),
+        (Get-Percentile -Values $hr -Percentile 0.5),
         ($ok[0].processes), $ok.Count, $g.Group.Count
 }
 
