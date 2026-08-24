@@ -248,4 +248,51 @@ Write-NoBom (Join-Path $BenchRepo 'windows\bench\results\paint-opportunity\2026-
       [ordered]@{ code='SCOPE_NOT_HOST_ONLY'; label='Measures the full keld dev flow including Bun spawn and kipc echo, not keld-host alone; not scope-matched to the committed 469 ms first-paint row nor to a packaged competitor hello' }
       [ordered]@{ code='REQUIRED_GATE_UNMEASURED'; label='WEB-CONTENT is status:required and is the stated prerequisite for accepting a PAINT-OPPORTUNITY sample; it has no Windows result document' })) } })
 
+# ===================================================================== DISK ==
+# Measured HERE, so the harness named in provenance is the one that produced
+# the number. The earlier DISK documents cited Measure-KeldIdleRss.ps1, which
+# does not measure file sizes at all — a false claim even where the byte count
+# was right.
+function New-DiskDoc {
+  param([string]$Label, [string]$AbsPath, [string]$Version, [string]$FrameworkName, [string]$Notes)
+  if (-not (Test-Path $AbsPath)) { throw "DISK: artifact not found: $AbsPath" }
+  $bytes = (Get-Item $AbsPath).Length
+  $sha   = (Get-FileHash $AbsPath -Algorithm SHA256).Hash.ToLower()
+  [ordered]@{
+    schema_version=1
+    metric=[ordered]@{ id='DISK'; unit='bytes'; registry_version=1 }
+    cache_state='fresh-process'
+    session=[ordered]@{ started_utc=$startUtc; finished_utc=$finishUtc; requested_samples=1; interleaving='none'
+      label=$Label; notes=$Notes }
+    environment=(New-Env)
+    provenance=[ordered]@{ bench_sha=$benchSha; bench_tree_state=$treeState; keld_sha=$keldSha
+      harness=[ordered]@{ path=$emitter; sha256=$emitSha; version='kel25-disk-v2-measured-here' } }
+    arms=@([ordered]@{ arm_id='keld'
+      framework=[ordered]@{ name=$FrameworkName; version='0.0.1' }
+      role='diagnostic'
+      artifact=[ordered]@{ sha256=$sha; basename=(Split-Path $AbsPath -Leaf); version=$Version }
+      samples=@([ordered]@{ run=1; value=[double]$bytes; valid=$true; reject_reason=$null
+        diagnostics=[ordered]@{ deterministic=$true; counter='file size in bytes'; measured_by='Emit-Kel25Documents.ps1' } })
+      statistics=[ordered]@{ valid_samples=1; median=[double]$bytes; p90=$null; p99=$null; min=[double]$bytes; max=[double]$bytes } })
+    publication=[ordered]@{ policy_version=1; requested=$false; eligible=$false
+      reasons=@(
+        [ordered]@{ code='SINGLE_LANE_DIAGNOSTIC'; label='One disk lane, Keld only; DISK lanes are never blended and this session measured no competitor arm' }
+        [ordered]@{ code='NO_PAIRED_ARM';          label='No Tauri/Electron/WinUI Windows disk arm measured in this session' }
+        [ordered]@{ code='DETERMINISTIC_SINGLE_SAMPLE'; label='A file size is deterministic, so the gui-paint-rss 30-sample policy is not meaningful here; recorded as one sample rather than padded to look statistical' }) } } }
+
+Write-NoBom (Join-Path $BenchRepo 'windows\bench\results\disk\2026-08-24.kel25-windows-host-exe.fresh-process.json') (New-DiskDoc `
+  -Label 'kel25-windows-host-exe' -AbsPath (Join-Path $KeldRepo 'target\release\keld-host.exe') -Version '0.0.1' `
+  -FrameworkName 'Keld host binary (PE, release)' `
+  -Notes 'HOST lane only. cargo build --release -p keld-host at keld_sha; workspace release profile lto=thin, codegen-units=1, strip=symbols, panic=abort. Raw host executable: bundles no web engine (WebView2 is a system Evergreen component, see environment.engine) and no JS runtime. Never blend with the runtime or wrapping lanes. There is no installer lane on Windows today because keld-pack is a skeleton.')
+
+Write-NoBom (Join-Path $BenchRepo 'windows\bench\results\disk\2026-08-24.kel25-windows-cli-exe.fresh-process.json') (New-DiskDoc `
+  -Label 'kel25-windows-cli-exe' -AbsPath (Join-Path $KeldRepo 'target\release\keld.exe') -Version '0.0.1' `
+  -FrameworkName 'Keld CLI binary (PE, release)' `
+  -Notes 'CLI lane only. cargo build --release -p keld-cli at keld_sha. Developer tooling, NOT an installer and not a shipped app artifact; the macOS scoreboard row draws the same distinction. Never blend with the host lane.')
+
+Write-NoBom (Join-Path $BenchRepo 'windows\bench\results\disk\2026-08-24.kel25-windows-bun-runtime.fresh-process.json') (New-DiskDoc `
+  -Label 'kel25-windows-bun-runtime' -AbsPath (Join-Path $env:USERPROFILE '.bun\bin\bun.exe') -Version '1.4.0' `
+  -FrameworkName 'Bun runtime (pinned, not bundled today)' `
+  -Notes 'RUNTIME lane only. The pinned Bun 1.4.0 Windows x64 executable as installed on this machine. Keld does NOT bundle this today (architecture 06 section 1 specifies a per-machine content-addressed download; keld-pack embedding is unimplemented), so it is its own lane and MUST NOT be added to the host lane to imply a shipped size. Independently corroborates the Bun 1.4.0 release-note Windows x64 binary-size figure.')
+
 Write-Output 'done'
