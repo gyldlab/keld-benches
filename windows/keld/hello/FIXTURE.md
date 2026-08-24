@@ -55,6 +55,20 @@ capture time:
   **not** emitted by `keld create` (the template is an explicit allow-list in
   `crates/keld-cli/src/template.rs`), so it is absent here too.
 
+### Why this directory carries a `.gitattributes`
+
+`keld create` writes **LF**. This repo has `core.autocrlf=true` and no
+repo-level `.gitattributes`, so without a local one a Windows checkout
+rewrites these files to CRLF and they stop matching `keld create`
+byte-for-byte — the blob stays LF, the working tree does not, and the
+byte-identity claim above silently becomes false for everyone except whoever
+authored the fixture. That is observable today on the macOS sibling:
+`macos/keld/hello/index.html` checks out at **366 bytes** on Windows against
+its own **349-byte** LF blob. The `* text eol=lf` rule here pins the working
+tree to the blob on every platform, so the claim is verifiable by anyone who
+clones. `.gitattributes` and this `FIXTURE.md` are repo bookkeeping, not part
+of the six emitted files.
+
 To re-derive rather than trust this copy:
 
 ```powershell
@@ -120,13 +134,22 @@ a pin difference.
 
 ## What this fixture does NOT prove
 
-- **No first-paint claim.** Nothing here timestamps paint. This fixture is
-  deliberately byte-identical to `keld create` output, which means it carries
-  **no paint beacon**. A `PAINT-OPPORTUNITY` run must derive a beacon-bearing
-  copy into a temporary directory at measure time — it must not be committed
-  here (that would break byte-identity) and it must not be patched into
-  `keld-wv` sources (reason code `SOURCE_TREE_PATCHED`, the violation this
-  fixture exists to retire).
+- **No first-paint claim in this file.** This fixture is deliberately
+  byte-identical to `keld create` output, so it carries **no paint beacon**.
+  `windows/bench/Measure-KeldPaint.ps1` derives a beacon-bearing copy into a
+  temp directory per launch; the beacon is never committed here (that would
+  break byte-identity) and never patched into `keld-wv` sources (reason code
+  `SOURCE_TREE_PATCHED`, the violation this fixture exists to retire).
+
+  **Scope warning for anyone comparing paint numbers.** A `keld dev` paint
+  measurement covers the whole developer flow — environment checks, echo
+  server, Bun child spawn, authenticated kipc echo, *then* window and paint.
+  The committed 469 ms Windows first-paint row measured `keld-host.exe`
+  alone, which spawns no Bun child. These are different scopes and must not
+  be put in the same column. `keld-host --hello` renders HTML baked into
+  `keld-wv`, not this fixture, so a beacon cannot reach it without patching
+  product source — which is why the host-only paint lane stays unmeasured
+  here rather than being obtained dishonestly.
 - **No RSS or size claim in this file.** Those live in
   `windows/bench/results/` as result documents with their own publication
   blocks.
