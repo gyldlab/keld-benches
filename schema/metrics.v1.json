@@ -116,7 +116,8 @@
       "budget": { "op": "<=", "value": 100, "unit": "us", "percentile": "p99" },
       "cache_states": ["fresh-process", "warm-cache"],
       "sample_class": "ipc",
-      "status": "unmeasured"
+      "status": "diagnostic",
+      "note": "One Windows Bun-only session recorded 2026-08-23 (KEL-99, keld 1609dbd) under windows/bench/results/ipc-rtt/: fresh-process p50 47.6 us / p90 66.3 / p99 101.6; warm-cache p50 45.9 / p90 59.3 / p99 100.5; 10,000 calls per session, handshake excluded. publication.eligible is false (1 session vs >=20 required, 10k calls vs 100k, no paired Rust arm, no block-bootstrap CIs, thermal state unverified) — diagnostics only, NOT a verdict against the <=100 us budget. macOS and Linux remain unmeasured."
     },
     {
       "id": "IPC-BULK",
