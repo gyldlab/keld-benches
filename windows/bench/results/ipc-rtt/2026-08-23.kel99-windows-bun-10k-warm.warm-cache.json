@@ -1,0 +1,142 @@
+{
+    "schema_version":  1,
+    "metric":  {
+                   "id":  "IPC-RTT",
+                   "unit":  "us",
+                   "registry_version":  1
+               },
+    "cache_state":  "warm-cache",
+    "session":  {
+                    "started_utc":  "2026-08-23T06:53:41.2193434+00:00",
+                    "finished_utc":  "2026-08-23T06:54:34.3497228+00:00",
+                    "requested_samples":  1,
+                    "interleaving":  "none",
+                    "label":  "kel99-windows-bun-10k-warm",
+                    "notes":  "One authenticated Bun session, exactly 10,000 sequential typed CALL/REPLY pairs. Raw values are windows/bench/results/ipc-rtt/2026-08-23.kel99-windows-bun-10k-warm.warm-cache.raw.json; p50/p90/p99 in this one session are diagnostic only."
+                },
+    "environment":  {
+                        "os":  {
+                                   "name":  "windows",
+                                   "version":  "Microsoft Windows 11 Home Single Language",
+                                   "build":  "10.0.26200"
+                               },
+                        "hardware":  {
+                                         "cpu":  "AMD Ryzen 7 5800H with Radeon Graphics",
+                                         "arch":  "AMD64",
+                                         "ram_bytes":  16522567680,
+                                         "machine_label":  "windows-local-2026-08-23"
+                                     },
+                        "power":  {
+                                      "ac_power":  true,
+                                      "low_power_mode":  false,
+                                      "thermal_state":  "unknown"
+                                  },
+                        "toolchains":  [
+                                           {
+                                               "name":  "rustc",
+                                               "version":  "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.97.1\nLLVM version: 22.1.6"
+                                           },
+                                           {
+                                               "name":  "bun",
+                                               "version":  "1.4.1"
+                                           },
+                                           {
+                                               "name":  "keld-host",
+                                               "version":  "0.0.1"
+                                           },
+                                           {
+                                               "name":  "keld-cli",
+                                               "version":  "0.0.1"
+                                           }
+                                       ]
+                    },
+    "provenance":  {
+                       "bench_sha":  "42abc1b67b24acb209d8aa6b98c90e538bc02786",
+                       "bench_tree_state":  "clean",
+                       "keld_sha":  "1609dbd250597ddda0ea5b9122c511437eecb85f",
+                       "harness":  {
+                                       "path":  "windows/bench/Run-KipcEcho.ps1",
+                                       "sha256":  "c88792637862aed89c091ffa8e449ef033dae0e0f940c78177b278d8e51453af",
+                                       "version":  "kel99-ipc-rtt-v1"
+                                   },
+                       "fixtures":  [
+                                        {
+                                            "path":  "windows/keld/kipc-echo",
+                                            "sha":  "42abc1b67b24acb209d8aa6b98c90e538bc02786"
+                                        }
+                                    ]
+                   },
+    "arms":  [
+                 {
+                     "arm_id":  "keld-bun",
+                     "framework":  {
+                                       "name":  "Keld host-owned kipc + Bun",
+                                       "version":  "0.0.1"
+                                   },
+                     "fixture_path":  "windows/keld/kipc-echo",
+                     "role":  "diagnostic",
+                     "artifact":  {
+                                      "sha256":  "d341e5649a39025b1b02348931bc11142af84294c396b01805c1068493df5cbb",
+                                      "basename":  "keld-kel99-runner.exe",
+                                      "version":  "0.0.1"
+                                  },
+                     "samples":  [
+                                     {
+                                         "run":  1,
+                                         "value":  100.5,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "mode":  "warm",
+                                                             "calls":  10000,
+                                                             "warmup_calls":  1000,
+                                                             "p50_ns":  45900,
+                                                             "p90_ns":  59300,
+                                                             "p99_ns":  100500,
+                                                             "min_ns":  38100,
+                                                             "max_ns":  2560300,
+                                                             "encoded_request_bytes":  25,
+                                                             "encoded_reply_bytes":  25,
+                                                             "raw_output":  "windows/bench/results/ipc-rtt/2026-08-23.kel99-windows-bun-10k-warm.warm-cache.raw.json",
+                                                             "timer":  "Bun.nanoseconds around session.echo"
+                                                         }
+                                     }
+                                 ],
+                     "statistics":  {
+                                        "valid_samples":  1,
+                                        "median":  100.5,
+                                        "p90":  null,
+                                        "p99":  null,
+                                        "min":  100.5,
+                                        "max":  100.5
+                                    }
+                 }
+             ],
+    "publication":  {
+                        "policy_version":  1,
+                        "requested":  false,
+                        "eligible":  false,
+                        "reasons":  [
+                                        {
+                                            "code":  "SAMPLES_BELOW_POLICY",
+                                            "label":  "1 independent session; IPC policy requires at least 20"
+                                        },
+                                        {
+                                            "code":  "CALLS_BELOW_POLICY",
+                                            "label":  "10,000 calls; IPC policy requires 100,000 calls per session"
+                                        },
+                                        {
+                                            "code":  "NO_PAIRED_ARM",
+                                            "label":  "Bun-only diagnostic has no paired Rust arm"
+                                        },
+                                        {
+                                            "code":  "NO_BLOCK_BOOTSTRAP_CI",
+                                            "label":  "No required session-block bootstrap confidence intervals"
+                                        },
+                                        {
+                                            "code":  "THERMAL_STATE_UNVERIFIED",
+                                            "label":  "Windows thermal state is recorded as unknown"
+                                        }
+                                    ]
+                    }
+}
