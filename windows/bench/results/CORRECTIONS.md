@@ -1,0 +1,83 @@
+# Corrections
+
+Result documents are immutable once committed (`HARNESS-CONTRACT.md` §4). When
+a committed document is later found to be wrong or unsafe to quote, it is
+corrected **here**, not edited in place.
+
+---
+
+## 2026-08-24 — the two paired keld-vs-tauri documents measured a beacon-instrumented Tauri binary
+
+**Affected documents**
+
+- `mem-idle/2026-08-24.kel25-windows-keld-vs-tauri-paired-30.fresh-process.json`
+- `mem-idle/2026-08-24.kel25-windows-keld-vs-tauri-thermal-30.fresh-process.json`
+
+Both record `arms[tauri].artifact.sha256 =
+9cfee0a246326290031130bc7446de0bc854113a8c22fca7de1da3dae8484b25`.
+
+**What is wrong**
+
+That binary does not embed the Tauri fixture's own page. It embeds a
+**paint-beacon-instrumented** page left over from an earlier
+`Measure-FirstPaint.ps1`-style session. Verified by extraction, not inference:
+the only `tauri-codegen-assets` blob whose bytes appear inside that exe sits at
+offset `6061195`, decompresses to **1717 bytes**, contains
+`requestAnimationFrame`, and fires
+
+```
+new Image().src = "http://127.0.0.1:54321/painted?nonce=testnonce123"
+```
+
+on every launch. Port 54321 had no listener during either session, so each
+Tauri launch also performed a failing loopback request.
+
+**Why it matters, and which way it biases**
+
+The Tauri arm therefore carried a `<script>` block, its JIT, and a failing
+network request that the Keld arm did not. The two arms were not rendering
+comparable content, which is exactly what `provenance.payload_sha256` exists to
+prevent — and neither document carried that field.
+
+The bias runs **in Keld's favour**: the arm Keld was compared against was doing
+extra work. The reported results —
+
+- paired-30: ratio 0.8332, "Keld 16.7% smaller"
+- thermal-30: ratio 0.8468, "Keld 15.3% smaller"
+
+— **must not be quoted as Keld-versus-Tauri results.** They remain valid as
+records of what was measured, and their raw data is retained, but the
+comparison conclusion is withdrawn.
+
+**What was done**
+
+`schema/canonical-payload.v1.html` (225 bytes, ASCII, LF, no BOM, sha256
+`26f6ad058d3350b46aa131ab281aa478b6c705a60af15c8755a369f66bab7f37`) is now the
+shared page. It was copied verbatim to `windows/tauri/hello/src/index.html` and
+the Tauri binary was force-rebuilt (`cargo clean -p tauri-hello --release` then
+`cargo build --release`, 41.5 s — a plain build is a no-op because `build.rs`
+emits no `rerun-if-changed` for `../src`).
+
+The new artifact is `d3f0fec3cb14263b33a5b643ac20178abb63e5b3b48e8954aeef517245ae1f3a`.
+Verified by extracting the embedded asset from that exe: 225 bytes,
+`requestAnimationFrame` absent, sha256 equal to the canonical page.
+
+**How this was missed, and the check that now exists**
+
+The contaminated binary was already on disk when the Tauri arm was adopted, and
+nothing verified what a measured artifact actually renders — only that it built
+and showed a window. A build succeeding says nothing about what it embedded.
+Any future document claiming payload parity must verify by **extracting the
+page from the artifact whose sha256 the document cites**, which is the check
+that caught this.
+
+**Still outstanding**
+
+A re-run under the canonical payload has not been performed. Until it is, there
+is no valid Keld-versus-Tauri comparison in this repository.
+
+Note also that source-byte parity is not rendered-environment parity: Tauri's
+webview exposes `__TAURI_INTERNALS__`, `__TAURI_EVENT_PLUGIN_INTERNALS__`,
+`ipc` and `isTauri` before the document runs, and Keld exposes none. Identical
+bytes still execute in non-identical environments, and a future paired document
+must disclose that rather than imply full parity.

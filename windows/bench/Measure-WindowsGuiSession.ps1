@@ -49,7 +49,15 @@ param(
   # which is what CONTRACT.md item 4 requires instead of a fixed settle.
   [int]$ThermalGateEveryRounds = 5,
   [int]$ThermalGateMaxWaitMs = 900000,
-  [int]$ThermalGatePollMs = 60000
+  [int]$ThermalGatePollMs = 60000,
+  # Canonical payload. HARNESS-CONTRACT.md requires a byte-identical payload
+  # across arms for publication. windows/keld/hello/index.html cannot be edited
+  # in place -- the fixture value is that it is byte-identical to keld create
+  # output -- so the Keld arm runs from a SESSION-SCOPED copy whose index.html
+  # is the canonical page. Session-scoped, not per-run: a fresh directory per
+  # launch is a colder filesystem state than the Tauri arm gets from its stable
+  # build directory, and that asymmetry would land in the measurement.
+  [string]$CanonicalPayload = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -287,6 +295,19 @@ function Get-Wv2Version {
 }
 
 # --- session ----------------------------------------------------------------
+$payloadSha = $null
+if ($CanonicalPayload) {
+  if (-not (Test-Path $CanonicalPayload)) { throw "CanonicalPayload not found: $CanonicalPayload" }
+  $payloadSha = (Get-FileHash $CanonicalPayload -Algorithm SHA256).Hash.ToLower()
+  $staged = Join-Path ([System.IO.Path]::GetTempPath()) ("keld-canon-" + [guid]::NewGuid().ToString('N').Substring(0,10))
+  $keldArm = $ARMS | Where-Object { $_.arm_id -eq 'keld' }
+  Copy-Item -Path $keldArm.workdir -Destination $staged -Recurse -Force
+  Copy-Item -Path $CanonicalPayload -Destination (Join-Path $staged 'index.html') -Force
+  $keldArm.workdir = $staged
+  Write-Output "canonical payload sha256=$payloadSha"
+  Write-Output "keld arm staged at $staged (index.html replaced with the canonical page)"
+}
+
 $wv2Start = Get-Wv2Version
 Write-Output "session start: WebView2 $wv2Start, seed $Seed, $Rounds rounds x $($ARMS.Count) arms"
 $thermalStart = Invoke-ThermalProbe -Label 'start'
@@ -362,6 +383,7 @@ $out = [ordered]@{
   schedule = $schedule
   webview2_start = $wv2Start; webview2_end = $wv2End; integrity = $integrity
   thermal_start = $thermalStart; thermal_end = $thermalEnd
+  canonical_payload_sha256 = $payloadSha
   thermal_gate_every_rounds = $ThermalGateEveryRounds
   thermal_gate_events = $gateEvents
   records = $records
