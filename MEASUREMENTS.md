@@ -409,6 +409,21 @@ raw per-run samples with SHAs, exe hashes and versions were written to
 > [`HARNESS-CONTRACT.md`](./HARNESS-CONTRACT.md) §4 and
 > [`windows/bench/CONTRACT.md`](./windows/bench/CONTRACT.md).
 
+### Current committed replacement raw (2026-08-15, median of 7)
+
+The file currently at `windows-first-paint.json` is the later `f28d696` session
+named in the caveat, not evidence for the 2026-08-14 table below. Its committed
+raw samples produce these corrected medians:
+
+| Stack | first paint | main RSS | helper RSS | procs |
+|---|---|---|---|---|
+| Electron 43.4.0† <!-- raw-median source=windows-first-paint.json arm=electron fields=first_paint_ms,main_rss_kb,helper_rss_kb,processes --> | **372 ms** | 91,988 KB | **224,252 KB** | **4** |
+| **Keld†** <!-- raw-median source=windows-first-paint.json arm=keld fields=first_paint_ms,main_rss_kb,helper_rss_kb,processes --> | **573 ms** | **23,068 KB** | 351,472 KB | 7 |
+| Tauri 2.11.5† <!-- raw-median source=windows-first-paint.json arm=tauri fields=first_paint_ms,main_rss_kb,helper_rss_kb,processes --> | 589 ms | 28,256 KB | 352,316 KB | 7 |
+
+† Corrected: median-index bug; see PR #10. This table does not reconstruct or
+replace the unrecoverable 2026-08-14 raw cited below.
+
 | Stack | first paint | main RSS | helper RSS | total RSS | procs |
 |---|---|---|---|---|---|
 | **Electron** 43.4.0 | **444 ms** | 87,088 KB | **217,284 KB** | **304,372 KB** | **4** |
@@ -468,41 +483,57 @@ Run A — new backend (`keld` branch `agent/kel-65-webview2-direct-com` @ `39be9
 
 | Stack | first paint | main RSS | procs |
 |---|---|---|---|
-| Electron 43.4.0 | 278 ms | 91,412 KB | 4 |
-| **Keld (direct COM)** | **472 ms** | **21,688 KB** | 7 |
-| Tauri 2.11.5 | 483 ms | 26,800 KB | 7 |
+| Electron 43.4.0† <!-- raw-median source=windows-first-paint-kel65-direct-com.json arm=electron fields=first_paint_ms,main_rss_kb,processes --> | 275 ms | 89,140 KB | 4 |
+| **Keld (direct COM)†** <!-- raw-median source=windows-first-paint-kel65-direct-com.json arm=keld fields=first_paint_ms,main_rss_kb,processes --> | **469 ms** | **19,552 KB** | 7 |
+| Tauri 2.11.5† <!-- raw-median source=windows-first-paint-kel65-direct-com.json arm=tauri fields=first_paint_ms,main_rss_kb,processes --> | 479 ms | 26,796 KB | 7 |
+
+† Corrected: median-index bug; see PR #10.
 
 Run B — baseline backend (`keld` main @ `137633f`, wry):
 
 | Stack | first paint | main RSS | procs |
 |---|---|---|---|
-| Electron 43.4.0 | 294 ms | 89,012 KB | 4 |
-| **Keld (wry)** | **467 ms** | **21,992 KB** | 7 |
-| Tauri 2.11.5 | 506 ms | 26,776 KB | 7 |
+| Electron 43.4.0† <!-- raw-median source=windows-first-paint-kel65-baseline.json arm=electron fields=first_paint_ms,main_rss_kb,processes --> | 286 ms | 88,960 KB | 4 |
+| **Keld (wry)†** <!-- raw-median source=windows-first-paint-kel65-baseline.json arm=keld fields=first_paint_ms,main_rss_kb,processes --> | **467 ms** | **21,972 KB** | 7 |
+| Tauri 2.11.5† <!-- raw-median source=windows-first-paint-kel65-baseline.json arm=tauri fields=first_paint_ms,main_rss_kb,processes --> | 490 ms | 26,760 KB | 7 |
+
+† Corrected: median-index bug; see PR #10.
 
 Raw samples: [`windows/bench/windows-first-paint-kel65-direct-com.json`](./windows/bench/windows-first-paint-kel65-direct-com.json),
 [`windows/bench/windows-first-paint-kel65-baseline.json`](./windows/bench/windows-first-paint-kel65-baseline.json),
 [`windows/bench/windows-first-paint-kel66-smartscreen-off.json`](./windows/bench/windows-first-paint-kel66-smartscreen-off.json).
 
+SmartScreen isolation from those same committed raws:
+
+| SmartScreen | first paint |
+|---|---|
+| ON† <!-- raw-median source=windows-first-paint-kel65-direct-com.json arm=keld fields=first_paint_ms --> | 469 ms |
+| OFF† <!-- raw-median source=windows-first-paint-kel66-smartscreen-off.json arm=keld fields=first_paint_ms --> | 453 ms |
+
+† Corrected: median-index bug; see PR #10.
+
 ### Honest reading
 
-* **First paint is unchanged by the rewrite** (472 vs 467 ms — inside run noise).
+* **First paint is unchanged by the rewrite** (469 vs 467 ms — inside run noise).
   The ~100 ms wry spent blocking the UI thread overlapped renderer boot, so it
   was never on the paint critical path. The floor is `CreateCoreWebView2Controller`
   — per Microsoft (WebView2Feedback #1536) "the bulk of starting a WebView2
   control", not reducible from app code, and environment creation is only
   runtime resolution (3–6 ms measured).
-* **Keld led Tauri in both runs** (472 vs 483; 467 vs 506). The margin (11–39 ms)
+* **Keld led Tauri in both runs** (469 vs 479; 467 vs 490). The margin (10–23 ms)
   is small against run noise; claim it as "consistently ahead this session", not
   as a fixed ratio.
-* **Enabling SmartScreen costs nothing measurable.** wry's default browser args
+* **The SmartScreen comparison is inconclusive.** wry's default browser args
   disable `msSmartScreenProtection`; the direct-COM backend passes no args.
-  Same-session isolation: SmartScreen ON 472 ms vs OFF 466 ms (noise). Verified
-  on the live browser process command line: wry baseline shows
+  Same-session isolation recorded SmartScreen ON 469 ms vs OFF 453 ms, a 16 ms
+  delta without the sample spread or confidence interval needed to attribute a
+  cost. The live browser process command line verifies the configuration: wry
+  baseline shows
   `--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection`, the new
   backend shows no `--disable-features` at all.
-* **Binary shrank 24%**: `keld-host.exe` 625,152 B (wry) → 484,864 B (direct
+* **Binary shrank 22.4%**: `keld-host.exe` 625,152 B (wry) → 484,864 B (direct
   COM) — wry is no longer linked on Windows.
-* Every arm's absolutes sit ~110–120 ms below the 2026-08-14 session (Electron
-  included), which is exactly why cross-session absolutes are banned in this
-  file. Within-session ordering is the signal.
+* Each arm's absolute sits ~97–110 ms below the earlier 2026-08-15 `f28d696`
+  session now preserved in the corrected table above (Electron included), which
+  is exactly why cross-session absolutes are banned in this file. Within-session
+  ordering is the signal.

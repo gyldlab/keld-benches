@@ -21,6 +21,7 @@ function Assert($condition, $name, $detail = '') {
 }
 
 Write-Host "negative controls:"
+& (Join-Path $PSScriptRoot 'Test-Statistics.ps1')
 
 # 1. A beacon carrying the wrong nonce must be rejected, not accepted.
 #    This is the stale-binary case: an arm that missed the rebuild still beacons,

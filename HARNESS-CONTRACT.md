@@ -14,22 +14,23 @@ task.
 
 ## Top-priority gap, stated before any restructure
 
-**No OS folder contains a `keld/` fixture.** The product this repo exists to
-benchmark is the only framework without a committed fixture:
+**Windows and Linux still have no committed `keld/` fixture.** macOS now has
+[`macos/keld/hello/`](./macos/keld/hello/), merged in PR #7; the remaining gaps
+are:
 
 - The Windows harness measures Keld by splicing a beacon into
   `keld-wv` sources inside the private Keld repo at `-Prepare` time and
   building `keld-host.exe` there. No committed SHA in *this* repo reproduces
   the Keld arm.
-- The macOS KEL-64 line (branch `agent/kel-64-startup-trace-*`) adds
-  `macos/keld/hello/` with a provenance-bound build recipe — the model to
-  follow — but it has not merged to `main`.
 - Linux has nothing.
 
-First fixture work on any OS MUST be `{os}/keld/hello/` (a committed build
+First fixture work on either remaining OS MUST be `{os}/keld/hello/` (a committed build
 recipe producing a Release artifact with bound provenance, following the
 KEL-64 `macos/keld/hello/build.sh` pattern), before any new competitor arm or
 metric lands. This gap is independent of, and ranked above, everything below.
+Correcting a historical table from an already-committed raw file is not new
+fixture or metric work and does not make that pre-contract result publication
+eligible.
 
 ## 1. Layout convention
 
@@ -144,6 +145,22 @@ Validate any document with:
 ```bash
 python3 schema/check.py          # schema + registry + examples + negative controls
 ```
+
+Validate the historical medians published from the pre-contract Windows raw
+files with the same percentile helper used by the harness:
+
+```powershell
+pwsh -NoProfile -File windows/bench/Test-Statistics.ps1
+pwsh -NoProfile -File windows/bench/Test-Harness.ps1
+pwsh -NoProfile -File windows/bench/Check-PublishedMeasurements.ps1
+pwsh -NoProfile -File windows/bench/Test-PublishedMeasurements.ps1
+```
+
+The last command is the publication negative control: it mutates one temporary
+Markdown cell and one temporary raw copy, and must observe the checker rejecting
+both mismatches. The checker binds historical raw paths to their immutable Git
+commit, blob, and SHA-256 before deriving any value. These are the repository's
+documented check targets; this repository has no CI workflow.
 
 ## 4. Result naming
 
