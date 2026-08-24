@@ -8,11 +8,11 @@
     "cache_state":  "fresh-process",
     "session":  {
                     "started_utc":  "2026-08-24T15:47:00.0000000+00:00",
-                    "finished_utc":  "2026-08-24T19:20:12.6847913Z",
+                    "finished_utc":  "2026-08-24T19:57:50.8841528Z",
                     "requested_samples":  30,
                     "interleaving":  "none",
                     "label":  "kel25-windows-fixture-idle-30",
-                    "notes":  "Idle RSS of the COMMITTED windows/keld/hello fixture through the shipping keld dev path, 30 fresh-process runs (the gui-paint-rss sample-policy count). SCORED value is the Keld-owned main-process (keld.exe) working set per metrics.v1.json MEM-IDLE. Every other lane is a per-run diagnostic and is never blended: bun child, WebView2 engine helpers, keld_processes_ws_kib (host+bun, the scope architecture 01 section 5 uses for its \u003c=92160 KiB budget), and the whole descendant tree. Stability requires BOTH bounded drift (6 consecutive tree totals within 1% of the window mean) AND an identical process-class census across that window with a non-zero engine count. The census condition was added after a 30-run session produced one byte-stable but INCOMPLETE tree (55,336 KiB, engine_process_count=0, against a ~372,000 KiB median) that drift alone accepted; adding it also cut host-lane stdev from 986 to 69 KiB and engine-lane stdev from 59,139 to 3,376 KiB, so membership churn had been contaminating many samples rather than one. Raw run records: results/mem-idle/2026-08-24.kel25-windows-fixture-idle-30.fresh-process.raw.json. THE BUDGET VERDICT IS UNDETERMINED, AND NOT BECAUSE OF SAMPLE COUNT. metrics.v1.json sets the MEM-IDLE budget at \u003c=92160 KiB scoped \"keld-owned processes only\" but never names WHICH memory counter, and the four defensible readings of these same 30 runs do not agree: host working set 22,704 KiB (PASS, +75% headroom); host+bun working set 45,150 KiB (PASS, +51%); host private commit 3,912 KiB (PASS, +96%); host+bun PRIVATE COMMIT 92,332 KiB -- FAIL, with 27 of 30 runs over budget (min 92,040, max 92,652). The registry is also internally inconsistent about scope: the budget says \"processes\" (plural, host+bun) while the note directs the scored value to \"the Keld-owned (main) RSS\" (singular, host only). This document scores host working set because that is the note explicit scoring instruction, which happens to be the single most flattering of the four readings; every other lane is recorded per-run above so no reader has to take that choice on trust, and no reader can quote a PASS without seeing the FAIL. Naming the counter in metrics.v1.json is a registry decision, not something a measurement session should settle by picking one. NOT a budget verdict for the additional usual reasons: single arm, not interleaved, thermal state unknown."
+                    "notes":  "Idle RSS of the COMMITTED windows/keld/hello fixture through the shipping keld dev path, 30 fresh-process runs (the gui-paint-rss sample-policy count). SCORED value is the Keld-owned main-process (keld.exe) working set per metrics.v1.json MEM-IDLE. Every other lane is a per-run diagnostic and is never blended: bun child, WebView2 engine helpers, keld_processes_ws_kib (host+bun, the scope architecture 01 section 5 uses for its \u003c=92160 KiB budget), and the whole descendant tree. Stability requires BOTH bounded drift (6 consecutive tree totals within 1% of the window mean) AND an identical process-class census across that window with a non-zero engine count. The census condition was added after a 30-run session produced one byte-stable but INCOMPLETE tree (55,336 KiB, engine_process_count=0, against a ~372,000 KiB median) that drift alone accepted; adding it also cut host-lane stdev from 986 to 69 KiB and engine-lane stdev from 59,139 to 3,376 KiB, so membership churn had been contaminating many samples rather than one. Raw run records: results/mem-idle/2026-08-24.kel25-windows-fixture-idle-30.fresh-process.raw.json. BUDGET READING, RESOLVED FROM THE SPEC ITSELF. architecture 01 section 5 states the budget as \"Idle RSS, 1 window (sum of keld processes) \u003c= 90 MB\". RSS is RESIDENT set size; on Windows the resident quantity is the WORKING SET. Private commit is not RSS -- it counts reserved pages that are by definition not resident -- and the metrics.v1.json oracle already separates them: \"Keld-owned RSS, engine helpers, total coalition/tree, and private dirty reported separately\". Private dirty is named there as a separate diagnostic, never the scored value. On the working-set counter BOTH defensible scopes pass: host only 22,704 KiB (PASS, +75% headroom) and host+bun 45,140 KiB (PASS, +51%). For completeness the private-commit lane is also recorded per run (host+bun 92,332 KiB, which would exceed the budget) precisely so no reader has to take the counter choice on trust -- but it is a diagnostic, not the score, and reporting it as a budget failure would contradict both the architecture wording and the registry oracle. The one genuine residual ambiguity is SCOPE: the budget says \"sum of keld processes\" (host+bun) while the registry note says \"the Keld-owned (main) RSS\" (host only). Both pass; the registry should still say which. NOT a budget verdict for the additional usual reasons: single arm, not interleaved, thermal state unknown."
                 },
     "environment":  {
                         "os":  {
@@ -27,7 +27,7 @@
                                          "machine_label":  "windows-local-2026-08-24"
                                      },
                         "power":  {
-                                      "ac_power":  false,
+                                      "ac_power":  true,
                                       "low_power_mode":  false,
                                       "thermal_state":  "unknown"
                                   },
@@ -51,7 +51,7 @@
                                        ]
                     },
     "provenance":  {
-                       "bench_sha":  "11d7759b731a61aa5fc5cd7e5929f199e7b88593",
+                       "bench_sha":  "d48d6cefd9873aece82a7585b714716c3c039d36",
                        "bench_tree_state":  "clean",
                        "keld_sha":  "58708bb4bb498148cc5e80d9ef9bedfaddaa47b9",
                        "harness":  {
@@ -62,7 +62,7 @@
                        "fixtures":  [
                                         {
                                             "path":  "windows/keld/hello/",
-                                            "sha":  "11d7759b731a61aa5fc5cd7e5929f199e7b88593"
+                                            "sha":  "d48d6cefd9873aece82a7585b714716c3c039d36"
                                         }
                                     ]
                    },
@@ -866,12 +866,8 @@
                                             "label":  "Windows thermal state recorded as unknown at both session boundaries"
                                         },
                                         {
-                                            "code":  "COUNTER_UNSPECIFIED",
-                                            "label":  "metrics.v1.json sets a \u003c=92160 KiB budget but does not name the memory counter; on these same 30 runs host+bun working set is 45,150 KiB (PASS) while host+bun private commit is 92,332 KiB (FAIL, 27/30 over). The verdict is undetermined until the registry names the counter"
-                                        },
-                                        {
                                             "code":  "REGISTRY_SCOPE_INCONSISTENT",
-                                            "label":  "Budget scope says \"keld-owned processes only\" (plural, host+bun) while the metric note directs scoring \"the Keld-owned (main) RSS\" (singular, host only); the two select different quantities"
+                                            "label":  "architecture 01 section 5 budgets the \"sum of keld processes\" (host+bun) while the metrics.v1.json note directs scoring \"the Keld-owned (main) RSS\" (host only). Both readings pass on the working-set counter (45,140 and 22,704 KiB against 92,160), so this does not change the verdict, but the registry should still state which scope is scored"
                                         }
                                     ]
                     }

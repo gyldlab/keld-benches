@@ -8,7 +8,7 @@
     "cache_state":  "fresh-process",
     "session":  {
                     "started_utc":  "2026-08-24T15:47:00.0000000+00:00",
-                    "finished_utc":  "2026-08-24T19:20:12.6847913Z",
+                    "finished_utc":  "2026-08-24T19:57:50.8841528Z",
                     "requested_samples":  1,
                     "interleaving":  "none",
                     "label":  "kel25-windows-bun-runtime",
@@ -27,7 +27,7 @@
                                          "machine_label":  "windows-local-2026-08-24"
                                      },
                         "power":  {
-                                      "ac_power":  false,
+                                      "ac_power":  true,
                                       "low_power_mode":  false,
                                       "thermal_state":  "unknown"
                                   },
@@ -51,12 +51,12 @@
                                        ]
                     },
     "provenance":  {
-                       "bench_sha":  "11d7759b731a61aa5fc5cd7e5929f199e7b88593",
+                       "bench_sha":  "d48d6cefd9873aece82a7585b714716c3c039d36",
                        "bench_tree_state":  "clean",
                        "keld_sha":  "58708bb4bb498148cc5e80d9ef9bedfaddaa47b9",
                        "harness":  {
                                        "path":  "windows/bench/Emit-Kel25Documents.ps1",
-                                       "sha256":  "d1b1184f27294bc8d8f1c4acc86a03d8032a0d3a190f9a6280311861a8f3430b",
+                                       "sha256":  "7d18d86f119a466842b280aaf67a908e3a2db719020a1312cdf802ee38072e46",
                                        "version":  "kel25-disk-v2-measured-here"
                                    }
                    },
