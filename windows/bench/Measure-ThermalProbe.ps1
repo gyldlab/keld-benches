@@ -49,14 +49,27 @@
 
 [CmdletBinding()]
 param(
-  [long]$Iterations = 40000000,
+  # Sized so ONE rep is ~100 ms on this class of machine. Short reps are
+  # dominated by scheduler noise: at 40M iters (~22 ms/rep) the observed
+  # quiet-machine spread was 1.18x, which makes a 1.05 band meaningless.
+  [long]$Iterations = 200000000,
   [int]$Reps = 10,
   # nominal iff observed/reference <= this. 1.05 is ~1/12 of the smallest
   # throttle step the probe can resolve, and ~3x the observed noise floor.
   [double]$NominalBand = 1.05,
-  # ns/iter on a known-quiet machine. Measured here: 2.464 and 2.483 in two
-  # independent runs (0.77% apart). Machine-specific: recalibrate per machine.
-  [double]$ReferenceFloorNsPerIter = 2.464,
+  # ns/iter on a known-quiet machine. MACHINE- AND LOOP-SPECIFIC: recalibrate
+  # with -Calibrate on any new machine, or after changing the work loop.
+  # Measured on windows-local-2026-08-24 (Ryzen 7 5800H) at 200M iters,
+  # min-of-10, three independent runs on an IDLE machine: 0.4824 / 0.4754 /
+  # 0.4844 ns/iter -> floor 0.4754, reproducibility 1.89%. Against a 5% band
+  # and a 2.89x throttle signal that is ample margin.
+  #
+  # An earlier calibration taken while the machine sat at 10-22% CPU utility
+  # produced 0.5504, which later quiet runs beat by 14%. That is precisely the
+  # failure the reference_suspect guard below now catches: a floor calibrated
+  # on a busy machine understates every ratio measured against it, and would
+  # have let a throttled session read as nominal. Calibrate only when idle.
+  [double]$ReferenceFloorNsPerIter = 0.4754,
   [switch]$Calibrate
 )
 
@@ -153,15 +166,33 @@ $work = Invoke-FixedWork -Iters $Iterations -Repetitions $Reps
 $ctx  = Get-ThermalContext
 $ratio = [math]::Round($work.ns_per_iter / $ReferenceFloorNsPerIter, 4)
 
-# Fail closed: if the probe could not run, thermal_state is 'unknown', never
-# 'nominal'. An unavailable probe must not silently become a pass.
+# Fail closed on BOTH sides.
+#
+# (a) If the probe could not run, thermal_state is 'unknown', never 'nominal'.
+#     An unavailable probe must not silently become a pass.
+#
+# (b) If the observed rate is MATERIALLY FASTER than the reference floor, the
+#     floor is not a floor -- it was calibrated on a machine that was already
+#     busy or throttled -- and every ratio computed against it is understated.
+#     Observed here: a calibration taken at 10-22% CPU utility produced a floor
+#     of 0.5504 ns/iter that a later run beat by 14% (ratio 0.8619). Answering
+#     'nominal' from a wrong reference is a false pass wearing a number, so the
+#     probe reports 'unknown' and flags the reference instead of guessing.
 $state = 'unknown'
+$referenceSuspect = $false
 if ($null -ne $work.ns_per_iter -and $work.ns_per_iter -gt 0) {
-  if ($ratio -le $NominalBand) { $state = 'nominal' } else { $state = 'throttled' }
+  if ($ratio -lt 0.95) {
+    $referenceSuspect = $true
+    $state = 'unknown'
+  }
+  elseif ($ratio -le $NominalBand) { $state = 'nominal' }
+  else { $state = 'throttled' }
 }
 
 $result = [ordered]@{
   thermal_state             = $state
+  reference_suspect         = $referenceSuspect
+  reference_suspect_note    = 'true when observed is >5% FASTER than the claimed floor, i.e. the floor was calibrated on a non-quiet machine and every ratio against it is understated'
   ratio_to_reference        = $ratio
   nominal_band              = $NominalBand
   reference_floor_ns_per_iter = $ReferenceFloorNsPerIter
