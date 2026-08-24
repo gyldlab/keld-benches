@@ -1,4 +1,4 @@
-# Emit result.v1 documents for the KEL-25 Windows session — with provenance
+# Emit result.v1 documents for the KEL-25 Windows session -- with provenance
 # that is MEASURED and ASSERTED, never hand-authored.
 #
 # WHY THIS SCRIPT EXISTS
@@ -10,7 +10,7 @@
 # documents:
 #
 #   mem-idle recorded bench_sha 0d629ac + harness sha256 a9896570..., but the
-#   harness blob AT 0d629ac was d85650d0... — a different file.
+#   harness blob AT 0d629ac was d85650d0... -- a different file.
 #   paint recorded harness sha256 69880c31... at bench_sha ed12e9f, where
 #   Measure-KeldPaint.ps1 did not exist in the repo at all.
 #
@@ -163,7 +163,7 @@ Write-NoBom (Join-Path $BenchRepo 'windows\bench\results\mem-idle\2026-08-24.kel
   cache_state='fresh-process'
   session=[ordered]@{ started_utc=$startUtc; finished_utc=$finishUtc; requested_samples=30; interleaving='none'
     label='kel25-windows-fixture-idle-30'
-    notes='Idle RSS of the COMMITTED windows/keld/hello fixture through the shipping keld dev path, 30 fresh-process runs (the gui-paint-rss sample-policy count). SCORED value is the Keld-owned main-process (keld.exe) working set per metrics.v1.json MEM-IDLE. Every other lane is a per-run diagnostic and is never blended: bun child, WebView2 engine helpers, keld_processes_ws_kib (host+bun, the scope architecture 01 section 5 uses for its <=92160 KiB budget), and the whole descendant tree. Stability requires BOTH bounded drift (6 consecutive tree totals within 1% of the window mean) AND an identical process-class census across that window with a non-zero engine count. The census condition was added after a 30-run session produced one byte-stable but INCOMPLETE tree (55,336 KiB, engine_process_count=0, against a ~372,000 KiB median) that drift alone accepted; adding it also cut host-lane stdev from 986 to 69 KiB and engine-lane stdev from 59,139 to 3,376 KiB, so membership churn had been contaminating many samples rather than one. Raw run records: results/mem-idle/2026-08-24.kel25-windows-fixture-idle-30.fresh-process.raw.json. THE BUDGET VERDICT IS UNDETERMINED, AND NOT BECAUSE OF SAMPLE COUNT. metrics.v1.json sets the MEM-IDLE budget at <=92160 KiB scoped "keld-owned processes only" but never names WHICH memory counter, and the four defensible readings of these same 30 runs do not agree: host working set 22,704 KiB (PASS, +75% headroom); host+bun working set 45,150 KiB (PASS, +51%); host private commit 3,912 KiB (PASS, +96%); host+bun PRIVATE COMMIT 92,332 KiB — FAIL, with 27 of 30 runs over budget (min 92,040, max 92,652). The registry is also internally inconsistent about scope: the budget says "processes" (plural, host+bun) while the note directs the scored value to "the Keld-owned (main) RSS" (singular, host only). This document scores host working set because that is the note explicit scoring instruction, which happens to be the single most flattering of the four readings; every other lane is recorded per-run above so no reader has to take that choice on trust, and no reader can quote a PASS without seeing the FAIL. Naming the counter in metrics.v1.json is a registry decision, not something a measurement session should settle by picking one. NOT a budget verdict for the additional usual reasons: single arm, not interleaved, thermal state unknown.' }
+    notes='Idle RSS of the COMMITTED windows/keld/hello fixture through the shipping keld dev path, 30 fresh-process runs (the gui-paint-rss sample-policy count). SCORED value is the Keld-owned main-process (keld.exe) working set per metrics.v1.json MEM-IDLE. Every other lane is a per-run diagnostic and is never blended: bun child, WebView2 engine helpers, keld_processes_ws_kib (host+bun, the scope architecture 01 section 5 uses for its <=92160 KiB budget), and the whole descendant tree. Stability requires BOTH bounded drift (6 consecutive tree totals within 1% of the window mean) AND an identical process-class census across that window with a non-zero engine count. The census condition was added after a 30-run session produced one byte-stable but INCOMPLETE tree (55,336 KiB, engine_process_count=0, against a ~372,000 KiB median) that drift alone accepted; adding it also cut host-lane stdev from 986 to 69 KiB and engine-lane stdev from 59,139 to 3,376 KiB, so membership churn had been contaminating many samples rather than one. Raw run records: results/mem-idle/2026-08-24.kel25-windows-fixture-idle-30.fresh-process.raw.json. THE BUDGET VERDICT IS UNDETERMINED, AND NOT BECAUSE OF SAMPLE COUNT. metrics.v1.json sets the MEM-IDLE budget at <=92160 KiB scoped "keld-owned processes only" but never names WHICH memory counter, and the four defensible readings of these same 30 runs do not agree: host working set 22,704 KiB (PASS, +75% headroom); host+bun working set 45,150 KiB (PASS, +51%); host private commit 3,912 KiB (PASS, +96%); host+bun PRIVATE COMMIT 92,332 KiB -- FAIL, with 27 of 30 runs over budget (min 92,040, max 92,652). The registry is also internally inconsistent about scope: the budget says "processes" (plural, host+bun) while the note directs the scored value to "the Keld-owned (main) RSS" (singular, host only). This document scores host working set because that is the note explicit scoring instruction, which happens to be the single most flattering of the four readings; every other lane is recorded per-run above so no reader has to take that choice on trust, and no reader can quote a PASS without seeing the FAIL. Naming the counter in metrics.v1.json is a registry decision, not something a measurement session should settle by picking one. NOT a budget verdict for the additional usual reasons: single arm, not interleaved, thermal state unknown.' }
   environment=(New-Env)
   provenance=[ordered]@{ bench_sha=$benchSha; bench_tree_state=$treeState; keld_sha=$keldSha
     harness=[ordered]@{ path=$rssHarness; sha256=$rssSha; version='kel25-mem-idle-v2-census' }
@@ -256,7 +256,7 @@ Write-NoBom (Join-Path $BenchRepo 'windows\bench\results\paint-opportunity\2026-
 # ===================================================================== DISK ==
 # Measured HERE, so the harness named in provenance is the one that produced
 # the number. The earlier DISK documents cited Measure-KeldIdleRss.ps1, which
-# does not measure file sizes at all — a false claim even where the byte count
+# does not measure file sizes at all -- a false claim even where the byte count
 # was right.
 function New-DiskDoc {
   param([string]$Label, [string]$AbsPath, [string]$Version, [string]$FrameworkName, [string]$Notes)
