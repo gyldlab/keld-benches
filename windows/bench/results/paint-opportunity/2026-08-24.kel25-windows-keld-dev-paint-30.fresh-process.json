@@ -8,7 +8,7 @@
     "cache_state":  "fresh-process",
     "session":  {
                     "started_utc":  "2026-08-24T16:05:00.0000000+00:00",
-                    "finished_utc":  "2026-08-24T18:28:27.5340110Z",
+                    "finished_utc":  "2026-08-24T19:20:12.6847913Z",
                     "requested_samples":  30,
                     "interleaving":  "none",
                     "label":  "kel25-windows-keld-dev-paint-30",
@@ -51,7 +51,7 @@
                                        ]
                     },
     "provenance":  {
-                       "bench_sha":  "29c4864ed9cdb68e332dfcef068dbf492afe2723",
+                       "bench_sha":  "11d7759b731a61aa5fc5cd7e5929f199e7b88593",
                        "bench_tree_state":  "clean",
                        "keld_sha":  "58708bb4bb498148cc5e80d9ef9bedfaddaa47b9",
                        "harness":  {
@@ -62,7 +62,7 @@
                        "fixtures":  [
                                         {
                                             "path":  "windows/keld/hello/",
-                                            "sha":  "29c4864ed9cdb68e332dfcef068dbf492afe2723"
+                                            "sha":  "11d7759b731a61aa5fc5cd7e5929f199e7b88593"
                                         }
                                     ],
                        "payload_sha256":  "b43a343e645968cd561f12db0bc9a39a288357cfa8046806b21a393f49b74b19"
