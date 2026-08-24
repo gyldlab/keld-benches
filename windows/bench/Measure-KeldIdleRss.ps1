@@ -23,7 +23,11 @@ param(
   [int]$WindowSize = 6,
   [double]$DriftRatio = 0.01,
   [int]$MaxStabilityWaitMs = 40000,
-  [int]$ReadyTimeoutMs = 60000
+  [int]$ReadyTimeoutMs = 60000,
+  # Membership floor: a settled tree must contain at least this many engine
+  # (msedgewebview2) processes. Bytes alone cannot tell "settled" from
+  # "not yet fully spawned" -- see Wait-BoundedDrift.
+  [int]$MinEngineProcesses = 1
 )
 
 $ErrorActionPreference = 'Stop'
@@ -108,7 +112,21 @@ function Get-TreeSnapshot {
 function Wait-BoundedDrift {
   <#
     Condition-based stability. Returns a hashtable with Stable/Samples/Reason.
-    Stable when the last $WindowSize tree totals have (max-min) <= DriftRatio * mean.
+
+    TWO conditions, both required:
+      1. bounded drift     -- the last $WindowSize tree totals satisfy
+                              (max-min) <= DriftRatio * mean;
+      2. stable membership -- the process-class census (bun/engine/other counts)
+                              is IDENTICAL across that same window, and the
+                              engine census is at least $MinEngineProcesses.
+
+    Condition 2 exists because bytes alone are not sufficient: a tree can be
+    perfectly byte-stable while still INCOMPLETE. Observed for real on
+    2026-08-24 -- one run in thirty settled after the titled window was already
+    visible but before any msedgewebview2 child existed, yielding a 55,336 KiB
+    "stable" tree with engine_process_count = 0 against a ~372,000 KiB median,
+    and drift alone accepted it as valid. schema/result.v1.schema.json already
+    names "membership churn" as a fail-closed reject reason; this is that check.
   #>
   param([int]$HostPid)
   $series = New-Object System.Collections.ArrayList
@@ -123,14 +141,27 @@ function Wait-BoundedDrift {
       $min = ($totals | Measure-Object -Minimum).Minimum
       $max = ($totals | Measure-Object -Maximum).Maximum
       $mean = ($totals | Measure-Object -Average).Average
-      if ($mean -gt 0 -and (($max - $min) / $mean) -le $DriftRatio) {
-        return @{ Stable = $true; Reason = $null; Samples = $series; Snapshot = $series[$series.Count - 1];
-                  DriftObserved = [math]::Round((($max - $min) / $mean), 6); SettleMs = [int]$sw.ElapsedMilliseconds }
+      $driftOk = ($mean -gt 0 -and (($max - $min) / $mean) -le $DriftRatio)
+
+      $census = $window | ForEach-Object { "$($_.bun_count)/$($_.engine_count)/$($_.other_count)" }
+      $membershipOk = ((($census | Select-Object -Unique) | Measure-Object).Count -eq 1)
+      $last = $series[$series.Count - 1]
+      $engineOk = ($last.engine_count -ge $MinEngineProcesses)
+
+      if ($driftOk -and $membershipOk -and $engineOk) {
+        return @{ Stable = $true; Reason = $null; Samples = $series; Snapshot = $last;
+                  DriftObserved = [math]::Round((($max - $min) / $mean), 6);
+                  SettleMs = [int]$sw.ElapsedMilliseconds; CensusStable = $true }
       }
     }
     Start-Sleep -Milliseconds $SampleIntervalMs
   }
-  return @{ Stable = $false; Reason = 'STABILITY_TIMEOUT'; Samples = $series; Snapshot = $series[$series.Count - 1] }
+  # Distinguish the timeout causes so a rejected sample records WHY.
+  $last = $null
+  if ($series.Count -gt 0) { $last = $series[$series.Count - 1] }
+  $reason = 'STABILITY_TIMEOUT'
+  if ($null -ne $last -and $last.engine_count -lt $MinEngineProcesses) { $reason = 'MEMBERSHIP_CHURN_ENGINE_ABSENT' }
+  return @{ Stable = $false; Reason = $reason; Samples = $series; Snapshot = $last }
 }
 
 # --- negative control -------------------------------------------------------
@@ -149,7 +180,23 @@ function Test-BoundedDrift {
   $driftStable = & $check $drifting 0.01
   if (-not $flatStable) { throw "NEGATIVE CONTROL FAILED: a flat series was rejected as unstable" }
   if ($driftStable) { throw "NEGATIVE CONTROL FAILED: a drifting series was accepted as stable" }
+
+  # Membership control. The bug this catches is a byte-STABLE but INCOMPLETE
+  # tree: drift alone says "settled" while the engine has not spawned. Both
+  # series below are perfectly flat, so only the census check can separate them.
+  $censusCheck = {
+    param($census, $engineCount, $minEngine)
+    $uniq = (($census | Select-Object -Unique) | Measure-Object).Count
+    return (($uniq -eq 1) -and ($engineCount -ge $minEngine))
+  }
+  $settledCensus  = @('1/6/0', '1/6/0', '1/6/0', '1/6/0', '1/6/0', '1/6/0')
+  $noEngineCensus = @('1/0/0', '1/0/0', '1/0/0', '1/0/0', '1/0/0', '1/0/0')
+  $churnCensus    = @('1/6/0', '1/6/0', '1/4/0', '1/6/0', '1/6/0', '1/6/0')
+  if (-not (& $censusCheck $settledCensus 6 1)) { throw "NEGATIVE CONTROL FAILED: a settled 6-engine census was rejected" }
+  if (& $censusCheck $noEngineCensus 0 1)      { throw "NEGATIVE CONTROL FAILED: a byte-stable tree with ZERO engine processes was accepted" }
+  if (& $censusCheck $churnCensus 6 1)         { throw "NEGATIVE CONTROL FAILED: a census that churned mid-window was accepted" }
   Write-Output "negative-control: flat=accepted drifting=rejected  OK"
+  Write-Output "negative-control: settled-census=accepted zero-engine=rejected churn=rejected  OK"
 }
 
 Test-BoundedDrift
@@ -204,6 +251,7 @@ for ($i = 1; $i -le $Runs; $i++) {
       settle_ms                 = $stab.SettleMs
       drift_observed            = $stab.DriftObserved
       stability_samples         = $stab.Samples.Count
+      census_stable             = [bool]$stab.CensusStable
       host_ws_kib               = if ($snap) { [math]::Round($snap.host_ws_bytes / 1024, 1) } else { $null }
       host_private_kib          = if ($snap) { [math]::Round($snap.host_private_bytes / 1024, 1) } else { $null }
       bun_ws_kib                = if ($snap) { [math]::Round($snap.bun_ws_bytes / 1024, 1) } else { $null }
