@@ -8,11 +8,11 @@
     "cache_state":  "fresh-process",
     "session":  {
                     "started_utc":  "2026-08-24T15:47:00.0000000+00:00",
-                    "finished_utc":  "2026-08-24T18:28:27.5340110Z",
+                    "finished_utc":  "2026-08-24T19:15:22.1264200Z",
                     "requested_samples":  30,
                     "interleaving":  "none",
                     "label":  "kel25-windows-fixture-idle-30",
-                    "notes":  "Idle RSS of the COMMITTED windows/keld/hello fixture through the shipping keld dev path, 30 fresh-process runs (the gui-paint-rss sample-policy count). SCORED value is the Keld-owned main-process (keld.exe) working set per metrics.v1.json MEM-IDLE. Every other lane is a per-run diagnostic and is never blended: bun child, WebView2 engine helpers, keld_processes_ws_kib (host+bun, the scope architecture 01 section 5 uses for its \u003c=92160 KiB budget), and the whole descendant tree. Stability requires BOTH bounded drift (6 consecutive tree totals within 1% of the window mean) AND an identical process-class census across that window with a non-zero engine count. The census condition was added after a 30-run session produced one byte-stable but INCOMPLETE tree (55,336 KiB, engine_process_count=0, against a ~372,000 KiB median) that drift alone accepted; adding it also cut host-lane stdev from 986 to 69 KiB and engine-lane stdev from 59,139 to 3,376 KiB, so membership churn had been contaminating many samples rather than one. Raw run records: results/mem-idle/2026-08-24.kel25-windows-fixture-idle-30.fresh-process.raw.json. NOT a budget verdict: single arm, not interleaved, thermal state unknown."
+                    "notes":  "Idle RSS of the COMMITTED windows/keld/hello fixture through the shipping keld dev path, 30 fresh-process runs (the gui-paint-rss sample-policy count). SCORED value is the Keld-owned main-process (keld.exe) working set per metrics.v1.json MEM-IDLE. Every other lane is a per-run diagnostic and is never blended: bun child, WebView2 engine helpers, keld_processes_ws_kib (host+bun, the scope architecture 01 section 5 uses for its \u003c=92160 KiB budget), and the whole descendant tree. Stability requires BOTH bounded drift (6 consecutive tree totals within 1% of the window mean) AND an identical process-class census across that window with a non-zero engine count. The census condition was added after a 30-run session produced one byte-stable but INCOMPLETE tree (55,336 KiB, engine_process_count=0, against a ~372,000 KiB median) that drift alone accepted; adding it also cut host-lane stdev from 986 to 69 KiB and engine-lane stdev from 59,139 to 3,376 KiB, so membership churn had been contaminating many samples rather than one. Raw run records: results/mem-idle/2026-08-24.kel25-windows-fixture-idle-30.fresh-process.raw.json. THE BUDGET VERDICT IS UNDETERMINED, AND NOT BECAUSE OF SAMPLE COUNT. metrics.v1.json sets the MEM-IDLE budget at \u003c=92160 KiB scoped \"keld-owned processes only\" but never names WHICH memory counter, and the four defensible readings of these same 30 runs do not agree: host working set 22,704 KiB (PASS, +75% headroom); host+bun working set 45,150 KiB (PASS, +51%); host private commit 3,912 KiB (PASS, +96%); host+bun PRIVATE COMMIT 92,332 KiB â€” FAIL, with 27 of 30 runs over budget (min 92,040, max 92,652). The registry is also internally inconsistent about scope: the budget says \"processes\" (plural, host+bun) while the note directs the scored value to \"the Keld-owned (main) RSS\" (singular, host only). This document scores host working set because that is the note explicit scoring instruction, which happens to be the single most flattering of the four readings; every other lane is recorded per-run above so no reader has to take that choice on trust, and no reader can quote a PASS without seeing the FAIL. Naming the counter in metrics.v1.json is a registry decision, not something a measurement session should settle by picking one. NOT a budget verdict for the additional usual reasons: single arm, not interleaved, thermal state unknown."
                 },
     "environment":  {
                         "os":  {
@@ -51,7 +51,7 @@
                                        ]
                     },
     "provenance":  {
-                       "bench_sha":  "29c4864ed9cdb68e332dfcef068dbf492afe2723",
+                       "bench_sha":  "e8ef6901ec3af409c0c494589d9d51db40e8ace3",
                        "bench_tree_state":  "clean",
                        "keld_sha":  "58708bb4bb498148cc5e80d9ef9bedfaddaa47b9",
                        "harness":  {
@@ -62,7 +62,7 @@
                        "fixtures":  [
                                         {
                                             "path":  "windows/keld/hello/",
-                                            "sha":  "29c4864ed9cdb68e332dfcef068dbf492afe2723"
+                                            "sha":  "e8ef6901ec3af409c0c494589d9d51db40e8ace3"
                                         }
                                     ]
                    },
@@ -97,6 +97,7 @@
                                                              "engine_private_kib":  164796,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45432,
+                                                             "keld_processes_private_kib":  92472,
                                                              "tree_ws_kib":  383796,
                                                              "native_window_ms":  783,
                                                              "settle_ms":  4550,
@@ -121,6 +122,7 @@
                                                              "engine_private_kib":  167040,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45156,
+                                                             "keld_processes_private_kib":  92384,
                                                              "tree_ws_kib":  383532,
                                                              "native_window_ms":  646,
                                                              "settle_ms":  4265,
@@ -145,6 +147,7 @@
                                                              "engine_private_kib":  164544,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45136,
+                                                             "keld_processes_private_kib":  92384,
                                                              "tree_ws_kib":  390944,
                                                              "native_window_ms":  524,
                                                              "settle_ms":  2171,
@@ -169,6 +172,7 @@
                                                              "engine_private_kib":  162056,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45100,
+                                                             "keld_processes_private_kib":  92124,
                                                              "tree_ws_kib":  374728,
                                                              "native_window_ms":  495,
                                                              "settle_ms":  2147,
@@ -193,6 +197,7 @@
                                                              "engine_private_kib":  162460,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45228,
+                                                             "keld_processes_private_kib":  92372,
                                                              "tree_ws_kib":  376952,
                                                              "native_window_ms":  506,
                                                              "settle_ms":  2122,
@@ -217,6 +222,7 @@
                                                              "engine_private_kib":  162996,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45104,
+                                                             "keld_processes_private_kib":  92040,
                                                              "tree_ws_kib":  374648,
                                                              "native_window_ms":  507,
                                                              "settle_ms":  2145,
@@ -241,6 +247,7 @@
                                                              "engine_private_kib":  163812,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45084,
+                                                             "keld_processes_private_kib":  92236,
                                                              "tree_ws_kib":  376744,
                                                              "native_window_ms":  505,
                                                              "settle_ms":  2405,
@@ -265,6 +272,7 @@
                                                              "engine_private_kib":  168072,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45284,
+                                                             "keld_processes_private_kib":  92460,
                                                              "tree_ws_kib":  386224,
                                                              "native_window_ms":  642,
                                                              "settle_ms":  4629,
@@ -289,6 +297,7 @@
                                                              "engine_private_kib":  160892,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45172,
+                                                             "keld_processes_private_kib":  92324,
                                                              "tree_ws_kib":  374524,
                                                              "native_window_ms":  615,
                                                              "settle_ms":  2244,
@@ -313,6 +322,7 @@
                                                              "engine_private_kib":  166648,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45084,
+                                                             "keld_processes_private_kib":  92296,
                                                              "tree_ws_kib":  385280,
                                                              "native_window_ms":  581,
                                                              "settle_ms":  4575,
@@ -337,6 +347,7 @@
                                                              "engine_private_kib":  162684,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45196,
+                                                             "keld_processes_private_kib":  92292,
                                                              "tree_ws_kib":  376444,
                                                              "native_window_ms":  657,
                                                              "settle_ms":  2349,
@@ -361,6 +372,7 @@
                                                              "engine_private_kib":  162884,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45252,
+                                                             "keld_processes_private_kib":  92316,
                                                              "tree_ws_kib":  374820,
                                                              "native_window_ms":  539,
                                                              "settle_ms":  2135,
@@ -385,6 +397,7 @@
                                                              "engine_private_kib":  161652,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45264,
+                                                             "keld_processes_private_kib":  92520,
                                                              "tree_ws_kib":  374388,
                                                              "native_window_ms":  481,
                                                              "settle_ms":  2123,
@@ -409,6 +422,7 @@
                                                              "engine_private_kib":  160364,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45068,
+                                                             "keld_processes_private_kib":  92372,
                                                              "tree_ws_kib":  374324,
                                                              "native_window_ms":  503,
                                                              "settle_ms":  2087,
@@ -433,6 +447,7 @@
                                                              "engine_private_kib":  163912,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45280,
+                                                             "keld_processes_private_kib":  92324,
                                                              "tree_ws_kib":  377652,
                                                              "native_window_ms":  505,
                                                              "settle_ms":  2143,
@@ -457,6 +472,7 @@
                                                              "engine_private_kib":  162156,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45124,
+                                                             "keld_processes_private_kib":  92388,
                                                              "tree_ws_kib":  374668,
                                                              "native_window_ms":  493,
                                                              "settle_ms":  2129,
@@ -481,6 +497,7 @@
                                                              "engine_private_kib":  161580,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45056,
+                                                             "keld_processes_private_kib":  92124,
                                                              "tree_ws_kib":  376876,
                                                              "native_window_ms":  490,
                                                              "settle_ms":  2121,
@@ -505,6 +522,7 @@
                                                              "engine_private_kib":  164340,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45176,
+                                                             "keld_processes_private_kib":  92440,
                                                              "tree_ws_kib":  377280,
                                                              "native_window_ms":  524,
                                                              "settle_ms":  2127,
@@ -529,6 +547,7 @@
                                                              "engine_private_kib":  164216,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45216,
+                                                             "keld_processes_private_kib":  92260,
                                                              "tree_ws_kib":  376980,
                                                              "native_window_ms":  474,
                                                              "settle_ms":  2093,
@@ -553,6 +572,7 @@
                                                              "engine_private_kib":  161844,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45088,
+                                                             "keld_processes_private_kib":  92232,
                                                              "tree_ws_kib":  374404,
                                                              "native_window_ms":  484,
                                                              "settle_ms":  2121,
@@ -577,6 +597,7 @@
                                                              "engine_private_kib":  163720,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45064,
+                                                             "keld_processes_private_kib":  92180,
                                                              "tree_ws_kib":  375068,
                                                              "native_window_ms":  564,
                                                              "settle_ms":  2106,
@@ -601,6 +622,7 @@
                                                              "engine_private_kib":  161652,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45180,
+                                                             "keld_processes_private_kib":  92196,
                                                              "tree_ws_kib":  374276,
                                                              "native_window_ms":  490,
                                                              "settle_ms":  2108,
@@ -625,6 +647,7 @@
                                                              "engine_private_kib":  161244,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45212,
+                                                             "keld_processes_private_kib":  92488,
                                                              "tree_ws_kib":  374892,
                                                              "native_window_ms":  492,
                                                              "settle_ms":  2109,
@@ -649,6 +672,7 @@
                                                              "engine_private_kib":  161640,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45060,
+                                                             "keld_processes_private_kib":  92540,
                                                              "tree_ws_kib":  374232,
                                                              "native_window_ms":  490,
                                                              "settle_ms":  2187,
@@ -673,6 +697,7 @@
                                                              "engine_private_kib":  163188,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45140,
+                                                             "keld_processes_private_kib":  92340,
                                                              "tree_ws_kib":  377576,
                                                              "native_window_ms":  486,
                                                              "settle_ms":  2125,
@@ -697,6 +722,7 @@
                                                              "engine_private_kib":  161636,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45196,
+                                                             "keld_processes_private_kib":  92264,
                                                              "tree_ws_kib":  374416,
                                                              "native_window_ms":  522,
                                                              "settle_ms":  2088,
@@ -721,6 +747,7 @@
                                                              "engine_private_kib":  165756,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45144,
+                                                             "keld_processes_private_kib":  92512,
                                                              "tree_ws_kib":  377584,
                                                              "native_window_ms":  468,
                                                              "settle_ms":  2179,
@@ -745,6 +772,7 @@
                                                              "engine_private_kib":  160532,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45064,
+                                                             "keld_processes_private_kib":  92380,
                                                              "tree_ws_kib":  374360,
                                                              "native_window_ms":  577,
                                                              "settle_ms":  2115,
@@ -769,6 +797,7 @@
                                                              "engine_private_kib":  162256,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45200,
+                                                             "keld_processes_private_kib":  92172,
                                                              "tree_ws_kib":  374904,
                                                              "native_window_ms":  480,
                                                              "settle_ms":  2100,
@@ -793,6 +822,7 @@
                                                              "engine_private_kib":  162276,
                                                              "engine_process_count":  6,
                                                              "keld_processes_ws_kib":  45096,
+                                                             "keld_processes_private_kib":  92652,
                                                              "tree_ws_kib":  374868,
                                                              "native_window_ms":  492,
                                                              "settle_ms":  2102,
@@ -834,6 +864,14 @@
                                         {
                                             "code":  "THERMAL_STATE_UNVERIFIED",
                                             "label":  "Windows thermal state recorded as unknown at both session boundaries"
+                                        },
+                                        {
+                                            "code":  "COUNTER_UNSPECIFIED",
+                                            "label":  "metrics.v1.json sets a \u003c=92160 KiB budget but does not name the memory counter; on these same 30 runs host+bun working set is 45,150 KiB (PASS) while host+bun private commit is 92,332 KiB (FAIL, 27/30 over). The verdict is undetermined until the registry names the counter"
+                                        },
+                                        {
+                                            "code":  "REGISTRY_SCOPE_INCONSISTENT",
+                                            "label":  "Budget scope says \"keld-owned processes only\" (plural, host+bun) while the metric note directs scoring \"the Keld-owned (main) RSS\" (singular, host only); the two select different quantities"
                                         }
                                     ]
                     }
