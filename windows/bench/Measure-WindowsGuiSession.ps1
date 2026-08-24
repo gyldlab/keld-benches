@@ -250,6 +250,27 @@ function Invoke-ArmRun {
   }
 }
 
+function Invoke-ThermalProbe {
+  # Fixed-work probe at a session BOUNDARY, with no arm running. result.v1
+  # requires thermal_state nominal at BOTH boundaries, and the probe is the
+  # only Windows candidate that survived a falsifiable negative control (a 40%
+  # processor cap slows it 2.892x, while ACPI Throttle Reasons stayed 0
+  # through the same cap). It is two-sided fail-closed: unavailable reports
+  # unknown, and a reference the observed run BEATS reports unknown with
+  # reference_suspect rather than a false nominal.
+  param([string]$Label)
+  $probe = Join-Path $BenchRepo 'windows/bench/Measure-ThermalProbe.ps1'
+  try {
+    $raw = & $probe -Reps 6 2>&1 | Out-String
+    $obj = $raw | ConvertFrom-Json
+    Write-Host ("  thermal[$Label]: $($obj.thermal_state)  ratio=$($obj.ratio_to_reference)  suspect=$($obj.reference_suspect)  tempC=$($obj.context.temperature_c)")
+    return $obj
+  } catch {
+    Write-Host "  thermal[$Label]: probe FAILED -- $($_.Exception.Message)"
+    return $null
+  }
+}
+
 function Get-Wv2Version {
   $k = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
   return (Get-ItemProperty $k -ErrorAction SilentlyContinue).pv
@@ -258,6 +279,7 @@ function Get-Wv2Version {
 # --- session ----------------------------------------------------------------
 $wv2Start = Get-Wv2Version
 Write-Output "session start: WebView2 $wv2Start, seed $Seed, $Rounds rounds x $($ARMS.Count) arms"
+$thermalStart = Invoke-ThermalProbe -Label 'start'
 
 $records = New-Object System.Collections.ArrayList
 foreach ($a in $ARMS) {
@@ -280,6 +302,7 @@ for ($r = 1; $r -le $Rounds; $r++) {
   }
 }
 
+$thermalEnd = Invoke-ThermalProbe -Label 'end'
 $wv2End = Get-Wv2Version
 $integrity = 'ok'
 if ($wv2Start -ne $wv2End) { $integrity = "WEBVIEW2_CHANGED_MIDSESSION $wv2Start -> $wv2End" }
@@ -290,6 +313,7 @@ $out = [ordered]@{
   interleaving = 'round-robin-randomized'
   schedule = $schedule
   webview2_start = $wv2Start; webview2_end = $wv2End; integrity = $integrity
+  thermal_start = $thermalStart; thermal_end = $thermalEnd
   records = $records
 }
 if ($OutFile) {
