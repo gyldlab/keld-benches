@@ -28,8 +28,6 @@ param(
   [Parameter(Mandatory = $true)][string]$KeldRepo,
   [Parameter(Mandatory = $true)][string]$SessionJson,
   [Parameter(Mandatory = $true)][string]$OutFile,
-  [string]$ThermalStart = 'unknown',
-  [string]$ThermalEnd = 'unknown',
   [switch]$AllowDirtyTree
 )
 
@@ -243,8 +241,23 @@ $cs = Get-CimInstance Win32_ComputerSystem
 $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name.Trim()
 $bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue
 $ac = $true; if ($bat) { $ac = ($bat.BatteryStatus -ne 1) }
+# The block below says eligibility is DERIVED, never hand-authored -- and the
+# thermal check then read -ThermalStart/-ThermalEnd, which the operator types.
+# In practice they matched the measurement, but a gate that reads what someone
+# typed is not a gate: 'nominal' for a throttled session would have published.
+# Both boundary probes are already in the session JSON. Fail closed.
+foreach ($boundary in @('thermal_start', 'thermal_end')) {
+  if ([string]::IsNullOrWhiteSpace($sess.$boundary.thermal_state)) {
+    throw "PROVENANCE FAILED: the session JSON has no $boundary.thermal_state, so the thermal boundary is unknown and cannot be asserted."
+  }
+}
+$thermalStartState = [string]$sess.thermal_start.thermal_state
+$thermalEndState   = [string]$sess.thermal_end.thermal_state
+$thermalSuspect    = ([bool]$sess.thermal_start.reference_suspect) -or ([bool]$sess.thermal_end.reference_suspect)
+Write-Output ("thermal boundaries (measured): start=$thermalStartState end=$thermalEndState suspect=$thermalSuspect")
+
 $thermal = 'unknown'
-if ($ThermalStart -eq 'nominal' -and $ThermalEnd -eq 'nominal') { $thermal = 'nominal' }
+if ($thermalStartState -eq 'nominal' -and $thermalEndState -eq 'nominal' -and -not $thermalSuspect) { $thermal = 'nominal' }
 
 # --- publication eligibility: DERIVED, never hand-authored --------------------
 # Stream-B finding, the hard way: publication blocks written by whoever emits are
@@ -268,8 +281,14 @@ if ($arms.Count -lt 2) {
 if ($tree -ne 'clean') {
   $reasons += [ordered]@{ code='TREE_NOT_CLEAN'; label="bench tree was '$tree' at emission" }
 }
-if ($ThermalStart -ne 'nominal' -or $ThermalEnd -ne 'nominal') {
-  $reasons += [ordered]@{ code='THERMAL_STATE_UNVERIFIED'; label="fixed-work probe reported start=$ThermalStart end=$ThermalEnd; publication requires nominal at BOTH boundaries" }
+if ($thermalStartState -ne 'nominal' -or $thermalEndState -ne 'nominal') {
+  $reasons += [ordered]@{ code='THERMAL_STATE_UNVERIFIED'; label="fixed-work probe measured start=$thermalStartState end=$thermalEndState; publication requires nominal at BOTH boundaries" }
+}
+# reference_suspect means the quiet-baseline floor was calibrated on a busy
+# machine, so every ratio measured against it is understated -- including the
+# ones that just reported 'nominal'. Nothing consumed this flag before.
+if ($thermalSuspect) {
+  $reasons += [ordered]@{ code='THERMAL_REFERENCE_SUSPECT'; label='a boundary probe ran FASTER than the claimed quiet-baseline floor, so the floor is not a quiet baseline and every ratio against it is understated' }
 }
 if (-not $ac) {
   $reasons += [ordered]@{ code='NOT_ON_AC_POWER'; label='machine was not on AC power; HARNESS-CONTRACT.md requires AC power with Low Power Mode off' }
