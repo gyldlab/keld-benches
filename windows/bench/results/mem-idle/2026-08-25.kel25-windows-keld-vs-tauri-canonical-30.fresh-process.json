@@ -55,23 +55,23 @@
                                        ]
                     },
     "provenance":  {
-                       "bench_sha":  "99d31c53f8c1d92d1f8a3144257b4a4396fb5189",
+                       "bench_sha":  "39455552f28a9da675c1d8b5d2c6624d7e10344d",
                        "bench_tree_state":  "clean",
                        "keld_sha":  "2a8e8a49fc4b253594861389e42aa973da164cfb",
                        "harness":  {
                                        "path":  "windows/bench/Measure-WindowsGuiSession.ps1",
-                                       "sha256":  "9f2e0f4de1f4269c1bc5d7c1e88d2992393cc8abb97cbf71a4f21b855407f1f1",
+                                       "sha256":  "8565ee6760bfc1642db588937ab30e0b00e0e7982c4cd4511971128d72ff26a8",
                                        "version":  "kel25-paired-gui-v1"
                                    },
                        "payload_sha256":  "26f6ad058d3350b46aa131ab281aa478b6c705a60af15c8755a369f66bab7f37",
                        "fixtures":  [
                                         {
                                             "path":  "windows/keld/hello/",
-                                            "sha":  "99d31c53f8c1d92d1f8a3144257b4a4396fb5189"
+                                            "sha":  "39455552f28a9da675c1d8b5d2c6624d7e10344d"
                                         },
                                         {
                                             "path":  "windows/tauri/hello/",
-                                            "sha":  "99d31c53f8c1d92d1f8a3144257b4a4396fb5189"
+                                            "sha":  "39455552f28a9da675c1d8b5d2c6624d7e10344d"
                                         }
                                     ]
                    },
