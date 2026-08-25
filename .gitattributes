@@ -1,3 +1,15 @@
 *.html text eol=lf
 *.ps1  text eol=lf
 *.py   text eol=lf
+
+# Published artifacts must check out byte-identical to their blobs.
+# keld-benches runs core.autocrlf=true, and result documents and schema files
+# were covered by no attribute at all, so a Windows clone rewrote them to CRLF
+# and any byte-level claim about a published document stopped holding for
+# anyone who was not its author. Same failure the fixture .gitattributes
+# documents, on the artifacts the repository exists to publish.
+#
+# Path-scoped, not *.json / *.md: windows/electron/hello/node_modules is
+# committed, and a global rule would renormalize vendored files.
+windows/bench/results/** text eol=lf
+schema/**                text eol=lf

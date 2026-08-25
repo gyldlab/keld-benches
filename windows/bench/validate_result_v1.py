@@ -66,6 +66,18 @@ def main(argv):
             failures += 1
             continue
 
+        # A result document is a JSON object. Raw sample sidecars (*.raw.json)
+        # are arrays, and passing one used to raise AttributeError deep in the
+        # metric checks instead of being rejected. A crash is not a verdict:
+        # it tells the caller nothing about whether the file is publishable,
+        # and a traceback in a validation gate reads as tooling breakage rather
+        # than as the refusal it actually is. Reject it here, with the reason.
+        if not isinstance(doc, dict):
+            print(f"FAIL {name}: top level is {type(doc).__name__}, not a result "
+                  f"object (raw sample sidecars are not result documents)")
+            failures += 1
+            continue
+
         for err in sorted(validator.iter_errors(doc), key=lambda e: list(e.path)):
             problems.append(f"schema: {list(err.path)}: {err.message}")
 
