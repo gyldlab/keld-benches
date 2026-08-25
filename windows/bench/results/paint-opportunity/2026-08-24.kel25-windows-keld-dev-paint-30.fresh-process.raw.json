@@ -1,0 +1,512 @@
+[
+    {
+        "run":  1,
+        "value":  1067.257,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  55310,
+                            "native_window_ms":  640.01,
+                            "window_to_paint_ms":  427.247,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  2,
+        "value":  1339.8,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  59198,
+                            "native_window_ms":  760.199,
+                            "window_to_paint_ms":  579.601,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  3,
+        "value":  1282.668,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  50924,
+                            "native_window_ms":  794.233,
+                            "window_to_paint_ms":  488.435,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  4,
+        "value":  1235.494,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  55223,
+                            "native_window_ms":  758.779,
+                            "window_to_paint_ms":  476.715,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  5,
+        "value":  1312.991,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  61669,
+                            "native_window_ms":  832.939,
+                            "window_to_paint_ms":  480.052,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  6,
+        "value":  1155.28,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  64692,
+                            "native_window_ms":  694.662,
+                            "window_to_paint_ms":  460.618,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  7,
+        "value":  1273.153,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  51994,
+                            "native_window_ms":  753.567,
+                            "window_to_paint_ms":  519.586,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  8,
+        "value":  1243.584,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  65055,
+                            "native_window_ms":  750.799,
+                            "window_to_paint_ms":  492.785,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  9,
+        "value":  1221.709,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  60123,
+                            "native_window_ms":  777.248,
+                            "window_to_paint_ms":  444.461,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  10,
+        "value":  1129.906,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  54925,
+                            "native_window_ms":  698.181,
+                            "window_to_paint_ms":  431.725,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  11,
+        "value":  1312.27,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  64749,
+                            "native_window_ms":  785.592,
+                            "window_to_paint_ms":  526.678,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  12,
+        "value":  1241.242,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  49972,
+                            "native_window_ms":  729.774,
+                            "window_to_paint_ms":  511.468,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  13,
+        "value":  1253.569,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  63410,
+                            "native_window_ms":  762.744,
+                            "window_to_paint_ms":  490.825,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  14,
+        "value":  1222.179,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  54468,
+                            "native_window_ms":  700.825,
+                            "window_to_paint_ms":  521.354,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  15,
+        "value":  1366.538,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  65097,
+                            "native_window_ms":  827.713,
+                            "window_to_paint_ms":  538.825,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  16,
+        "value":  1109.667,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  55828,
+                            "native_window_ms":  679.73,
+                            "window_to_paint_ms":  429.937,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  17,
+        "value":  1266.214,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  61375,
+                            "native_window_ms":  793.21,
+                            "window_to_paint_ms":  473.004,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  18,
+        "value":  1277.6,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  50322,
+                            "native_window_ms":  765.95,
+                            "window_to_paint_ms":  511.65,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  19,
+        "value":  1195.059,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  49695,
+                            "native_window_ms":  755.995,
+                            "window_to_paint_ms":  439.064,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  20,
+        "value":  1247.136,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  52088,
+                            "native_window_ms":  753.219,
+                            "window_to_paint_ms":  493.917,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  21,
+        "value":  1298.174,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  52789,
+                            "native_window_ms":  788.117,
+                            "window_to_paint_ms":  510.057,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  22,
+        "value":  1222.252,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  52340,
+                            "native_window_ms":  694.46,
+                            "window_to_paint_ms":  527.792,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  23,
+        "value":  1246.232,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  59331,
+                            "native_window_ms":  790.203,
+                            "window_to_paint_ms":  456.029,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  24,
+        "value":  1262.979,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  57080,
+                            "native_window_ms":  729.964,
+                            "window_to_paint_ms":  533.015,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  25,
+        "value":  1248.668,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  59207,
+                            "native_window_ms":  767.941,
+                            "window_to_paint_ms":  480.727,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  26,
+        "value":  1310.6,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  49204,
+                            "native_window_ms":  809.813,
+                            "window_to_paint_ms":  500.787,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  27,
+        "value":  1226.405,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  62126,
+                            "native_window_ms":  734.072,
+                            "window_to_paint_ms":  492.333,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  28,
+        "value":  1260.601,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  56196,
+                            "native_window_ms":  767.766,
+                            "window_to_paint_ms":  492.835,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  29,
+        "value":  1173.975,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  61638,
+                            "native_window_ms":  701.151,
+                            "window_to_paint_ms":  472.824,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    },
+    {
+        "run":  30,
+        "value":  1294.019,
+        "valid":  true,
+        "reject_reason":  null,
+        "diagnostics":  {
+                            "port":  64891,
+                            "native_window_ms":  791.332,
+                            "window_to_paint_ms":  502.687,
+                            "nonce_matched":  true,
+                            "beacon_sha256":  "40631d6bbb9511773b7d2811573f569230dc148878981130d1200213348710f3",
+                            "beacon_source":  "windows/bench/hello.template.html",
+                            "nonce_scope":  "per-launch",
+                            "source_patched":  false,
+                            "fixture_copied_to_temp":  true
+                        }
+    }
+]

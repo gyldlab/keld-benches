@@ -1,0 +1,484 @@
+{
+    "schema_version":  1,
+    "metric":  {
+                   "id":  "NATIVE-WINDOW",
+                   "unit":  "ms",
+                   "registry_version":  1
+               },
+    "cache_state":  "fresh-process",
+    "session":  {
+                    "started_utc":  "2026-08-24T15:47:00.0000000+00:00",
+                    "finished_utc":  "2026-08-24T19:57:50.8841528Z",
+                    "requested_samples":  30,
+                    "interleaving":  "none",
+                    "label":  "kel25-windows-fixture-native-window-30",
+                    "notes":  "Parent-side wall time from spawn to a real, visible, non-minimized titled HWND, against the COMMITTED windows/keld/hello fixture over 30 fresh-process runs, from the same launches as the MEM-IDLE document. metrics.v1.json marks NATIVE-WINDOW \"Presentation policy, not paint; not comparable across frameworks\". It is explicitly NOT PAINT-OPPORTUNITY: no beacon, no double-rAF, no nonce. Do NOT compare against the committed 469 ms Windows first-paint row: different oracle. Note this differs from the native_window_ms diagnostic inside the PAINT-OPPORTUNITY document (759.5 ms median) because that harness copies the fixture into a FRESH temp directory per launch, a colder filesystem state than repeated launches from one stable project directory. Raw run records: results/mem-idle/2026-08-24.kel25-windows-fixture-idle-30.fresh-process.raw.json."
+                },
+    "environment":  {
+                        "os":  {
+                                   "name":  "windows",
+                                   "version":  "Microsoft Windows 11 Home Single Language",
+                                   "build":  "10.0.26200"
+                               },
+                        "hardware":  {
+                                         "cpu":  "AMD Ryzen 7 5800H with Radeon Graphics",
+                                         "arch":  "AMD64",
+                                         "ram_bytes":  16522567680,
+                                         "machine_label":  "windows-local-2026-08-24"
+                                     },
+                        "power":  {
+                                      "ac_power":  true,
+                                      "low_power_mode":  false,
+                                      "thermal_state":  "unknown"
+                                  },
+                        "engine":  {
+                                       "name":  "WebView2 Evergreen",
+                                       "version":  "151.0.4129.101"
+                                   },
+                        "toolchains":  [
+                                           {
+                                               "name":  "rustc",
+                                               "version":  "rustc 1.97.1 (8bab26f4f 2026-07-14)"
+                                           },
+                                           {
+                                               "name":  "bun",
+                                               "version":  "1.4.0+34cbb9a40"
+                                           },
+                                           {
+                                               "name":  "keld-cli",
+                                               "version":  "0.0.1"
+                                           }
+                                       ]
+                    },
+    "provenance":  {
+                       "bench_sha":  "d48d6cefd9873aece82a7585b714716c3c039d36",
+                       "bench_tree_state":  "clean",
+                       "keld_sha":  "58708bb4bb498148cc5e80d9ef9bedfaddaa47b9",
+                       "harness":  {
+                                       "path":  "windows/bench/Measure-KeldIdleRss.ps1",
+                                       "sha256":  "a9896570401877dda8819ba8ccd2fc5acc9c2c2eb3a341866fb094f5f087287a",
+                                       "version":  "kel25-mem-idle-v2-census"
+                                   },
+                       "fixtures":  [
+                                        {
+                                            "path":  "windows/keld/hello/",
+                                            "sha":  "d48d6cefd9873aece82a7585b714716c3c039d36"
+                                        }
+                                    ]
+                   },
+    "arms":  [
+                 {
+                     "arm_id":  "keld",
+                     "framework":  {
+                                       "name":  "Keld host-owned hello (keld dev)",
+                                       "version":  "0.0.1"
+                                   },
+                     "fixture_path":  "windows/keld/hello/",
+                     "lane":  "webview2",
+                     "role":  "diagnostic",
+                     "artifact":  {
+                                      "sha256":  "df2b05b664c31ab21bedb4dc5d4f0aa73f606aa0fc90e1ff0d70b9a097ec161f",
+                                      "basename":  "keld.exe",
+                                      "version":  "0.0.1"
+                                  },
+                     "samples":  [
+                                     {
+                                         "run":  1,
+                                         "value":  783,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  2,
+                                         "value":  646,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  3,
+                                         "value":  524,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  4,
+                                         "value":  495,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  5,
+                                         "value":  506,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  6,
+                                         "value":  507,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  7,
+                                         "value":  505,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  8,
+                                         "value":  642,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  9,
+                                         "value":  615,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  10,
+                                         "value":  581,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  11,
+                                         "value":  657,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  12,
+                                         "value":  539,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  13,
+                                         "value":  481,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  14,
+                                         "value":  503,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  15,
+                                         "value":  505,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  16,
+                                         "value":  493,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  17,
+                                         "value":  490,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  18,
+                                         "value":  524,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  19,
+                                         "value":  474,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  20,
+                                         "value":  484,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  21,
+                                         "value":  564,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  22,
+                                         "value":  490,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  23,
+                                         "value":  492,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  24,
+                                         "value":  490,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  25,
+                                         "value":  486,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  26,
+                                         "value":  522,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  27,
+                                         "value":  468,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  28,
+                                         "value":  577,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  29,
+                                         "value":  480,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     },
+                                     {
+                                         "run":  30,
+                                         "value":  492,
+                                         "valid":  true,
+                                         "reject_reason":  null,
+                                         "diagnostics":  {
+                                                             "oracle":  "Process.MainWindowHandle with matching title AND user32 IsWindowVisible AND NOT IsIconic",
+                                                             "poll_interval_ms":  50,
+                                                             "clock":  "Stopwatch armed immediately before Start-Process, parent-side",
+                                                             "engine_process_count":  6
+                                                         }
+                                     }
+                                 ],
+                     "statistics":  {
+                                        "valid_samples":  30,
+                                        "median":  505,
+                                        "p90":  642,
+                                        "p99":  null,
+                                        "min":  468,
+                                        "max":  783,
+                                        "bootstrap_ci95":  {
+                                                               "lower":  492,
+                                                               "upper":  524,
+                                                               "resamples":  10000
+                                                           }
+                                    }
+                 }
+             ],
+    "publication":  {
+                        "policy_version":  1,
+                        "requested":  false,
+                        "eligible":  false,
+                        "reasons":  [
+                                        {
+                                            "code":  "NO_PAIRED_ARM",
+                                            "label":  "Keld-only session; no Tauri/Electron/WinUI Windows arm measured alongside it on the same engine"
+                                        },
+                                        {
+                                            "code":  "ARMS_NOT_INTERLEAVED",
+                                            "label":  "Single arm, interleaving=none; publication requires balanced randomized interleaving by round"
+                                        },
+                                        {
+                                            "code":  "THERMAL_STATE_UNVERIFIED",
+                                            "label":  "Windows thermal state recorded as unknown at both session boundaries"
+                                        },
+                                        {
+                                            "code":  "PRESENTATION_POLICY_ONLY",
+                                            "label":  "NATIVE-WINDOW is presentation policy, not paint; the registry marks it diagnostic and not comparable across frameworks"
+                                        }
+                                    ]
+                    }
+}

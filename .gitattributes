@@ -1,0 +1,31 @@
+*.html text eol=lf
+*.ps1  text eol=lf
+*.py   text eol=lf
+
+# Published artifacts must check out byte-identical to their blobs.
+# keld-benches runs core.autocrlf=true, and result documents and schema files
+# were covered by no attribute at all, so a Windows clone rewrote them to CRLF
+# and any byte-level claim about a published document stopped holding for
+# anyone who was not its author. Same failure the fixture .gitattributes
+# documents, on the artifacts the repository exists to publish.
+#
+# Path-scoped, not *.json / *.md: windows/electron/hello/node_modules is
+# committed, and a global rule would renormalize vendored files.
+windows/bench/results/** text eol=lf
+schema/**                text eol=lf
+
+# Hello fixtures. Their entire value is being BYTE-IDENTICAL to `keld create
+# hello` output at the pinned Keld SHA, and `keld create` writes LF.
+#
+# keld-benches runs core.autocrlf=true, so without an attribute a Windows
+# checkout rewrites these to CRLF and they stop matching byte-for-byte: the
+# blob stays LF, the working tree does not. Not hypothetical -- every file
+# under macos/keld/hello checked out CRLF, index.html at 366 bytes against its
+# own 349-byte blob, so that fixture's identity claim was unverifiable to
+# anyone cloning on Windows.
+#
+# This rule covers every OS fixture dir. It replaces a per-directory
+# .gitattributes that pinned only the Windows fixture while its own comment
+# cited the broken macOS one as evidence -- the exact drift a second copy
+# produces.
+*/keld/hello/** text eol=lf

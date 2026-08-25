@@ -12,6 +12,8 @@
 | [`macos/neutralino/hello/`](./macos/neutralino/hello/) | Neutralino | yes | Measured 2026-08-14 |
 | [`macos/nwjs/hello/`](./macos/nwjs/hello/) | NW.js (Chromium + Node) | yes (app sources; runtime zip not committed) | Measured 2026-08-14 |
 | [`macos/electrobun/hello/`](./macos/electrobun/hello/) | Electrobun (system webview + Bun) | yes | Measured 2026-08-14 |
+| [`windows/keld/hello/`](./windows/keld/hello/) | Keld (WebView2 + supervised Bun) | yes | Byte-identical to `keld create hello` at keld `58708bb`; measured 2026-08-25 with a binary built at `2a8e8a4`. `crates/keld-cli/templates/` is unchanged across `58708bb..2a8e8a4` (verified `git diff --stat`, empty), so the fixture is not stale against the measured binary. |
+| [`macos/keld/hello/`](./macos/keld/hello/) | Keld (WKWebView + supervised Bun) | yes | Not yet measured |
 | [`windows/electron/hello/`](./windows/electron/hello/) | Electron (Chromium + Node) | yes | Measured 2026-08-13/15 |
 | [`windows/tauri/hello/`](./windows/tauri/hello/) | Tauri 2 (WebView2) | yes | Measured 2026-08-13/15 |
 | [`windows/wails/hello/`](./windows/wails/hello/) | Wails (WebView2) | yes | Measured 2026-08-13 |
@@ -537,3 +539,123 @@ SmartScreen isolation from those same committed raws:
   session now preserved in the corrected table above (Electron included), which
   is exactly why cross-session absolutes are banned in this file. Within-session
   ordering is the signal.
+
+---
+
+## Keld vs Tauri, paired — windows (2026-08-25)
+
+Fixtures: [`windows/keld/hello/`](./windows/keld/hello/) and
+[`windows/tauri/hello/`](./windows/tauri/hello/).
+Document: [`windows/bench/results/mem-idle/2026-08-25.kel25-windows-keld-vs-tauri-canonical-30.fresh-process.json`](./windows/bench/results/mem-idle/2026-08-25.kel25-windows-keld-vs-tauri-canonical-30.fresh-process.json)
+— the machine-readable record, and the only citable source. This section is a
+summary of it, not a second source of truth.
+
+Windows 11 build 26200, AMD Ryzen 7 5800H, on AC. WebView2 Evergreen
+151.0.4129.107. keld `2a8e8a4`, Tauri 2.11.5, Bun 1.4.0, rustc 1.97.1.
+
+Round-major randomized interleaving, 30 paired rounds, both arms 30/30 valid.
+Both arms are handed the byte-identical 225-byte canonical page
+(`26f6ad05…`), verified by **extracting the embedded page from the Tauri
+artifact this document cites** rather than by trusting the build.
+
+### MEM-IDLE — host working set
+
+| Arm | Median (KiB) | Min | Max |
+|---|---|---|---|
+| **Keld** host | **22,788** | 22,680 | 22,888 |
+| **Tauri** host | **26,856** | 26,732 | 27,008 |
+
+Paired percentile bootstrap over rounds, 10,000 resamples, resampling whole
+rounds to preserve pairing:
+
+**median ratio 0.8484, CI95 [0.846864, 0.849548], verdict PASS** — the Keld
+host process is ~15.2% smaller, and the interval excludes 1.0.
+
+### What this is not
+
+**Host scope only.** `framework_ws_kib` (host + runtime) is recorded per run and
+deliberately excluded from the comparison: for Keld the median is 73,620 KiB,
+because the supervised Bun child is a capability the Tauri hello has no
+equivalent of. Do not read 0.8484 as total application footprint.
+
+**Do not compare a working set across sessions.** An earlier session on this
+machine recorded that same diagnostic at 48,688 KiB. Its `runtime_private_kib`
+was 88,918 against this session's 89,016 — flat — with one runtime process in
+both. Private bytes is the allocation-side counter and it did not move; only
+residency did. A working set is how much of an allocation the OS is currently
+keeping in physical memory, so it tracks system pressure as well as the program.
+That is safe for the scored comparison here, where both arms are measured within
+the same round seconds apart under the same pressure, and it is **not** safe
+between documents. Quoting a working set from one session as a standing property
+of a framework — as an earlier revision of this section did — is that unsafe
+read.
+
+**The arms are not scope-matched.** The Keld arm runs the full `keld dev`
+developer flow — doctor checks, echo server, supervised Bun spawn,
+authenticated kipc echo, then window — against a packaged Tauri release exe.
+
+**Payload parity is source-level, not environment-level.** Tauri exposes
+`__TAURI_INTERNALS__`, `__TAURI_EVENT_PLUGIN_INTERNALS__`, `ipc` and `isTauri`
+before the document runs and loads via a custom asset protocol at
+`http://tauri.localhost`; Keld exposes none of those and loads via
+`NavigateToString` at origin `null`. Identical bytes, non-identical environments.
+
+**The Tauri npm layer is unpinned**: `windows/tauri/hello/package-lock.json` is
+gitignored, so that fixture's npm layer is not reproducible from this repo. Its
+`Cargo.lock` is committed and the CLI is not on the measured build path.
+
+### Thermal
+
+The document records `environment.power.thermal_state: "nominal"`. The emitter
+derives that from the fixed-work probes at both session boundaries and fails
+closed: publication requires nominal at both, and a probe that ran *faster* than
+the claimed quiet-baseline floor is refused as `THERMAL_REFERENCE_SUSPECT`,
+because such a floor was not measured on a quiet machine and understates every
+ratio against it.
+
+The probe is fixed work, not a temperature reading: 200M iterations, CPU0-pinned,
+min-of-6, expressed as a ratio against this machine's quiet-baseline floor of
+0.4754 ns/iter. Nominal is a ratio at or under 1.05. Temperature is recorded as
+descriptive context only, because on this machine it is not a usable decision
+variable — idle sweeps ranged 70–91 °C, and this session's opening probe read
+82 °C while running nominal.
+
+Every ratio below is citable from the raw session record the emitter now writes
+alongside the document
+([`…canonical-30.fresh-process.raw.json`](./windows/bench/results/mem-idle/2026-08-25.kel25-windows-keld-vs-tauri-canonical-30.fresh-process.raw.json)),
+which carries the same session object the document was computed from.
+
+| probe | ratio | state |
+|---|---|---|
+| session start | 1.0202 | nominal |
+| gate after r5 | 1.0499 | nominal |
+| gate after r10 | 1.0456 | nominal |
+| gate after r15 | 1.0086 | nominal |
+| **gate after r20** | **1.1132** | **throttled — gate entered** |
+| gate after r20, recheck | 0.9729 | nominal, after idling 63,591 ms |
+| gate after r25 | 0.9931 | nominal |
+| gate after r30 | 1.0006 | nominal |
+| session end | 0.9655 | nominal |
+
+**The session was not uniformly nominal.** The r20 gate found the machine
+throttled and idled it for 63.6 s until a fresh probe came back nominal; the
+session's 7 min 40 s wall window includes that pause. Rounds 21–30 were measured
+after the recovery, not during the throttle. Because the interleaving is
+round-major, any residual effect lands on both arms within the same round rather
+than on one of them.
+
+Publication additionally fails closed on a probe that runs *faster* than the
+claimed floor (`THERMAL_REFERENCE_SUSPECT`), because such a floor was not
+measured on a quiet machine and understates every ratio against it. Neither
+boundary probe was suspect here.
+
+An earlier version of this section cited three ratios that appeared nowhere in
+the repository: they came from a session file that was never committed, and the
+sidecar that *was* committed belonged to a different session (see
+[`CORRECTIONS.md`](./windows/bench/results/CORRECTIONS.md)).
+
+### Superseded
+
+The two 2026-08-24 paired documents are **withdrawn** as Keld-versus-Tauri
+results; see [`windows/bench/results/CORRECTIONS.md`](./windows/bench/results/CORRECTIONS.md).
+They measured a Tauri binary that embedded a paint-beacon-instrumented page.
