@@ -79,7 +79,16 @@ if ($keldExeUtc -lt $keldCommitUtc) {
 }
 Write-Output ("keld artifact provenance OK: exe {0:u} >= commit {1:u}" -f $keldExeUtc, $keldCommitUtc)
 
-$runnerSha = Assert-AtCommit -Repo $BenchRepo -Sha $benchSha -Rel $runnerRel
+$null = Assert-AtCommit -Repo $BenchRepo -Sha $benchSha -Rel $runnerRel
+# Provenance names the runner that PRODUCED this session, not whatever is on
+# disk now. Recomputing here made a re-emission after a runner edit cite a
+# harness that never ran the session: on 2026-08-25 it silently moved from
+# 9f2e0f4d to 8565ee67, one commit after that rule was written down.
+$runnerSha = [string]$sess.harness_sha256
+if ([string]::IsNullOrWhiteSpace($runnerSha)) {
+  throw "PROVENANCE FAILED: the session JSON has no harness_sha256. Re-run with a runner that stamps its own hash; hashing the current file would name a harness that may not have produced this session."
+}
+Write-Output ("harness sha256 (stamped at session time): " + $runnerSha.Substring(0,16))
 $null      = Assert-AtCommit -Repo $BenchRepo -Sha $benchSha -Rel $emitRel
 Write-Output "provenance OK: runner=$($runnerSha.Substring(0,16))"
 
@@ -385,5 +394,14 @@ $doc = [ordered]@{
 
 [System.IO.File]::WriteAllText($OutFile, ($doc | ConvertTo-Json -Depth 14), (New-Object System.Text.UTF8Encoding($false)))
 Write-Output "wrote $OutFile"
+
+# The raw sidecar is written HERE, from the same session object that produced
+# the document, so the pair cannot diverge. Before this it was committed by
+# hand: on 2026-08-25 a sidecar from a superseded 10:56Z session (seed 20260824)
+# sat beside a document from the 11:08Z session (seed 20260825) under the same
+# basename, and nothing in the repo compared them.
+$rawFile = [System.IO.Path]::ChangeExtension($OutFile, $null).TrimEnd('.') + '.raw.json'
+[System.IO.File]::WriteAllText($rawFile, ($sess | ConvertTo-Json -Depth 14), (New-Object System.Text.UTF8Encoding($false)))
+Write-Output "wrote $rawFile (same session object as the document)"
 & python (Join-Path $BenchRepo 'windows\bench\validate_result_v1.py') $BenchRepo $OutFile
 if ($LASTEXITCODE -ne 0) { throw "EMISSION FAILED VALIDATION: exit $LASTEXITCODE" }

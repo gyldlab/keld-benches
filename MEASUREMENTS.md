@@ -594,12 +594,20 @@ gitignored, so that fixture's npm layer is not reproducible from this repo. Its
 
 ### Thermal
 
-All eight fixed-work checkpoints nominal: 0.9893 at start, peak 1.0499 at the
-r30 gate against a 1.05 band, 0.9872 at end. No cooling gate was entered.
+The document records `environment.power.thermal_state: "nominal"`. The emitter
+derives that from the fixed-work probes at both session boundaries and fails
+closed: publication requires nominal at both, and a probe that ran *faster* than
+the claimed quiet-baseline floor is refused as `THERMAL_REFERENCE_SUSPECT`,
+because such a floor was not measured on a quiet machine and understates every
+ratio against it.
 
-The r30 gate sat **0.0001 under the band** — this session had no thermal
-headroom left. A longer run on this machine needs a lower launch cadence, not a
-wider band.
+Per-probe ratios are not carried in the result schema, so none is quoted here.
+An earlier version of this section cited three — start, r30 gate, end — that
+appeared nowhere in the repository: they came from a session file that was never
+committed, and the sidecar that *was* committed belonged to a different session
+(see [`CORRECTIONS.md`](./windows/bench/results/CORRECTIONS.md)). The raw
+session record is now written by the emitter alongside the document, so its
+probe ratios are citable from the repository itself.
 
 ### Superseded
 

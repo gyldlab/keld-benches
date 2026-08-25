@@ -394,6 +394,13 @@ $out = [ordered]@{
   schedule = $schedule
   webview2_start = $wv2Start; webview2_end = $wv2End; integrity = $integrity
   thermal_start = $thermalStart; thermal_end = $thermalEnd
+  # The runner hashes ITSELF at session time. The emitter used to hash the
+  # file on disk when the document was written, so editing the runner between
+  # the run and a re-emission silently changed provenance.harness.sha256 to a
+  # runner that never produced the session -- which is exactly what happened
+  # on 2026-08-25 (9f2e0f4d -> 8565ee67, one commit after writing down that it
+  # must not). A hash captured at run time cannot drift.
+  harness_sha256 = (Get-FileHash $PSCommandPath -Algorithm SHA256).Hash.ToLower()
   canonical_payload_sha256 = $payloadSha
   thermal_gate_every_rounds = $ThermalGateEveryRounds
   thermal_gate_events = $gateEvents

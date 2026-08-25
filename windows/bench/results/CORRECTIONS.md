@@ -86,3 +86,46 @@ webview exposes `__TAURI_INTERNALS__`, `__TAURI_EVENT_PLUGIN_INTERNALS__`,
 `ipc` and `isTauri` before the document runs, and Keld exposes none. Identical
 bytes still execute in non-identical environments, and a future paired document
 must disclose that rather than imply full parity.
+
+---
+
+## 2026-08-25 — a raw sidecar was paired with a document from a different session
+
+**Affected file**
+
+- `mem-idle/2026-08-25.kel25-windows-keld-vs-tauri-canonical-30.fresh-process.raw.json`
+  (renamed to `…-superseded-1056z.fresh-process.raw.json`)
+
+**What was wrong**
+
+The repository pairs `X.json` with `X.raw.json` by basename. That sidecar was
+committed by hand in `fe7b3d6` from a session that ran **10:56:17Z–11:00:19Z
+with seed 20260824**. The document later written under the same basename came
+from a different session: **11:08:26Z–11:12:38Z, seed 20260825**.
+
+Nothing in the repository compared them. `schema/check.py` reads only
+`schema/examples/`; `validate_result_v1.py` validates one document internally
+and passes; `Check-PublishedMeasurements.ps1` only checks `MEASUREMENTS.md` rows
+carrying an inline `raw-median source=` marker, and the paired section carries
+none.
+
+Recomputing the headline from the mismatched sidecar gives median ratio
+**0.847438** against the document's **0.8501** — the document's point estimate
+falls outside the sidecar's own CI95 `[0.843445, 0.848198]`. Two different
+sessions, as the timestamps and seed already said.
+
+The earlier session's document was never committed: it was discarded the same
+day for recording `keld_sha=2a8e8a4` against a binary built at `58708bb`. Its
+raw records were committed anyway and outlived it.
+
+**What was done**
+
+The sidecar is renamed rather than deleted — it is real data from a real
+session, and it is now labelled with that session's own start time so it cannot
+be read as belonging to any document.
+
+The cause is fixed at the boundary rather than by convention:
+`Emit-PairedSession.ps1` now writes the sidecar **itself**, from the same
+session object it emits the document from, so the pair cannot diverge again.
+A hand-committed sidecar was always going to drift eventually.
+
