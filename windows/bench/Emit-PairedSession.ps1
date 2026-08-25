@@ -56,6 +56,31 @@ if ($tree -ne 'clean' -and -not $AllowDirtyTree) {
 }
 $runnerRel = 'windows/bench/Measure-WindowsGuiSession.ps1'
 $emitRel   = 'windows/bench/Emit-PairedSession.ps1'
+# The keld ARTIFACT must actually correspond to keld_sha. Assert-AtCommit
+# validates bench harness files against bench_sha, but nothing validated the
+# measured Keld binary -- and on 2026-08-25 the Keld repo moved to a commit
+# touching 1399 lines of product source while target/release/keld.exe was still
+# the binary built from the previous one. A document recording keld_sha alone
+# would have claimed code the measured binary does not contain.
+#
+# A binary cannot embed the sha it was built from, so the checkable invariant is
+# ordering: an artifact built BEFORE its claimed commit existed cannot be that
+# commit. Fails closed; a dirty keld tree is also refused, since then keld_sha
+# does not describe the source either.
+$keldDirty = & git -C $KeldRepo status --porcelain
+if (-not [string]::IsNullOrWhiteSpace(($keldDirty | Out-String))) {
+  throw "PROVENANCE FAILED: the keld repo tree is dirty, so keld_sha $keldSha does not describe the source the artifact was built from."
+}
+$keldCommitUtc = [datetime]::Parse((& git -C $KeldRepo show -s --format=%cI $keldSha)).ToUniversalTime()
+$keldExePath = Join-Path $KeldRepo 'target/release/keld.exe'
+if (-not (Test-Path $keldExePath)) { throw "PROVENANCE FAILED: no keld.exe at $keldExePath" }
+$keldExeUtc = (Get-Item $keldExePath).LastWriteTimeUtc
+if ($keldExeUtc -lt $keldCommitUtc) {
+  throw ("PROVENANCE FAILED: keld.exe was built {0:u} but keld_sha {1} was committed {2:u}. " -f $keldExeUtc, $keldSha.Substring(0,12), $keldCommitUtc) +
+        "The measured binary predates the commit it would be attributed to. Rebuild at this sha, or check out the sha the binary was built from."
+}
+Write-Output ("keld artifact provenance OK: exe {0:u} >= commit {1:u}" -f $keldExeUtc, $keldCommitUtc)
+
 $runnerSha = Assert-AtCommit -Repo $BenchRepo -Sha $benchSha -Rel $runnerRel
 $null      = Assert-AtCommit -Repo $BenchRepo -Sha $benchSha -Rel $emitRel
 Write-Output "provenance OK: runner=$($runnerSha.Substring(0,16))"
