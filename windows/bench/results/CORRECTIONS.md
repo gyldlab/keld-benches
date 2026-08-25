@@ -71,10 +71,15 @@ Any future document claiming payload parity must verify by **extracting the
 page from the artifact whose sha256 the document cites**, which is the check
 that caught this.
 
-**Still outstanding**
+**Resolved 2026-08-25**
 
-A re-run under the canonical payload has not been performed. Until it is, there
-is no valid Keld-versus-Tauri comparison in this repository.
+The re-run was performed: `mem-idle/2026-08-25.kel25-windows-keld-vs-tauri-canonical-30.fresh-process.json`.
+Both arms verified to deliver payload
+`26f6ad058d3350b46aa131ab281aa478b6c705a60af15c8755a369f66bab7f37`, the Tauri
+side by extraction from the artifact that document cites. It carries the
+environment-parity and scope disclosures noted below. The withdrawal above
+still stands for the two 2026-08-24 documents; this note does not reinstate
+them.
 
 Note also that source-byte parity is not rendered-environment parity: Tauri's
 webview exposes `__TAURI_INTERNALS__`, `__TAURI_EVENT_PLUGIN_INTERNALS__`,
