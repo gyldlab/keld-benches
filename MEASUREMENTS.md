@@ -562,21 +562,33 @@ artifact this document cites** rather than by trusting the build.
 
 | Arm | Median (KiB) | Min | Max |
 |---|---|---|---|
-| **Keld** host | **22,784** | 22,660 | 22,884 |
-| **Tauri** host | **26,790** | 26,644 | 26,948 |
+| **Keld** host | **22,788** | 22,680 | 22,888 |
+| **Tauri** host | **26,856** | 26,732 | 27,008 |
 
 Paired percentile bootstrap over rounds, 10,000 resamples, resampling whole
 rounds to preserve pairing:
 
-**median ratio 0.8501, CI95 [0.847891, 0.851282], verdict PASS** — the Keld
-host process is ~15.0% smaller, and the interval excludes 1.0.
+**median ratio 0.8484, CI95 [0.846864, 0.849548], verdict PASS** — the Keld
+host process is ~15.2% smaller, and the interval excludes 1.0.
 
 ### What this is not
 
 **Host scope only.** `framework_ws_kib` (host + runtime) is recorded per run and
-deliberately excluded from the comparison: for Keld that is ~48,750 KiB, because
-the supervised Bun child is a capability the Tauri hello has no equivalent of.
-Do not read 0.8501 as total application footprint.
+deliberately excluded from the comparison: for Keld the median is 73,620 KiB,
+because the supervised Bun child is a capability the Tauri hello has no
+equivalent of. Do not read 0.8484 as total application footprint.
+
+**Do not compare a working set across sessions.** An earlier session on this
+machine recorded that same diagnostic at 48,688 KiB. Its `runtime_private_kib`
+was 88,918 against this session's 89,016 — flat — with one runtime process in
+both. Private bytes is the allocation-side counter and it did not move; only
+residency did. A working set is how much of an allocation the OS is currently
+keeping in physical memory, so it tracks system pressure as well as the program.
+That is safe for the scored comparison here, where both arms are measured within
+the same round seconds apart under the same pressure, and it is **not** safe
+between documents. Quoting a working set from one session as a standing property
+of a framework — as an earlier revision of this section did — is that unsafe
+read.
 
 **The arms are not scope-matched.** The Keld arm runs the full `keld dev`
 developer flow — doctor checks, echo server, supervised Bun spawn,
@@ -601,13 +613,46 @@ the claimed quiet-baseline floor is refused as `THERMAL_REFERENCE_SUSPECT`,
 because such a floor was not measured on a quiet machine and understates every
 ratio against it.
 
-Per-probe ratios are not carried in the result schema, so none is quoted here.
-An earlier version of this section cited three — start, r30 gate, end — that
-appeared nowhere in the repository: they came from a session file that was never
-committed, and the sidecar that *was* committed belonged to a different session
-(see [`CORRECTIONS.md`](./windows/bench/results/CORRECTIONS.md)). The raw
-session record is now written by the emitter alongside the document, so its
-probe ratios are citable from the repository itself.
+The probe is fixed work, not a temperature reading: 200M iterations, CPU0-pinned,
+min-of-6, expressed as a ratio against this machine's quiet-baseline floor of
+0.4754 ns/iter. Nominal is a ratio at or under 1.05. Temperature is recorded as
+descriptive context only, because on this machine it is not a usable decision
+variable — idle sweeps ranged 70–91 °C, and this session's opening probe read
+82 °C while running nominal.
+
+Every ratio below is citable from the raw session record the emitter now writes
+alongside the document
+([`…canonical-30.fresh-process.raw.json`](./windows/bench/results/mem-idle/2026-08-25.kel25-windows-keld-vs-tauri-canonical-30.fresh-process.raw.json)),
+which carries the same session object the document was computed from.
+
+| probe | ratio | state |
+|---|---|---|
+| session start | 1.0202 | nominal |
+| gate after r5 | 1.0499 | nominal |
+| gate after r10 | 1.0456 | nominal |
+| gate after r15 | 1.0086 | nominal |
+| **gate after r20** | **1.1132** | **throttled — gate entered** |
+| gate after r20, recheck | 0.9729 | nominal, after idling 63,591 ms |
+| gate after r25 | 0.9931 | nominal |
+| gate after r30 | 1.0006 | nominal |
+| session end | 0.9655 | nominal |
+
+**The session was not uniformly nominal.** The r20 gate found the machine
+throttled and idled it for 63.6 s until a fresh probe came back nominal; the
+session's 7 min 40 s wall window includes that pause. Rounds 21–30 were measured
+after the recovery, not during the throttle. Because the interleaving is
+round-major, any residual effect lands on both arms within the same round rather
+than on one of them.
+
+Publication additionally fails closed on a probe that runs *faster* than the
+claimed floor (`THERMAL_REFERENCE_SUSPECT`), because such a floor was not
+measured on a quiet machine and understates every ratio against it. Neither
+boundary probe was suspect here.
+
+An earlier version of this section cited three ratios that appeared nowhere in
+the repository: they came from a session file that was never committed, and the
+sidecar that *was* committed belonged to a different session (see
+[`CORRECTIONS.md`](./windows/bench/results/CORRECTIONS.md)).
 
 ### Superseded
 
