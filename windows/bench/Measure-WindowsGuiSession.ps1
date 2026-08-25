@@ -323,11 +323,22 @@ function Invoke-ThermalGate {
   # in the document rather than an invisible pause in the operator terminal.
   param([int]$AfterRound)
   $probe = Invoke-ThermalProbe -Label ("gate r$AfterRound")
-  if ($null -eq $probe) { return [ordered]@{ after_round=$AfterRound; entered=$false; note='probe unavailable' } }
-  if ($probe.thermal_state -eq 'nominal' -and -not $probe.reference_suspect) {
+  # An unavailable probe means the thermal state is UNKNOWN, not nominal. This
+  # used to return entered=$false and the session continued uncooled while the
+  # file header claimed the probe is fail-closed -- the gate was fail-open. An
+  # unknown state now enters the cooling loop exactly like a non-nominal one; if
+  # the probe never becomes available the gate ends with recovered=$false, which
+  # the emitter refuses to publish.
+  $probeUnavailable = ($null -eq $probe)
+  if ($probeUnavailable) {
+    Write-Host ("  cooling gate after r{0}: probe UNAVAILABLE -- treating as not-nominal" -f $AfterRound)
+  }
+  if (-not $probeUnavailable -and $probe.thermal_state -eq 'nominal' -and -not $probe.reference_suspect) {
     return [ordered]@{ after_round=$AfterRound; entered=$false; state=$probe.thermal_state; ratio=$probe.ratio_to_reference }
   }
-  Write-Host ("  cooling gate after r{0}: {1} (ratio {2}) -- idling until nominal" -f $AfterRound, $probe.thermal_state, $probe.ratio_to_reference)
+  if (-not $probeUnavailable) {
+    Write-Host ("  cooling gate after r{0}: {1} (ratio {2}) -- idling until nominal" -f $AfterRound, $probe.thermal_state, $probe.ratio_to_reference)
+  }
   $sw = [System.Diagnostics.Stopwatch]::StartNew()
   $attempts = 0
   while ($sw.ElapsedMilliseconds -lt $ThermalGateMaxWaitMs) {
@@ -340,7 +351,7 @@ function Invoke-ThermalGate {
     }
   }
   Write-Host ("  cooling gate after r{0}: DID NOT recover within {1} ms" -f $AfterRound, $ThermalGateMaxWaitMs)
-  return [ordered]@{ after_round=$AfterRound; entered=$true; recovered=$false; waited_ms=[int]$sw.ElapsedMilliseconds; attempts=$attempts }
+  return [ordered]@{ after_round=$AfterRound; entered=$true; recovered=$false; probe_unavailable=$probeUnavailable; waited_ms=[int]$sw.ElapsedMilliseconds; attempts=$attempts }
 }
 
 $gateEvents = New-Object System.Collections.ArrayList
