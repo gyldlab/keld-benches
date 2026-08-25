@@ -62,6 +62,32 @@ Write-Output "provenance OK: runner=$($runnerSha.Substring(0,16))"
 
 $sess = Get-Content $SessionJson -Raw | ConvertFrom-Json
 
+# --- payload parity, PROVEN from the measured artifact ------------------------
+# HARNESS-CONTRACT.md requires a byte-identical canonical payload across arms,
+# recorded as provenance.payload_sha256. It is only meaningful if it is
+# recovered from what was MEASURED. On 2026-08-24 a Tauri artifact cited by two
+# committed documents turned out to embed a beacon-instrumented page; a source
+# file hash would have happily agreed with itself and hidden that.
+#
+# Keld  : the staged index.html the harness actually launched against.
+# Tauri : the page extracted from inside the exe whose sha256 this document
+#         cites, via windows/bench/extract_tauri_payload.py.
+# Emission FAILS if they disagree. An unprovable parity claim is worse than none.
+$payloadSha = $null
+if ($sess.canonical_payload_sha256) {
+  $keldPayload = [string]$sess.canonical_payload_sha256
+  $tauriExe = Join-Path $BenchRepo 'windows/tauri/hello/src-tauri/target/release/tauri-hello.exe'
+  $extractor = Join-Path $BenchRepo 'windows/bench/extract_tauri_payload.py'
+  $null = & python $extractor $tauriExe --expect-sha256 $keldPayload
+  if ($LASTEXITCODE -ne 0) {
+    throw "PAYLOAD PARITY FAILED: the Tauri artifact does not embed the canonical page ($keldPayload). Exit $LASTEXITCODE."
+  }
+  $payloadSha = $keldPayload
+  Write-Output "payload parity verified: both arms deliver $payloadSha"
+} else {
+  Write-Output "payload parity: NOT claimed (session ran without -CanonicalPayload)"
+}
+
 function Get-Median { param([double[]]$v)
   $s = $v | Sort-Object; $n = $s.Count; if ($n -eq 0) { return $null }
   if ($n % 2 -eq 1) { return [double]$s[[int](($n-1)/2)] }
@@ -233,6 +259,7 @@ $doc = [ordered]@{
   provenance = [ordered]@{
     bench_sha = $benchSha; bench_tree_state = $tree; keld_sha = $keldSha
     harness = [ordered]@{ path = $runnerRel; sha256 = $runnerSha; version = 'kel25-paired-gui-v1' }
+    payload_sha256 = $payloadSha
     fixtures = @(
       [ordered]@{ path = 'windows/keld/hello/'; sha = $benchSha }
       [ordered]@{ path = 'windows/tauri/hello/'; sha = $benchSha }
