@@ -239,10 +239,15 @@ $ratioArr = @($ratios | ForEach-Object { [double]$_ })
 $ci = Get-PairedRatioCi95 -Ratios $ratioArr
 $verdict = 'INCONCLUSIVE'
 $THRESH = 1.05
-if ($ci) {
-  if ($ci.lower -gt $THRESH) { $verdict = 'FAIL' }
-  elseif ($ci.upper -le $THRESH) { $verdict = 'PASS' }
+# Fewer than two paired rounds leaves $ci null, and the comparison block was
+# still emitted with both bounds as JSON null -- which result.v1.schema.json
+# rejects, so the document could not have validated. Refuse here, where the
+# reason is a sentence rather than a schema path.
+if ($null -eq $ci) {
+  throw "PAIRED COMPARISON IMPOSSIBLE: only $($ratioArr.Count) round(s) had one valid sample from each arm. A paired interval needs at least two. Re-run the session; do not emit a document without a comparison."
 }
+if ($ci.lower -gt $THRESH) { $verdict = 'FAIL' }
+elseif ($ci.upper -le $THRESH) { $verdict = 'PASS' }
 Write-Output ("paired rounds=$($ratioArr.Count)  median ratio=$([math]::Round((Get-Median $ratioArr),4))  ci95=[$($ci.lower), $($ci.upper)]  verdict=$verdict")
 
 # --- environment -------------------------------------------------------------
@@ -348,6 +353,22 @@ if ([string]::IsNullOrWhiteSpace($finishedUtc)) {
 Write-Output ("session started_utc (opening thermal probe): {0}" -f $startedUtc)
 Write-Output ("session finished_utc (closing thermal probe): {0}" -f $finishedUtc)
 
+# provenance.payload_sha256 is OMITTED, not null, when no payload was verified:
+# the schema types it as a 64-character hex sha256 and rejects null, so writing
+# the key empty produced a document that could not validate. Its absence is
+# already reported as the PAYLOAD_PARITY_UNPROVEN publication reason, so nothing
+# is lost by leaving the key out. Assembled in order here because [ordered]
+# appends, and a conditional key added after the fact would land past fixtures.
+$provenance = [ordered]@{
+  bench_sha = $benchSha; bench_tree_state = $tree; keld_sha = $keldSha
+  harness = [ordered]@{ path = $runnerRel; sha256 = $runnerSha; version = 'kel25-paired-gui-v1' }
+}
+if ($payloadSha) { $provenance['payload_sha256'] = $payloadSha }
+$provenance['fixtures'] = @(
+  [ordered]@{ path = 'windows/keld/hello/'; sha = $benchSha }
+  [ordered]@{ path = 'windows/tauri/hello/'; sha = $benchSha }
+)
+
 $doc = [ordered]@{
   schema_version = 1
   metric = [ordered]@{ id = 'MEM-IDLE'; unit = 'KiB'; registry_version = 1 }
@@ -372,15 +393,7 @@ $doc = [ordered]@{
       [ordered]@{ name = 'tauri'; version = '2.11.5' }
     )
   }
-  provenance = [ordered]@{
-    bench_sha = $benchSha; bench_tree_state = $tree; keld_sha = $keldSha
-    harness = [ordered]@{ path = $runnerRel; sha256 = $runnerSha; version = 'kel25-paired-gui-v1' }
-    payload_sha256 = $payloadSha
-    fixtures = @(
-      [ordered]@{ path = 'windows/keld/hello/'; sha = $benchSha }
-      [ordered]@{ path = 'windows/tauri/hello/'; sha = $benchSha }
-    )
-  }
+  provenance = $provenance
   arms = $arms
   comparison = [ordered]@{
     baseline_arm = 'tauri'

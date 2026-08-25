@@ -25,7 +25,7 @@ the only `tauri-codegen-assets` blob whose bytes appear inside that exe sits at
 offset `6061195`, decompresses to **1717 bytes**, contains
 `requestAnimationFrame`, and fires
 
-```
+```js
 new Image().src = "http://127.0.0.1:54321/painted?nonce=testnonce123"
 ```
 

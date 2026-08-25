@@ -409,4 +409,9 @@ $out = [ordered]@{
 if ($OutFile) {
   [System.IO.File]::WriteAllText($OutFile, ($out | ConvertTo-Json -Depth 10), (New-Object System.Text.UTF8Encoding($false)))
   Write-Output "wrote $OutFile"
+} else {
+  # -OutFile is optional and the session is not reproducible on demand: this one
+  # took 7m40s including a cooling gate. Discarding the records because an
+  # argument was omitted throws away the measurement, not just the file.
+  $out | ConvertTo-Json -Depth 10
 }

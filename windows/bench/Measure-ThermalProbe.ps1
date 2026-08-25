@@ -94,6 +94,24 @@ if ($NominalBand -gt 1.05) {
 if ($NominalBand -le 0.95) {
   throw "INVALID -NominalBand: $NominalBand is at or below the reference_suspect cutoff of 0.95, so no ratio could ever be classified nominal. That is an unsatisfiable gate, not a strict one."
 }
+# The other three inputs are equally load-bearing and were equally unchecked.
+# -Reps 0 leaves an empty sample, so Measure-Object returns nothing and the
+# rate reads as zero -- a maximally fast machine. -Iterations 0 divides by zero
+# for ns_per_iter. -ReferenceFloorNsPerIter 0 makes every ratio infinite. Each
+# one produces a confident number that means nothing, which is worse than an
+# error, so they are refused before anything is measured.
+if ($Iterations -le 0) {
+  throw "INVALID -Iterations: $Iterations. The probe divides elapsed time by the iteration count; a non-positive count has no rate."
+}
+if ($Reps -le 0) {
+  throw "INVALID -Reps: $Reps. The probe reports the minimum of N timed repetitions; with none there is no minimum, and the empty sample reads as a rate of zero."
+}
+if (-not $Calibrate) {
+  # -Calibrate is how a floor is produced, so it legitimately runs without one.
+  if ([double]::IsNaN($ReferenceFloorNsPerIter) -or [double]::IsInfinity($ReferenceFloorNsPerIter) -or $ReferenceFloorNsPerIter -le 0) {
+    throw "INVALID -ReferenceFloorNsPerIter: '$ReferenceFloorNsPerIter'. Every ratio is measured against this floor; a non-positive or non-finite floor makes thermal_state meaningless. Produce one with -Calibrate on an idle machine."
+  }
+}
 
 # The work loop is COMPILED, not interpreted. A PowerShell loop runs the same
 # arithmetic ~1000x slower and its wall time is dominated by interpreter

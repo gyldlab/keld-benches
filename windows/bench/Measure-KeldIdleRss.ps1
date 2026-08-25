@@ -333,11 +333,14 @@ for ($i = 1; $i -le $Runs; $i++) {
   }
 }
 
-$runRecords | ConvertTo-Json -Depth 8 | Out-String -Width 400 | Write-Output
+# -InputObject @(...) because PowerShell unwraps a one-element pipeline: with
+# -Runs 1 this emitted a bare object where every consumer, including
+# validate_result_v1.py's raw-sidecar check, expects an array of records.
+ConvertTo-Json -InputObject @($runRecords) -Depth 8 | Out-String -Width 400 | Write-Output
 if ($OutFile) {
   # UTF-8 WITHOUT BOM. PowerShell 5.1 Set-Content -Encoding utf8 emits a BOM,
   # which strict JSON parsers reject (recorded trap in windows/bench/CONTRACT.md).
-  $json = $runRecords | ConvertTo-Json -Depth 8
+  $json = ConvertTo-Json -InputObject @($runRecords) -Depth 8
   [System.IO.File]::WriteAllText($OutFile, $json, (New-Object System.Text.UTF8Encoding($false)))
   Write-Output "wrote $OutFile"
 }

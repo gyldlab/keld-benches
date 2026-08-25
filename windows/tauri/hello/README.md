@@ -5,7 +5,7 @@ scaffold, slimmed to one 960x640 window + local HTML. On Windows the engine is
 the **system WebView2 Evergreen runtime** (`webviewInstallMode:
 downloadBootstrapper`) — nothing is bundled.
 
-**Release weigh is `npm run tauri build`**, not `--debug` / `tauri dev`.
+**Release build is `npm run tauri build`**, not `--debug` / `tauri dev`.
 
 Same engine class as Keld on this OS — both drive system WebView2, which is
 what makes a `vs` cell legitimate here. **Not** the same class as Electron or
