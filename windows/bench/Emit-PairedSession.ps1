@@ -307,7 +307,17 @@ $startedUtc = $sess.thermal_start.sampled_utc
 if ([string]::IsNullOrWhiteSpace($startedUtc)) {
   throw "PROVENANCE FAILED: the session JSON has no thermal_start.sampled_utc, so the session start time is unknown. Emitting a placeholder would put a false timestamp in a published document."
 }
+# finished_utc was (Get-Date) at EMISSION, not the end of the session. It read
+# correctly only while emission immediately followed the run; re-emitting the
+# same session hours later stretched the recorded window to ~5 hours. Same class
+# as the hardcoded start: a field inside `session` describing the emitter.
+# The closing thermal probe is the session's last measured event.
+$finishedUtc = $sess.thermal_end.sampled_utc
+if ([string]::IsNullOrWhiteSpace($finishedUtc)) {
+  throw "PROVENANCE FAILED: the session JSON has no thermal_end.sampled_utc, so the session end time is unknown. Emitting the current clock would record when the document was written, not when the session ran."
+}
 Write-Output ("session started_utc (opening thermal probe): {0}" -f $startedUtc)
+Write-Output ("session finished_utc (closing thermal probe): {0}" -f $finishedUtc)
 
 $doc = [ordered]@{
   schema_version = 1
@@ -315,7 +325,7 @@ $doc = [ordered]@{
   cache_state = 'fresh-process'
   session = [ordered]@{
     started_utc = $startedUtc
-    finished_utc = (Get-Date).ToUniversalTime().ToString('o')
+    finished_utc = $finishedUtc
     requested_samples = [int]$sess.rounds
     interleaving = 'round-robin-randomized'
     label = 'kel25-windows-keld-vs-tauri-paired-30'
