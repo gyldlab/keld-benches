@@ -12,6 +12,8 @@
 | [`macos/neutralino/hello/`](./macos/neutralino/hello/) | Neutralino | yes | Measured 2026-08-14 |
 | [`macos/nwjs/hello/`](./macos/nwjs/hello/) | NW.js (Chromium + Node) | yes (app sources; runtime zip not committed) | Measured 2026-08-14 |
 | [`macos/electrobun/hello/`](./macos/electrobun/hello/) | Electrobun (system webview + Bun) | yes | Measured 2026-08-14 |
+| [`windows/keld/hello/`](./windows/keld/hello/) | Keld (WebView2 + supervised Bun) | yes | Byte-identical to `keld create hello` at keld `58708bb`; measured 2026-08-25 with a binary built at `2a8e8a4`. `crates/keld-cli/templates/` is unchanged across `58708bb..2a8e8a4` (verified `git diff --stat`, empty), so the fixture is not stale against the measured binary. |
+| [`macos/keld/hello/`](./macos/keld/hello/) | Keld (WKWebView + supervised Bun) | yes | Not yet measured |
 | [`windows/electron/hello/`](./windows/electron/hello/) | Electron (Chromium + Node) | yes | Measured 2026-08-13/15 |
 | [`windows/tauri/hello/`](./windows/tauri/hello/) | Tauri 2 (WebView2) | yes | Measured 2026-08-13/15 |
 | [`windows/wails/hello/`](./windows/wails/hello/) | Wails (WebView2) | yes | Measured 2026-08-13 |
@@ -537,3 +539,70 @@ SmartScreen isolation from those same committed raws:
   session now preserved in the corrected table above (Electron included), which
   is exactly why cross-session absolutes are banned in this file. Within-session
   ordering is the signal.
+
+---
+
+## Keld vs Tauri, paired — windows (2026-08-25)
+
+Fixtures: [`windows/keld/hello/`](./windows/keld/hello/) and
+[`windows/tauri/hello/`](./windows/tauri/hello/).
+Document: [`windows/bench/results/mem-idle/2026-08-25.kel25-windows-keld-vs-tauri-canonical-30.fresh-process.json`](./windows/bench/results/mem-idle/2026-08-25.kel25-windows-keld-vs-tauri-canonical-30.fresh-process.json)
+— the machine-readable record, and the only citable source. This section is a
+summary of it, not a second source of truth.
+
+Windows 11 build 26200, AMD Ryzen 7 5800H, on AC. WebView2 Evergreen
+151.0.4129.107. keld `2a8e8a4`, Tauri 2.11.5, Bun 1.4.0, rustc 1.97.1.
+
+Round-major randomized interleaving, 30 paired rounds, both arms 30/30 valid.
+Both arms are handed the byte-identical 225-byte canonical page
+(`26f6ad05…`), verified by **extracting the embedded page from the Tauri
+artifact this document cites** rather than by trusting the build.
+
+### MEM-IDLE — host working set
+
+| Arm | Median (KiB) | Min | Max |
+|---|---|---|---|
+| **Keld** host | **22,784** | 22,660 | 22,884 |
+| **Tauri** host | **26,790** | 26,644 | 26,948 |
+
+Paired percentile bootstrap over rounds, 10,000 resamples, resampling whole
+rounds to preserve pairing:
+
+**median ratio 0.8501, CI95 [0.847891, 0.851282], verdict PASS** — the Keld
+host process is ~15.0% smaller, and the interval excludes 1.0.
+
+### What this is not
+
+**Host scope only.** `framework_ws_kib` (host + runtime) is recorded per run and
+deliberately excluded from the comparison: for Keld that is ~48,750 KiB, because
+the supervised Bun child is a capability the Tauri hello has no equivalent of.
+Do not read 0.8501 as total application footprint.
+
+**The arms are not scope-matched.** The Keld arm runs the full `keld dev`
+developer flow — doctor checks, echo server, supervised Bun spawn,
+authenticated kipc echo, then window — against a packaged Tauri release exe.
+
+**Payload parity is source-level, not environment-level.** Tauri exposes
+`__TAURI_INTERNALS__`, `__TAURI_EVENT_PLUGIN_INTERNALS__`, `ipc` and `isTauri`
+before the document runs and loads via a custom asset protocol at
+`http://tauri.localhost`; Keld exposes none of those and loads via
+`NavigateToString` at origin `null`. Identical bytes, non-identical environments.
+
+**The Tauri npm layer is unpinned**: `windows/tauri/hello/package-lock.json` is
+gitignored, so that fixture's npm layer is not reproducible from this repo. Its
+`Cargo.lock` is committed and the CLI is not on the measured build path.
+
+### Thermal
+
+All eight fixed-work checkpoints nominal: 0.9893 at start, peak 1.0499 at the
+r30 gate against a 1.05 band, 0.9872 at end. No cooling gate was entered.
+
+The r30 gate sat **0.0001 under the band** — this session had no thermal
+headroom left. A longer run on this machine needs a lower launch cadence, not a
+wider band.
+
+### Superseded
+
+The two 2026-08-24 paired documents are **withdrawn** as Keld-versus-Tauri
+results; see [`windows/bench/results/CORRECTIONS.md`](./windows/bench/results/CORRECTIONS.md).
+They measured a Tauri binary that embedded a paint-beacon-instrumented page.
