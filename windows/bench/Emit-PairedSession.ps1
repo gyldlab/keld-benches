@@ -280,15 +280,41 @@ if (-not $payloadSha) {
 if ($sess.integrity -ne 'ok') {
   $reasons += [ordered]@{ code='SESSION_INTEGRITY_FAILED'; label=[string]$sess.integrity }
 }
+# A cooling gate that fired and never returned to nominal means part of the
+# session ran outside the thermal band, which the boundary probes cannot see:
+# they sample the ends, not the middle. Nothing checked this before, so a
+# session could enter a gate, fail to recover, and still publish.
+foreach ($gate in @($sess.thermal_gate_events)) {
+  if ($gate -and $gate.entered -and -not $gate.recovered) {
+    $why = if ($gate.probe_unavailable) { 'the probe was unavailable' } else { "it did not return to nominal within $($gate.waited_ms) ms" }
+    $reasons += [ordered]@{ code='THERMAL_GATE_UNRECOVERED'; label="cooling gate after round $($gate.after_round) entered and $why" }
+  }
+}
 $eligible = ($reasons.Count -eq 0)
 Write-Output ("publication: eligible=$eligible  (" + $reasons.Count + " blocking reason(s))")
+
+# The session start was a hardcoded literal until 2026-08-25, so every emitted
+# document carried '2026-08-24T20:10:00' regardless of when it actually ran --
+# the 2026-08-25 paired document claimed a start ~15 hours before its own
+# finished_utc. That is the false-provenance class this pipeline exists to
+# prevent, sitting in the pipeline itself.
+#
+# The opening thermal probe is the session's first measured event and already
+# stamps a real sampled_utc, so it IS the session start; taking it keeps one
+# source of truth rather than adding a second timestamp for the runner to drift
+# against. Fail closed: no boundary probe, no emission.
+$startedUtc = $sess.thermal_start.sampled_utc
+if ([string]::IsNullOrWhiteSpace($startedUtc)) {
+  throw "PROVENANCE FAILED: the session JSON has no thermal_start.sampled_utc, so the session start time is unknown. Emitting a placeholder would put a false timestamp in a published document."
+}
+Write-Output ("session started_utc (opening thermal probe): {0}" -f $startedUtc)
 
 $doc = [ordered]@{
   schema_version = 1
   metric = [ordered]@{ id = 'MEM-IDLE'; unit = 'KiB'; registry_version = 1 }
   cache_state = 'fresh-process'
   session = [ordered]@{
-    started_utc = '2026-08-24T20:10:00.0000000+00:00'
+    started_utc = $startedUtc
     finished_utc = (Get-Date).ToUniversalTime().ToString('o')
     requested_samples = [int]$sess.rounds
     interleaving = 'round-robin-randomized'
