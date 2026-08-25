@@ -151,13 +151,22 @@ for ($i = 1; $i -le $Runs; $i++) {
           $windowMs = [math]::Round($sw.Elapsed.TotalMilliseconds, 3)
         }
       }
-      if ($ctxTask.Wait(25)) {
+      # The deadline is checked BEFORE and AFTER the wait, not only after it.
+      # Previously a beacon that arrived past TimeoutMs was handled here, one
+      # branch above the timeout check, and recorded as a valid measurement:
+      # the run reported a paint time larger than the deadline it was supposed
+      # to have failed. The wait is also bounded by the time actually left, so
+      # the loop cannot sit up to 25 ms past the deadline before noticing.
+      $remainingMs = $TimeoutMs - $sw.ElapsedMilliseconds
+      if ($remainingMs -le 0) { $reject = "TIMEOUT_${TimeoutMs}MS"; break }
+      if ($ctxTask.Wait([Math]::Min(25, [int]$remainingMs))) {
         $elapsed = $sw.Elapsed.TotalMilliseconds
         $ctx = $ctxTask.Result
         $got = $ctx.Request.QueryString['nonce']
         $ctx.Response.StatusCode = 204
         $ctx.Response.Close()
-        if ($got -eq $nonce) { $paintMs = [math]::Round($elapsed, 3) }
+        if ($elapsed -gt $TimeoutMs) { $reject = "TIMEOUT_${TimeoutMs}MS" }
+        elseif ($got -eq $nonce) { $paintMs = [math]::Round($elapsed, 3) }
         else { $reject = "NONCE_MISMATCH got='$got'" }
         break
       }
@@ -172,7 +181,22 @@ for ($i = 1; $i -le $Runs; $i++) {
       if ($proc.MainWindowHandle -ne [IntPtr]::Zero) {
         [void][PaintW32]::PostMessage($proc.MainWindowHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
       }
-      if (-not $proc.WaitForExit(15000)) { try { Stop-Process -Id $proc.Id -Force } catch {} }
+      # A forced kill that FAILS leaves the Keld process running, and the next
+      # run then measures first paint on a machine that still hosts the last
+      # one. The failure used to be swallowed by an empty catch, so the record
+      # could still say valid=true. Confirm the process is gone; if it is not,
+      # the run is rejected and its value discarded, because it was measured on
+      # a machine whose state the harness no longer controls.
+      if (-not $proc.WaitForExit(15000)) {
+        $killError = $null
+        try { Stop-Process -Id $proc.Id -Force -ErrorAction Stop } catch { $killError = $_.Exception.Message }
+        $proc.Refresh()
+        if ($killError -or -not $proc.WaitForExit(5000)) {
+          $detail = if ($killError) { $killError } else { 'the process was still alive 5s after a forced kill' }
+          $reject = "CLEANUP_FAILED: $detail"
+          $paintMs = $null
+        }
+      }
     }
     if ($listener) { try { $listener.Stop(); $listener.Close() } catch {} }
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue

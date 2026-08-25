@@ -38,12 +38,10 @@ function Get-TreeState { param([string]$Repo)
   if ([string]::IsNullOrWhiteSpace(($p | Out-String))) { return 'clean' }
   return 'dirty' }
 
-function Assert-AtCommit { param([string]$Repo, [string]$Sha, [string]$Rel)
-  $null = & git -C $Repo show "${Sha}:$Rel" 2>$null
-  if ($LASTEXITCODE -ne 0) { throw "PROVENANCE FAILED: $Rel does not exist at $Sha" }
-  $d = & git -C $Repo status --porcelain -- $Rel
-  if (-not [string]::IsNullOrWhiteSpace(($d | Out-String))) { throw "PROVENANCE FAILED: $Rel differs from its blob at $Sha" }
-  return (Get-FileHash (Join-Path $Repo $Rel) -Algorithm SHA256).Hash.ToLower() }
+# Assert-BlobAtCommit hashes the blob at $Sha rather than the working-tree
+# path, so the recorded hash is reproducible from a fresh clone under any EOL
+# attribute. See Provenance.ps1 for why that distinction is not cosmetic.
+. (Join-Path $PSScriptRoot 'Provenance.ps1')
 
 $benchSha = (& git -C $BenchRepo rev-parse HEAD).Trim()
 $keldSha  = (& git -C $KeldRepo rev-parse HEAD).Trim()
@@ -54,7 +52,7 @@ if ($tree -ne 'clean' -and -not $AllowDirtyTree) {
 }
 $runnerRel = 'windows/bench/Measure-WindowsGuiSession.ps1'
 $emitRel   = 'windows/bench/Emit-PairedSession.ps1'
-# The keld ARTIFACT must actually correspond to keld_sha. Assert-AtCommit
+# The keld ARTIFACT must actually correspond to keld_sha. Assert-BlobAtCommit
 # validates bench harness files against bench_sha, but nothing validated the
 # measured Keld binary -- and on 2026-08-25 the Keld repo moved to a commit
 # touching 1399 lines of product source while target/release/keld.exe was still
@@ -84,7 +82,7 @@ Write-Output ("keld artifact provenance OK: exe {0:u} >= commit {1:u}" -f $keldE
 # closed with a message naming a missing stamp that was in fact present.
 $sess = Get-Content $SessionJson -Raw | ConvertFrom-Json
 
-$null = Assert-AtCommit -Repo $BenchRepo -Sha $benchSha -Rel $runnerRel
+$null = Assert-BlobAtCommit -Repo $BenchRepo -Sha $benchSha -RepoRelPath $runnerRel
 # Provenance names the runner that PRODUCED this session, not whatever is on
 # disk now. Recomputing here made a re-emission after a runner edit cite a
 # harness that never ran the session: on 2026-08-25 it silently moved from
@@ -94,7 +92,7 @@ if ([string]::IsNullOrWhiteSpace($runnerSha)) {
   throw "PROVENANCE FAILED: the session JSON has no harness_sha256. Re-run with a runner that stamps its own hash; hashing the current file would name a harness that may not have produced this session."
 }
 Write-Output ("harness sha256 (stamped at session time): " + $runnerSha.Substring(0,16))
-$null      = Assert-AtCommit -Repo $BenchRepo -Sha $benchSha -Rel $emitRel
+$null      = Assert-BlobAtCommit -Repo $BenchRepo -Sha $benchSha -RepoRelPath $emitRel
 Write-Output "provenance OK: runner=$($runnerSha.Substring(0,16))"
 
 # --- payload parity, PROVEN from the measured artifact ------------------------

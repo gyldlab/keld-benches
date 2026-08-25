@@ -75,6 +75,26 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# NominalBand IS the publication gate, so it is validated rather than trusted.
+# -NominalBand 3 would have stamped 'nominal' on a ratio of 2.9, a machine
+# running at a third of its quiet speed, and the emitted document would have
+# carried nominal_band: 3 that no consumer read back.
+#
+# The satisfiable range is (0.95, 1.05]. Above 1.05 is looser than the band this
+# probe's header derives and documents. At or below 0.95 nothing can ever be
+# nominal, because a ratio under 0.95 is already routed to reference_suspect --
+# a band that can only ever answer 'throttled' is a silently broken gate, not a
+# strict one. Narrower-but-satisfiable is allowed: it can only refuse more.
+if ([double]::IsNaN($NominalBand) -or [double]::IsInfinity($NominalBand)) {
+  throw "INVALID -NominalBand: '$NominalBand' is not a finite number. The gate cannot be evaluated against it."
+}
+if ($NominalBand -gt 1.05) {
+  throw "INVALID -NominalBand: $NominalBand is looser than the documented 1.05 band. Widening the gate from the command line would publish a throttled session as nominal. Fix the machine, not the band."
+}
+if ($NominalBand -le 0.95) {
+  throw "INVALID -NominalBand: $NominalBand is at or below the reference_suspect cutoff of 0.95, so no ratio could ever be classified nominal. That is an unsatisfiable gate, not a strict one."
+}
+
 # The work loop is COMPILED, not interpreted. A PowerShell loop runs the same
 # arithmetic ~1000x slower and its wall time is dominated by interpreter
 # overhead, which is exactly the thing that must NOT be in the signal: the
@@ -162,7 +182,48 @@ if ($Calibrate) {
   return
 }
 
-$work = Invoke-FixedWork -Iters $Iterations -Repetitions $Reps
+function Write-UnknownResult {
+  <#
+    A probe that cannot run must still answer, in the same shape, so the answer
+    lands in the session record. Previously Add-Type failure was swallowed by
+    -ErrorAction SilentlyContinue and the script then died inside
+    [KeldFixedWork]::Run before printing anything: the caller saw a parse error
+    and stored $null, so the session JSON carried no thermal boundary at all
+    and the *reason* existed only in console scrollback.
+
+    'unknown' is never 'nominal', so every existing consumer still fails closed.
+  #>
+  param([string]$Diagnostic)
+  ([ordered]@{
+    thermal_state               = 'unknown'
+    reference_suspect           = $false
+    reference_suspect_note      = 'true when observed is >5% FASTER than the claimed floor, i.e. the floor was calibrated on a non-quiet machine and every ratio against it is understated'
+    ratio_to_reference          = $null
+    nominal_band                = $NominalBand
+    reference_floor_ns_per_iter = $ReferenceFloorNsPerIter
+    observed_ns_per_iter        = $null
+    probe                       = $null
+    probe_error                 = $Diagnostic
+    context                     = (Get-ThermalContext)
+    sampled_utc                 = (Get-Date).ToUniversalTime().ToString('o')
+    method                      = 'fixed-work min-of-N, CPU0-pinned, AboveNormal; ratio vs per-machine quiet-baseline floor'
+  }) | ConvertTo-Json -Depth 6
+}
+
+# Add-Type above runs with -ErrorAction SilentlyContinue because re-running in
+# one session legitimately reports the type as already defined. That also hides
+# a real compile failure, so the type is checked instead of assumed.
+if (-not ('KeldFixedWork' -as [type])) {
+  Write-UnknownResult -Diagnostic 'the compiled fixed-work type could not be created (Add-Type failed); no C# compiler, or a locked-down execution environment'
+  exit 3
+}
+
+try {
+  $work = Invoke-FixedWork -Iters $Iterations -Repetitions $Reps
+} catch {
+  Write-UnknownResult -Diagnostic ("the fixed-work probe failed to execute: " + $_.Exception.Message)
+  exit 3
+}
 $ctx  = Get-ThermalContext
 $ratio = [math]::Round($work.ns_per_iter / $ReferenceFloorNsPerIter, 4)
 

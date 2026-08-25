@@ -59,8 +59,22 @@ def main(argv):
         raw = open(path, 'rb').read()
         if raw[:3] == b'\xef\xbb\xbf':
             problems.append("file starts with a UTF-8 BOM")
+        # `json.loads` accepts the bare literals NaN, Infinity and -Infinity as
+        # an extension. They are not JSON (RFC 8259 has no non-finite numbers),
+        # and once parsed they reach the schema as Python floats that satisfy
+        # `"type": "number"`, while every numeric comparison against NaN returns
+        # False -- so a document carrying `"median": NaN` would pass both the
+        # schema and the range checks and be declared publishable. Refuse them
+        # at the parse boundary, where the reason is still legible.
+        def _reject_constant(literal: str) -> None:
+            raise ValueError(
+                f"{literal} is not JSON: RFC 8259 has no non-finite numbers, "
+                "and it would satisfy the schema while defeating every "
+                "numeric check"
+            )
+
         try:
-            doc = json.loads(raw.decode('utf-8'))
+            doc = json.loads(raw.decode('utf-8'), parse_constant=_reject_constant)
         except Exception as exc:
             print(f"FAIL {name}: not valid UTF-8 JSON: {exc}")
             failures += 1

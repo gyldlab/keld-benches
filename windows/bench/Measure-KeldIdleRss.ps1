@@ -42,6 +42,58 @@ public class KeldW32 {
 }
 "@ -ErrorAction SilentlyContinue
 
+function Stop-RunCoalition {
+  <#
+    Ends one run: kills the launched tree, removes its temp files, and waits
+    for the coalition to actually be gone.
+
+    THE REJECT PATH USED TO SKIP ALL THREE. A run rejected for
+    NATIVE_WINDOW_NOT_OBSERVED called `Stop-Process -Force` on the host alone
+    and `continue`d, so the bun and msedgewebview2 children the host had
+    already spawned were orphaned, two temp files leaked per rejected run, and
+    the next run started immediately -- against a machine still hosting the
+    previous run's processes. Documents emitted from those runs record
+    cache_state fresh-process, which is then not what was measured.
+
+    Descendants are enumerated while the root is still ALIVE. Once the host
+    exits its children are reparented and can no longer be attributed to this
+    run, so a post-mortem walk finds nothing to reap.
+
+    The host is killed FIRST: it is a supervisor, and killing the supervised
+    Bun child while the supervisor lives invites a respawn. Each descendant is
+    then matched on name before being killed, so a PID reused in the interval
+    is not a stranger this harness terminates.
+  #>
+  param([int]$HostPid, [string[]]$TempFiles)
+
+  $descendants = @(Get-DescendantPids -RootPid $HostPid)
+
+  if (Get-Process -Id $HostPid -ErrorAction SilentlyContinue) {
+    Stop-Process -Id $HostPid -Force -ErrorAction SilentlyContinue
+  }
+  foreach ($d in $descendants) {
+    $dpid = [int]$d.ProcessId
+    $live = Get-Process -Id $dpid -ErrorAction SilentlyContinue
+    if ($live -and "$($live.ProcessName).exe" -eq "$($d.Name)") {
+      Stop-Process -Id $dpid -Force -ErrorAction SilentlyContinue
+    }
+  }
+  if ($TempFiles) { Remove-Item $TempFiles -ErrorAction SilentlyContinue }
+
+  # Fresh-process cache state: await the condition, never sleep a fixed span.
+  $gone = [System.Diagnostics.Stopwatch]::StartNew()
+  while ($gone.ElapsedMilliseconds -lt 15000) {
+    $alive = 0
+    if (Get-Process -Id $HostPid -ErrorAction SilentlyContinue) { $alive++ }
+    foreach ($d in $descendants) {
+      if (Get-Process -Id ([int]$d.ProcessId) -ErrorAction SilentlyContinue) { $alive++ }
+    }
+    if ($alive -eq 0) { return $true }
+    Start-Sleep -Milliseconds 100
+  }
+  return $false
+}
+
 function Get-DescendantPids {
   param([int]$RootPid)
   # One CIM snapshot, then walk ParentProcessId edges. Avoids per-process
@@ -233,7 +285,7 @@ for ($i = 1; $i -le $Runs; $i++) {
 
   if ($hwnd -eq [IntPtr]::Zero) {
     [void]$runRecords.Add([ordered]@{ run = $i; valid = $false; reject_reason = 'NATIVE_WINDOW_NOT_OBSERVED'; value = $null })
-    if (Get-Process -Id $hostPid -ErrorAction SilentlyContinue) { Stop-Process -Id $hostPid -Force }
+    $null = Stop-RunCoalition -HostPid $hostPid -TempFiles @($stdout, $stderr)
     continue
   }
 
@@ -270,17 +322,14 @@ for ($i = 1; $i -le $Runs; $i++) {
       $record.diagnostics.host_ws_kib, $record.diagnostics.bun_ws_kib, $record.diagnostics.engine_ws_kib, `
       $record.diagnostics.engine_process_count, $record.diagnostics.tree_ws_kib, $record.valid, $record.diagnostics.settle_ms)
 
+  # Graceful close first, so Keld tears its own child down the way it would in
+  # production; Stop-RunCoalition is the fallback and the verification. It also
+  # replaces a wait that watched only $hostPid: the host exiting never proved
+  # the bun and engine processes had.
   [void][KeldW32]::PostMessage($hwnd, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
-  $exited = $proc.WaitForExit(20000)
-  if (-not $exited) { Stop-Process -Id $hostPid -Force }
-  Remove-Item $stdout, $stderr -ErrorAction SilentlyContinue
-
-  # Fresh-process cache state: require the previous coalition to be gone before
-  # the next run. Condition, not a sleep.
-  $gone = [System.Diagnostics.Stopwatch]::StartNew()
-  while ($gone.ElapsedMilliseconds -lt 15000) {
-    if (-not (Get-Process -Id $hostPid -ErrorAction SilentlyContinue)) { break }
-    Start-Sleep -Milliseconds 100
+  $null = $proc.WaitForExit(20000)
+  if (-not (Stop-RunCoalition -HostPid $hostPid -TempFiles @($stdout, $stderr))) {
+    Write-Output "    WARNING run ${i}: the launched process tree was still alive 15s after teardown; the next run is not a clean fresh-process launch"
   }
 }
 

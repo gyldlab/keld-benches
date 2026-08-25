@@ -39,30 +39,15 @@ function Get-TreeState {
   return 'dirty'
 }
 
-function Assert-HarnessAtCommit {
-  <#
-    The recorded harness sha256 MUST be the blob at the recorded bench_sha.
-    Hashing the working tree is what produced the false provenance this
-    script exists to prevent.
-  #>
-  param([string]$Repo, [string]$Sha, [string]$RepoRelPath)
-  $blob = & git -C $Repo show "${Sha}:$RepoRelPath" 2>$null
-  if ($LASTEXITCODE -ne 0 -or $null -eq $blob) {
-    throw "PROVENANCE FAILED: $RepoRelPath does not exist at $Sha. Commit the harness before emitting a document that cites it."
-  }
-  # Hash the blob bytes exactly as git stores them.
-  $tmp = [System.IO.Path]::GetTempFileName()
-  & git -C $Repo show "${Sha}:$RepoRelPath" | Out-File -FilePath $tmp -Encoding utf8 -NoNewline
-  $blobHash = (Get-FileHash (Join-Path $Repo $RepoRelPath) -Algorithm SHA256).Hash.ToLower()
-  Remove-Item $tmp -ErrorAction SilentlyContinue
-
-  # Authoritative check: does git consider the file modified vs HEAD?
-  $diff = & git -C $Repo status --porcelain -- $RepoRelPath
-  if (-not [string]::IsNullOrWhiteSpace(($diff | Out-String))) {
-    throw "PROVENANCE FAILED: $RepoRelPath differs from its committed blob at $Sha (git status: $diff)."
-  }
-  return $blobHash
-}
+# The rule this file used to state and then break: the recorded harness sha256
+# MUST be the blob at the recorded bench_sha. The previous implementation wrote
+# `git show` to a temp file, never used it, and hashed the working-tree path --
+# directly under a doc comment saying that hashing the working tree is what
+# produced the false provenance this script exists to prevent. It also checked
+# `git status`, which compares against HEAD whatever $Sha is passed.
+#
+# Both emitters now share one implementation.
+. (Join-Path $PSScriptRoot 'Provenance.ps1')
 
 $benchSha  = (& git -C $BenchRepo rev-parse HEAD).Trim()
 $keldSha   = (& git -C $KeldRepo  rev-parse HEAD).Trim()
@@ -76,9 +61,9 @@ if ($treeState -ne 'clean' -and -not $AllowDirtyTree) {
 $rssHarness   = 'windows/bench/Measure-KeldIdleRss.ps1'
 $paintHarness = 'windows/bench/Measure-KeldPaint.ps1'
 $emitter      = 'windows/bench/Emit-Kel25Documents.ps1'
-$rssSha    = Assert-HarnessAtCommit -Repo $BenchRepo -Sha $benchSha -RepoRelPath $rssHarness
-$paintSha  = Assert-HarnessAtCommit -Repo $BenchRepo -Sha $benchSha -RepoRelPath $paintHarness
-$emitSha   = Assert-HarnessAtCommit -Repo $BenchRepo -Sha $benchSha -RepoRelPath $emitter
+$rssSha    = Assert-BlobAtCommit -Repo $BenchRepo -Sha $benchSha -RepoRelPath $rssHarness
+$paintSha  = Assert-BlobAtCommit -Repo $BenchRepo -Sha $benchSha -RepoRelPath $paintHarness
+$emitSha   = Assert-BlobAtCommit -Repo $BenchRepo -Sha $benchSha -RepoRelPath $emitter
 Write-Output "provenance OK: rss=$($rssSha.Substring(0,16)) paint=$($paintSha.Substring(0,16)) emitter=$($emitSha.Substring(0,16))"
 
 # --- statistics, computed here so the cited scripts reproduce the document ---
