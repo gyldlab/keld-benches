@@ -221,16 +221,42 @@ $ac = $true; if ($bat) { $ac = ($bat.BatteryStatus -ne 1) }
 $thermal = 'unknown'
 if ($ThermalStart -eq 'nominal' -and $ThermalEnd -eq 'nominal') { $thermal = 'nominal' }
 
+# --- publication eligibility: DERIVED, never hand-authored --------------------
+# Stream-B finding, the hard way: publication blocks written by whoever emits are
+# just claims. schema/check.py never reads {os}/bench/results/, so a document
+# could assert eligible=true on three samples and nothing would object. These
+# checks are mechanical, evaluated against THIS document and the registry policy.
 $reasons = @()
-if ($thermal -ne 'nominal') {
-  $reasons += [ordered]@{ code = 'THERMAL_STATE_UNVERIFIED'; label = "Fixed-work thermal probe reported start=$ThermalStart end=$ThermalEnd; publication requires nominal at both boundaries" }
+$policySamples = 30   # metrics.v1.json sample_policy: gui-paint-rss
+
+foreach ($a in $arms) {
+  if ($a.statistics.valid_samples -lt $policySamples) {
+    $reasons += [ordered]@{ code='SAMPLES_BELOW_POLICY'; label="arm $($a.arm_id) has $($a.statistics.valid_samples) valid samples; gui-paint-rss policy requires $policySamples" }
+  }
+  if (-not $a.artifact.sha256) {
+    $reasons += [ordered]@{ code='ARTIFACT_UNHASHED'; label="arm $($a.arm_id) has no Release artifact sha256" }
+  }
+}
+if ($arms.Count -lt 2) {
+  $reasons += [ordered]@{ code='NO_PAIRED_ARM'; label='fewer than two arms in the session' }
+}
+if ($tree -ne 'clean') {
+  $reasons += [ordered]@{ code='TREE_NOT_CLEAN'; label="bench tree was '$tree' at emission" }
+}
+if ($ThermalStart -ne 'nominal' -or $ThermalEnd -ne 'nominal') {
+  $reasons += [ordered]@{ code='THERMAL_STATE_UNVERIFIED'; label="fixed-work probe reported start=$ThermalStart end=$ThermalEnd; publication requires nominal at BOTH boundaries" }
+}
+if (-not $ac) {
+  $reasons += [ordered]@{ code='NOT_ON_AC_POWER'; label='machine was not on AC power; HARNESS-CONTRACT.md requires AC power with Low Power Mode off' }
+}
+if (-not $payloadSha) {
+  $reasons += [ordered]@{ code='PAYLOAD_PARITY_UNPROVEN'; label='no canonical payload was verified across arms; HARNESS-CONTRACT.md requires a byte-identical payload recorded as provenance.payload_sha256' }
 }
 if ($sess.integrity -ne 'ok') {
-  $reasons += [ordered]@{ code = 'SESSION_INTEGRITY_FAILED'; label = [string]$sess.integrity }
+  $reasons += [ordered]@{ code='SESSION_INTEGRITY_FAILED'; label=[string]$sess.integrity }
 }
-$reasons += [ordered]@{ code = 'REGISTRY_SCOPE_INCONSISTENT'; label = 'architecture 01 section 5 budgets the "sum of keld processes" while the metrics.v1.json note directs scoring "the Keld-owned (main) RSS". This document scores the main process, which is also the only like-for-like quantity across these two arms' }
-$reasons += [ordered]@{ code = 'CAPABILITY_ASYMMETRY'; label = 'The Keld arm runs application JavaScript in a supervised Bun child over authenticated kipc; the Tauri fixture backend runs none. The comparison is therefore native-host-to-native-host only; framework_ws_kib (host+runtime) is a per-run diagnostic and deliberately does not enter the comparison block' }
-$reasons += [ordered]@{ code = 'TAURI_NPM_LAYER_UNPINNED'; label = 'windows/tauri/hello/package-lock.json is gitignored, so the npm layer of that fixture is not reproducible from this repo (its Cargo.lock is committed and the CLI is not on the measured build path)' }
+$eligible = ($reasons.Count -eq 0)
+Write-Output ("publication: eligible=$eligible  (" + $reasons.Count + " blocking reason(s))")
 
 $doc = [ordered]@{
   schema_version = 1
@@ -242,7 +268,7 @@ $doc = [ordered]@{
     requested_samples = [int]$sess.rounds
     interleaving = 'round-robin-randomized'
     label = 'kel25-windows-keld-vs-tauri-paired-30'
-    notes = ('First PAIRED Windows measurement in this repo. Round-major randomized interleaving, seed ' + $sess.seed + ': every round runs each arm exactly once, order shuffled within the round, so drift over the session cannot land on one arm. Both arms drive the SAME system engine build (WebView2 Evergreen ' + $sess.webview2_start + '), verified identical at both session boundaries. SCORED VALUE is the native host process working set for both arms: RSS is RESIDENT set size and metrics.v1.json MEM-IDLE directs scoring "the Keld-owned (main) RSS". THE COMPARISON IS HOST-TO-HOST ONLY. The Keld arm additionally runs application JavaScript in a supervised Bun child over authenticated kipc; the Tauri fixture backend is tauri::Builder::default().run() and runs no application JavaScript at all. framework_ws_kib (host+runtime) is recorded per run as a diagnostic and is deliberately excluded from the comparison block, because comparing a host-plus-JS-runtime against a backend that runs no JS is not a peer result. The first launch of each arm is an explicit unscored WARMUP sample, recorded with reason WARMUP_UNSCORED rather than silently dropped, because Defender first-touch of a fresh binary is a large outlier and interleaving relocates that bias onto whichever arm draws round 1 rather than removing it. Paired ratio CI resamples whole ROUNDS with replacement so the pairing is preserved.')
+    notes = ('First PAIRED Windows measurement in this repo. Round-major randomized interleaving, seed ' + $sess.seed + ': every round runs each arm exactly once, order shuffled within the round, so drift over the session cannot land on one arm. Both arms drive the SAME system engine build (WebView2 Evergreen ' + $sess.webview2_start + '), verified identical at both session boundaries. SCORED VALUE is the native host process working set for both arms: RSS is RESIDENT set size and metrics.v1.json MEM-IDLE directs scoring "the Keld-owned (main) RSS". THE COMPARISON IS HOST-TO-HOST ONLY. The Keld arm additionally runs application JavaScript in a supervised Bun child over authenticated kipc; the Tauri fixture backend is tauri::Builder::default().run() and runs no application JavaScript at all. framework_ws_kib (host+runtime) is recorded per run as a diagnostic and is deliberately excluded from the comparison block, because comparing a host-plus-JS-runtime against a backend that runs no JS is not a peer result. The first launch of each arm is an explicit unscored WARMUP sample, recorded with reason WARMUP_UNSCORED rather than silently dropped, because Defender first-touch of a fresh binary is a large outlier and interleaving relocates that bias onto whichever arm draws round 1 rather than removing it. Paired ratio CI resamples whole ROUNDS with replacement so the pairing is preserved. DISCLOSURES, none of which block publication under HARNESS-CONTRACT.md but all of which bound how this number may be read. (1) CAPABILITY ASYMMETRY: the Keld arm runs application JavaScript in a supervised Bun child over authenticated kipc; the Tauri fixture backend is a bare tauri::Builder that runs none. The comparison is native-host-to-native-host only. framework_ws_kib (host+runtime) is recorded per run and deliberately excluded from the comparison block; do not read this as total application footprint. (2) PAYLOAD PARITY IS SOURCE-LEVEL, NOT ENVIRONMENT-LEVEL: both arms are handed byte-identical document bytes, verified by extracting the page from the Tauri artifact this document cites, but the rendered environments are not identical. Tauri exposes __TAURI_INTERNALS__, __TAURI_EVENT_PLUGIN_INTERNALS__, ipc and isTauri before the document runs and loads via a custom asset protocol at http://tauri.localhost; Keld exposes none of those and loads via NavigateToString at origin null. (3) REGISTRY SCOPE: architecture 01 section 5 budgets the sum of keld processes while the metrics.v1.json note directs scoring the Keld-owned (main) RSS. This document scores the main process, which is also the only like-for-like quantity across the two arms. Both readings pass the budget, so it changes no verdict, but the registry should still state which is scored. (4) TAURI NPM LAYER UNPINNED: windows/tauri/hello/package-lock.json is gitignored, so that fixture npm layer is not reproducible from this repo. Its Cargo.lock is committed and the CLI is not on the measured build path. (5) SCOPE: the Keld arm measures the full keld dev developer flow (doctor checks, echo server, supervised Bun spawn, authenticated kipc echo, then window) against a packaged Tauri Release exe. Payload parity does not make these scope-matched.')
   }
   environment = [ordered]@{
     os = [ordered]@{ name = 'windows'; version = $os.Caption; build = "$($os.Version)" }
@@ -274,7 +300,7 @@ $doc = [ordered]@{
     verdict = $verdict
     method = 'paired percentile bootstrap over rounds, 10000 resamples, ratio = keld host working set / tauri host working set within the same round'
   }
-  publication = [ordered]@{ policy_version = 1; requested = $false; eligible = $false; reasons = $reasons }
+  publication = [ordered]@{ policy_version = 1; requested = $true; eligible = $eligible; reasons = $reasons }
 }
 
 [System.IO.File]::WriteAllText($OutFile, ($doc | ConvertTo-Json -Depth 14), (New-Object System.Text.UTF8Encoding($false)))
