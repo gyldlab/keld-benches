@@ -13,3 +13,19 @@
 # committed, and a global rule would renormalize vendored files.
 windows/bench/results/** text eol=lf
 schema/**                text eol=lf
+
+# Hello fixtures. Their entire value is being BYTE-IDENTICAL to `keld create
+# hello` output at the pinned Keld SHA, and `keld create` writes LF.
+#
+# keld-benches runs core.autocrlf=true, so without an attribute a Windows
+# checkout rewrites these to CRLF and they stop matching byte-for-byte: the
+# blob stays LF, the working tree does not. Not hypothetical -- every file
+# under macos/keld/hello checked out CRLF, index.html at 366 bytes against its
+# own 349-byte blob, so that fixture's identity claim was unverifiable to
+# anyone cloning on Windows.
+#
+# This rule covers every OS fixture dir. It replaces a per-directory
+# .gitattributes that pinned only the Windows fixture while its own comment
+# cited the broken macOS one as evidence -- the exact drift a second copy
+# produces.
+*/keld/hello/** text eol=lf
