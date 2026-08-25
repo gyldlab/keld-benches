@@ -7,8 +7,8 @@
                },
     "cache_state":  "fresh-process",
     "session":  {
-                    "started_utc":  "2026-08-24T20:10:00.0000000+00:00",
-                    "finished_utc":  "2026-08-25T11:13:10.3145351Z",
+                    "started_utc":  "2026-08-25T11:08:26.9949503Z",
+                    "finished_utc":  "2026-08-25T11:12:38.1255062Z",
                     "requested_samples":  30,
                     "interleaving":  "round-robin-randomized",
                     "label":  "kel25-windows-keld-vs-tauri-paired-30",
@@ -55,7 +55,7 @@
                                        ]
                     },
     "provenance":  {
-                       "bench_sha":  "8f20f963ed172c1b6e9ae8fb7be8843478b074ae",
+                       "bench_sha":  "99d31c53f8c1d92d1f8a3144257b4a4396fb5189",
                        "bench_tree_state":  "clean",
                        "keld_sha":  "2a8e8a49fc4b253594861389e42aa973da164cfb",
                        "harness":  {
@@ -67,11 +67,11 @@
                        "fixtures":  [
                                         {
                                             "path":  "windows/keld/hello/",
-                                            "sha":  "8f20f963ed172c1b6e9ae8fb7be8843478b074ae"
+                                            "sha":  "99d31c53f8c1d92d1f8a3144257b4a4396fb5189"
                                         },
                                         {
                                             "path":  "windows/tauri/hello/",
-                                            "sha":  "8f20f963ed172c1b6e9ae8fb7be8843478b074ae"
+                                            "sha":  "99d31c53f8c1d92d1f8a3144257b4a4396fb5189"
                                         }
                                     ]
                    },
