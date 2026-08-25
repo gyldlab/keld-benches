@@ -79,6 +79,11 @@ if ($keldExeUtc -lt $keldCommitUtc) {
 }
 Write-Output ("keld artifact provenance OK: exe {0:u} >= commit {1:u}" -f $keldExeUtc, $keldCommitUtc)
 
+# The session is the subject of every provenance guard below, so it is read
+# first. Reading it later made the harness_sha256 guard test $null and fail
+# closed with a message naming a missing stamp that was in fact present.
+$sess = Get-Content $SessionJson -Raw | ConvertFrom-Json
+
 $null = Assert-AtCommit -Repo $BenchRepo -Sha $benchSha -Rel $runnerRel
 # Provenance names the runner that PRODUCED this session, not whatever is on
 # disk now. Recomputing here made a re-emission after a runner edit cite a
@@ -91,8 +96,6 @@ if ([string]::IsNullOrWhiteSpace($runnerSha)) {
 Write-Output ("harness sha256 (stamped at session time): " + $runnerSha.Substring(0,16))
 $null      = Assert-AtCommit -Repo $BenchRepo -Sha $benchSha -Rel $emitRel
 Write-Output "provenance OK: runner=$($runnerSha.Substring(0,16))"
-
-$sess = Get-Content $SessionJson -Raw | ConvertFrom-Json
 
 # --- payload parity, PROVEN from the measured artifact ------------------------
 # HARNESS-CONTRACT.md requires a byte-identical canonical payload across arms,
