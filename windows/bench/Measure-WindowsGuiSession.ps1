@@ -100,7 +100,24 @@ $ARMS = @(
 
 function Get-DescendantProcs {
   param([int]$RootPid)
-  $all = Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId, Name
+  # PID REUSE GUARD. Windows does not clear ParentProcessId when a parent exits,
+  # and it reuses PIDs freely. So a walk down ParentProcessId edges alone will
+  # adopt STRANGERS: if this arm's host PID was previously held by some other
+  # process whose children are still alive, those children still name that PID
+  # as their parent and get counted as this arm's memory.
+  #
+  # Observed: a 2-round session recorded other_ws_kib = 7,032 with
+  # other_process_count = 1 for the Tauri arm, while direct observation of a
+  # tauri-hello tree shows ZERO non-engine descendants, and the published
+  # 30-round session recorded 0 in 30 of 30 Tauri samples. An intermittent
+  # stranger is exactly what an unguarded walk produces.
+  #
+  # The guard is causal, not heuristic: a real child cannot have been created
+  # before its parent. CreationDate is compared against the claimed parent's,
+  # so a reused PID is rejected on the only fact that distinguishes it.
+  $all = Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId, Name, CreationDate
+  $byPid = @{}
+  foreach ($p in $all) { $byPid[[int]$p.ProcessId] = $p }
   $byParent = @{}
   foreach ($p in $all) {
     $k = [int]$p.ParentProcessId
@@ -115,8 +132,17 @@ function Get-DescendantProcs {
     $cur = [int]$q.Dequeue()
     if ($seen.ContainsKey($cur)) { continue }
     $seen[$cur] = $true
-    if ($byParent.ContainsKey($cur)) {
-      foreach ($c in $byParent[$cur]) { [void]$out.Add($c); $q.Enqueue([int]$c.ProcessId) }
+    if (-not $byParent.ContainsKey($cur)) { continue }
+    $parent = $byPid[$cur]
+    foreach ($c in $byParent[$cur]) {
+      # No creation time on either side means the claim cannot be checked, so it
+      # is not counted: an unverifiable descendant is a stranger until proven
+      # otherwise. Counting it would be the fail-open this harness keeps having
+      # to have removed.
+      if ($null -eq $parent -or $null -eq $parent.CreationDate -or $null -eq $c.CreationDate) { continue }
+      if ($c.CreationDate -lt $parent.CreationDate) { continue }
+      [void]$out.Add($c)
+      $q.Enqueue([int]$c.ProcessId)
     }
   }
   return $out
@@ -131,6 +157,7 @@ function Get-TreeSnapshot {
     runtime_ws_bytes = [int64]0; runtime_private_bytes = [int64]0; runtime_count = 0
     engine_ws_bytes = [int64]0; engine_private_bytes = [int64]0; engine_count = 0
     other_ws_bytes = [int64]0; other_count = 0
+    keld_processes_ws_bytes = [int64]0
   }
   foreach ($d in (Get-DescendantProcs -RootPid $HostPid)) {
     $dp = Get-Process -Id ([int]$d.ProcessId) -ErrorAction SilentlyContinue
@@ -145,10 +172,26 @@ function Get-TreeSnapshot {
     }
   }
   $lanes.tree_ws_bytes = $lanes.host_ws_bytes + $lanes.runtime_ws_bytes + $lanes.engine_ws_bytes + $lanes.other_ws_bytes
-  # "sum of keld processes" in architecture 01 section 5 terms: the framework
-  # own processes, excluding the shared system engine.
+  # framework_ws_bytes is HOST + RUNTIME ONLY. Its comment used to claim this
+  # was "sum of keld processes in architecture 01 section 5 terms", which it is
+  # not: the `other` lane above collects framework-owned descendants that are
+  # neither the Bun runtime nor the shared engine, and this figure omits them.
+  #
+  # On this machine that omission is 10,146 KiB in 30 of 30 Keld samples and
+  # 0 KiB in 30 of 30 Tauri samples, because no binary in the Keld workspace
+  # sets `#![windows_subsystem = "windows"]` -- so every Keld executable is
+  # console subsystem and Windows attaches a conhost.exe -- while the Tauri
+  # fixture sets it for release builds. A reader who took framework_ws_bytes at
+  # its comment's word understated the keld-process sum by ~10 MiB and was given
+  # no field that would reveal it: `other` was folded into tree_ws_bytes and
+  # never emitted, recoverable only as tree - host - runtime - engine.
+  #
+  # Both are kept and both are emitted. framework_ws_bytes stays because
+  # published documents cite it and its definition must not change under them;
+  # keld_processes_ws_bytes is the architecture 01 section 5 quantity.
   $lanes.framework_ws_bytes = $lanes.host_ws_bytes + $lanes.runtime_ws_bytes
   $lanes.framework_private_bytes = $lanes.host_private_bytes + $lanes.runtime_private_bytes
+  $lanes.keld_processes_ws_bytes = $lanes.host_ws_bytes + $lanes.runtime_ws_bytes + $lanes.other_ws_bytes
   return $lanes
 }
 
@@ -241,6 +284,12 @@ function Invoke-ArmRun {
       engine_process_count    = $s.engine_count
       framework_ws_kib        = [math]::Round($s.framework_ws_bytes / 1024, 1)
       framework_private_kib   = [math]::Round($s.framework_private_bytes / 1024, 1)
+      # The `other` lane is now emitted rather than only folded into tree_ws.
+      # An unnamed bucket is not a diagnostic; it is a number a reader cannot
+      # see and therefore cannot check.
+      other_ws_kib            = [math]::Round($s.other_ws_bytes / 1024, 1)
+      other_process_count     = $s.other_count
+      keld_processes_ws_kib   = [math]::Round($s.keld_processes_ws_bytes / 1024, 1)
       tree_ws_kib             = [math]::Round($s.tree_ws_bytes / 1024, 1)
       native_window_ms        = $windowMs
       settle_ms               = $st.SettleMs
