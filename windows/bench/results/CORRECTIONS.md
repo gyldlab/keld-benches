@@ -89,6 +89,96 @@ must disclose that rather than imply full parity.
 
 ---
 
+## 2026-08-25 — environment.power.ac_power described the wrong moment
+
+**What was wrong.** The emitter sampled `Win32_Battery` at EMISSION time and
+wrote the answer into `environment.power.ac_power`. HARNESS-CONTRACT.md requires
+AC power *during the measurement*, so the field named the machine's state when
+the document was written, not when the session ran.
+
+**How it surfaced.** Re-emitting the 2026-08-25 canonical session to correct an
+unrelated sentence produced `ac_power: false` and a blocking `NOT_ON_AC_POWER`
+reason. The same session had published `ac_power: true`, `eligible: true` hours
+earlier. Nothing about the measurement changed; the laptop had been unplugged in
+between. One session, two publication verdicts, neither of them a fact about the
+measurement.
+
+**It failed in both directions.** Measure on battery, emit on AC, and the
+document would have carried a false AC claim straight through the publication
+gate — the same failure with the sign reversed, and that one publishes rather
+than refuses.
+
+**Was the published document wrong?** No. The 2026-08-25 canonical session
+genuinely ran on mains power: `Win32_Battery.BatteryStatus` read 2 before launch
+and the thermal probe's context recorded `CurrentClockSpeed` at the full
+3201 MHz throughout, which a discharging laptop on this machine does not hold.
+The published value is true — but it was true by the accident of when the
+emitter ran, not because anything checked.
+
+**Fix.** `Measure-WindowsGuiSession.ps1` samples power at BOTH session
+boundaries and stamps `power_start` / `power_end` into the session, next to the
+thermal boundaries it already records. `Emit-PairedSession.ps1` reads those and
+refuses to emit a session that has none, rather than substituting its own
+reading. `NOT_ON_AC_POWER` now names which boundary failed, because a machine
+unplugged mid-session is a different fault from one that was never plugged in.
+
+**The counter is `GetSystemPowerStatus.ACLineStatus`, not
+`Win32_Battery.BatteryStatus`.** The first version of this fix tested
+`BatteryStatus -ne 1`, which is wrong twice over. Per the `Win32_Battery`
+documentation, `1` is "Other", not "discharging"; `4` (Low) and `5` (Critical)
+are unambiguously discharging and that test classified both as AC. No value of
+`BatteryStatus` establishes the AC line at all — it reports the battery's charge
+state. `GetSystemPowerStatus` answers the actual question: `ACLineStatus` 0 is
+offline, 1 is online, 255 is unknown.
+
+It also **failed open**: `$onAc` defaulted to `$true` when the query failed or
+no battery was found, so an unavailable reading published as AC. That is the
+same fail-open the thermal cooling gate had already had to have fixed out of it.
+Unknown now yields `null`, and every consumer treats `null` as not-on-AC. The
+emitter keeps `null` distinct from `false` so the blocking reason can say which
+it was: "we measured battery" and "we could not tell" are different facts for
+whoever decides whether to re-run. A desktop with no battery needs no special
+case — `ACLineStatus` reports 1 directly.
+
+**Consequence for the published document.** It stays as published at
+`b30d145`. It cannot be re-emitted until a session exists that carries a power
+record, so the unrelated `session.notes` correction below also waits for the
+next measurement. Correcting the sentence today would have meant emitting a
+document that falsely said the session was not on AC — trading a wording
+overclaim for a false fact.
+
+## 2026-08-25 — a paired document overclaimed what randomized interleaving buys
+
+**What the document said.** `session.notes` on the 2026-08-25 canonical paired
+document read "order shuffled within the round, so drift over the session
+cannot land on one arm."
+
+**Why that is wrong.** Round-major pairing plus within-round shuffling does buy
+a great deal: each arm gets exactly one sample per round, so a session-scale
+trend is sampled by both arms alike instead of accumulating on one, and no arm
+systematically occupies the first slot. What it does not buy is the absence of
+drift. Within a round the second arm is still measured later than the first by
+about one launch. Shuffling randomizes *which* arm that is, converting a
+systematic order effect into a random one; it does not remove the gap. "Cannot"
+was an absolute the method does not support.
+
+Numbers are unaffected: this is a claim about what the design controls for, not
+a computation. The medians, the paired ratio 0.8484 and its interval
+[0.846864, 0.849548] are unchanged, and the re-emitted document differs from
+the withdrawn wording only in `session.notes` and `provenance.bench_sha`.
+
+**Fix.** The sentence is corrected in `Emit-PairedSession.ps1`, which is the
+single source of that text. The canonical document is **not** re-emitted today:
+the `ac_power` defect recorded above means an emission on battery would write a
+false power claim into it, and trading a wording overclaim for a false fact is
+not a fix. The document carries the corrected sentence from the next session. The two 2026-08-24 paired documents carry the same sentence and
+are deliberately left alone: they are already withdrawn as Keld-versus-Tauri
+results, and rewriting a withdrawn record makes the history less legible, not
+more.
+
+Found by CodeRabbit on gyldlab/keld#93, reviewing the scoreboard row that
+repeated the claim.
+
 ## 2026-08-25 — a raw sidecar was paired with a document from a different session
 
 **Affected file**

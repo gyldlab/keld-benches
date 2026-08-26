@@ -100,7 +100,24 @@ $ARMS = @(
 
 function Get-DescendantProcs {
   param([int]$RootPid)
-  $all = Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId, Name
+  # PID REUSE GUARD. Windows does not clear ParentProcessId when a parent exits,
+  # and it reuses PIDs freely. So a walk down ParentProcessId edges alone will
+  # adopt STRANGERS: if this arm's host PID was previously held by some other
+  # process whose children are still alive, those children still name that PID
+  # as their parent and get counted as this arm's memory.
+  #
+  # Observed: a 2-round session recorded other_ws_kib = 7,032 with
+  # other_process_count = 1 for the Tauri arm, while direct observation of a
+  # tauri-hello tree shows ZERO non-engine descendants, and the published
+  # 30-round session recorded 0 in 30 of 30 Tauri samples. An intermittent
+  # stranger is exactly what an unguarded walk produces.
+  #
+  # The guard is causal, not heuristic: a real child cannot have been created
+  # before its parent. CreationDate is compared against the claimed parent's,
+  # so a reused PID is rejected on the only fact that distinguishes it.
+  $all = Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId, Name, CreationDate
+  $byPid = @{}
+  foreach ($p in $all) { $byPid[[int]$p.ProcessId] = $p }
   $byParent = @{}
   foreach ($p in $all) {
     $k = [int]$p.ParentProcessId
@@ -115,8 +132,17 @@ function Get-DescendantProcs {
     $cur = [int]$q.Dequeue()
     if ($seen.ContainsKey($cur)) { continue }
     $seen[$cur] = $true
-    if ($byParent.ContainsKey($cur)) {
-      foreach ($c in $byParent[$cur]) { [void]$out.Add($c); $q.Enqueue([int]$c.ProcessId) }
+    if (-not $byParent.ContainsKey($cur)) { continue }
+    $parent = $byPid[$cur]
+    foreach ($c in $byParent[$cur]) {
+      # No creation time on either side means the claim cannot be checked, so it
+      # is not counted: an unverifiable descendant is a stranger until proven
+      # otherwise. Counting it would be the fail-open this harness keeps having
+      # to have removed.
+      if ($null -eq $parent -or $null -eq $parent.CreationDate -or $null -eq $c.CreationDate) { continue }
+      if ($c.CreationDate -lt $parent.CreationDate) { continue }
+      [void]$out.Add($c)
+      $q.Enqueue([int]$c.ProcessId)
     }
   }
   return $out
@@ -131,6 +157,7 @@ function Get-TreeSnapshot {
     runtime_ws_bytes = [int64]0; runtime_private_bytes = [int64]0; runtime_count = 0
     engine_ws_bytes = [int64]0; engine_private_bytes = [int64]0; engine_count = 0
     other_ws_bytes = [int64]0; other_count = 0
+    keld_processes_ws_bytes = [int64]0
   }
   foreach ($d in (Get-DescendantProcs -RootPid $HostPid)) {
     $dp = Get-Process -Id ([int]$d.ProcessId) -ErrorAction SilentlyContinue
@@ -145,10 +172,26 @@ function Get-TreeSnapshot {
     }
   }
   $lanes.tree_ws_bytes = $lanes.host_ws_bytes + $lanes.runtime_ws_bytes + $lanes.engine_ws_bytes + $lanes.other_ws_bytes
-  # "sum of keld processes" in architecture 01 section 5 terms: the framework
-  # own processes, excluding the shared system engine.
+  # framework_ws_bytes is HOST + RUNTIME ONLY. Its comment used to claim this
+  # was "sum of keld processes in architecture 01 section 5 terms", which it is
+  # not: the `other` lane above collects framework-owned descendants that are
+  # neither the Bun runtime nor the shared engine, and this figure omits them.
+  #
+  # On this machine that omission is 10,146 KiB in 30 of 30 Keld samples and
+  # 0 KiB in 30 of 30 Tauri samples, because no binary in the Keld workspace
+  # sets `#![windows_subsystem = "windows"]` -- so every Keld executable is
+  # console subsystem and Windows attaches a conhost.exe -- while the Tauri
+  # fixture sets it for release builds. A reader who took framework_ws_bytes at
+  # its comment's word understated the keld-process sum by ~10 MiB and was given
+  # no field that would reveal it: `other` was folded into tree_ws_bytes and
+  # never emitted, recoverable only as tree - host - runtime - engine.
+  #
+  # Both are kept and both are emitted. framework_ws_bytes stays because
+  # published documents cite it and its definition must not change under them;
+  # keld_processes_ws_bytes is the architecture 01 section 5 quantity.
   $lanes.framework_ws_bytes = $lanes.host_ws_bytes + $lanes.runtime_ws_bytes
   $lanes.framework_private_bytes = $lanes.host_private_bytes + $lanes.runtime_private_bytes
+  $lanes.keld_processes_ws_bytes = $lanes.host_ws_bytes + $lanes.runtime_ws_bytes + $lanes.other_ws_bytes
   return $lanes
 }
 
@@ -241,6 +284,12 @@ function Invoke-ArmRun {
       engine_process_count    = $s.engine_count
       framework_ws_kib        = [math]::Round($s.framework_ws_bytes / 1024, 1)
       framework_private_kib   = [math]::Round($s.framework_private_bytes / 1024, 1)
+      # The `other` lane is now emitted rather than only folded into tree_ws.
+      # An unnamed bucket is not a diagnostic; it is a number a reader cannot
+      # see and therefore cannot check.
+      other_ws_kib            = [math]::Round($s.other_ws_bytes / 1024, 1)
+      other_process_count     = $s.other_count
+      keld_processes_ws_kib   = [math]::Round($s.keld_processes_ws_bytes / 1024, 1)
       tree_ws_kib             = [math]::Round($s.tree_ws_bytes / 1024, 1)
       native_window_ms        = $windowMs
       settle_ms               = $st.SettleMs
@@ -308,9 +357,105 @@ if ($CanonicalPayload) {
   Write-Output "keld arm staged at $staged (index.html replaced with the canonical page)"
 }
 
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class KeldPowerLine {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SYSTEM_POWER_STATUS {
+        public byte ACLineStatus;
+        public byte BatteryFlag;
+        public byte BatteryLifePercent;
+        public byte SystemStatusFlag;
+        public int  BatteryLifeTime;
+        public int  BatteryFullLifeTime;
+    }
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS status);
+
+    public static SYSTEM_POWER_STATUS Read() {
+        SYSTEM_POWER_STATUS s;
+        if (!GetSystemPowerStatus(out s)) {
+            throw new InvalidOperationException("GetSystemPowerStatus failed: " + Marshal.GetLastWin32Error());
+        }
+        return s;
+    }
+}
+"@ -ErrorAction SilentlyContinue
+
+function Get-PowerState {
+  <#
+    Sampled at BOTH session boundaries and stamped into the session, because
+    HARNESS-CONTRACT.md requires AC power DURING the measurement. The emitter
+    used to read this at emission time instead, so the same session emitted
+    twice could yield two different publication verdicts: the 2026-08-25
+    canonical session ran on AC and published eligible, then re-emitting it
+    hours later on battery produced ac_power false and NOT_ON_AC_POWER. The
+    field described the machine when the document was written, not when the
+    measurement ran, and it failed in both directions -- a session measured on
+    battery and emitted on AC would have published a false AC claim.
+
+    THE COUNTER IS ACLineStatus, NOT Win32_Battery.BatteryStatus. The first
+    version of this function tested `BatteryStatus -ne 1`, which is wrong twice
+    over. Per Win32_Battery documentation `1` is "Other", not "discharging";
+    `4` (Low) and `5` (Critical) are unambiguously discharging and that test
+    called both of them AC. BatteryStatus reports the BATTERY's charge state and
+    no value of it establishes the AC line. GetSystemPowerStatus answers the
+    actual question: ACLineStatus 0 = offline, 1 = online, 255 = unknown.
+
+    Fails CLOSED. Unknown is not AC: an unavailable reading returns $null, and
+    every consumer must treat that as not-on-AC rather than as a pass. The first
+    version defaulted $onAc = $true when the query failed or no battery was
+    found, which is the same fail-open the thermal cooling gate already had to
+    have fixed out of it.
+
+    A desktop with no battery is genuinely on AC and GetSystemPowerStatus says
+    so directly (ACLineStatus 1), so no special case is needed for it.
+  #>
+  # NOT $error: that is a PowerShell automatic variable (the session's error
+  # collection). Assigning to it shadows the collection for the rest of the
+  # scope and silently changes what `$error[0]` means to any caller.
+  $acPower = $null
+  $lineStatus = $null
+  $batteryFlag = $null
+  $percent = $null
+  $powerError = $null
+
+  if (-not ('KeldPowerLine' -as [type])) {
+    $powerError = 'the GetSystemPowerStatus binding could not be created (Add-Type failed)'
+  } else {
+    try {
+      $st = [KeldPowerLine]::Read()
+      $lineStatus = [int]$st.ACLineStatus
+      $batteryFlag = [int]$st.BatteryFlag
+      $percent = if ($st.BatteryLifePercent -eq 255) { $null } else { [int]$st.BatteryLifePercent }
+      switch ($lineStatus) {
+        0 { $acPower = $false }
+        1 { $acPower = $true }
+        default { $powerError = "ACLineStatus reported $lineStatus (255 = unknown); AC state is not established" }
+      }
+    } catch {
+      $powerError = "GetSystemPowerStatus failed: $($_.Exception.Message)"
+    }
+  }
+
+  return [ordered]@{
+    ac_power        = $acPower
+    ac_line_status  = $lineStatus
+    battery_flag    = $batteryFlag
+    charge_percent  = $percent
+    power_error     = $powerError
+    sampled_utc     = (Get-Date).ToUniversalTime().ToString('o')
+    method          = 'kernel32!GetSystemPowerStatus ACLineStatus; 0 = offline, 1 = online, 255 = unknown (null ac_power, fails closed)'
+  }
+}
+
 $wv2Start = Get-Wv2Version
 Write-Output "session start: WebView2 $wv2Start, seed $Seed, $Rounds rounds x $($ARMS.Count) arms"
 $thermalStart = Invoke-ThermalProbe -Label 'start'
+$powerStart = Get-PowerState
+Write-Host ("  power[start]: ac={0} ACLineStatus={1} charge={2} err={3}" -f $powerStart.ac_power, $powerStart.ac_line_status, $powerStart.charge_percent, $powerStart.power_error)
 
 $records = New-Object System.Collections.ArrayList
 foreach ($a in $ARMS) {
@@ -383,6 +528,8 @@ if ($ThermalGateEveryRounds -gt 0) {
   [void]$gateEvents.Add((Invoke-ThermalGate -AfterRound $Rounds))
 }
 $thermalEnd = Invoke-ThermalProbe -Label 'end'
+$powerEnd = Get-PowerState
+Write-Host ("  power[end]: ac={0} ACLineStatus={1} charge={2} err={3}" -f $powerEnd.ac_power, $powerEnd.ac_line_status, $powerEnd.charge_percent, $powerEnd.power_error)
 $wv2End = Get-Wv2Version
 $integrity = 'ok'
 if ($wv2Start -ne $wv2End) { $integrity = "WEBVIEW2_CHANGED_MIDSESSION $wv2Start -> $wv2End" }
@@ -394,6 +541,7 @@ $out = [ordered]@{
   schedule = $schedule
   webview2_start = $wv2Start; webview2_end = $wv2End; integrity = $integrity
   thermal_start = $thermalStart; thermal_end = $thermalEnd
+  power_start = $powerStart; power_end = $powerEnd
   # The runner hashes ITSELF at session time. The emitter used to hash the
   # file on disk when the document was written, so editing the runner between
   # the run and a re-emission silently changed provenance.harness.sha256 to a
