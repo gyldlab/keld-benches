@@ -89,6 +89,46 @@ must disclose that rather than imply full parity.
 
 ---
 
+## 2026-08-25 — environment.power.ac_power described the wrong moment
+
+**What was wrong.** The emitter sampled `Win32_Battery` at EMISSION time and
+wrote the answer into `environment.power.ac_power`. HARNESS-CONTRACT.md requires
+AC power *during the measurement*, so the field named the machine's state when
+the document was written, not when the session ran.
+
+**How it surfaced.** Re-emitting the 2026-08-25 canonical session to correct an
+unrelated sentence produced `ac_power: false` and a blocking `NOT_ON_AC_POWER`
+reason. The same session had published `ac_power: true`, `eligible: true` hours
+earlier. Nothing about the measurement changed; the laptop had been unplugged in
+between. One session, two publication verdicts, neither of them a fact about the
+measurement.
+
+**It failed in both directions.** Measure on battery, emit on AC, and the
+document would have carried a false AC claim straight through the publication
+gate — the same failure with the sign reversed, and that one publishes rather
+than refuses.
+
+**Was the published document wrong?** No. The 2026-08-25 canonical session
+genuinely ran on mains power: `Win32_Battery.BatteryStatus` read 2 before launch
+and the thermal probe's context recorded `CurrentClockSpeed` at the full
+3201 MHz throughout, which a discharging laptop on this machine does not hold.
+The published value is true — but it was true by the accident of when the
+emitter ran, not because anything checked.
+
+**Fix.** `Measure-WindowsGuiSession.ps1` samples power at BOTH session
+boundaries and stamps `power_start` / `power_end` into the session, next to the
+thermal boundaries it already records. `Emit-PairedSession.ps1` reads those and
+refuses to emit a session that has none, rather than substituting its own
+reading. `NOT_ON_AC_POWER` now names which boundary failed, because a machine
+unplugged mid-session is a different fault from one that was never plugged in.
+
+**Consequence for the published document.** It stays as published at
+`b30d145`. It cannot be re-emitted until a session exists that carries a power
+record, so the unrelated `session.notes` correction below also waits for the
+next measurement. Correcting the sentence today would have meant emitting a
+document that falsely said the session was not on AC — trading a wording
+overclaim for a false fact.
+
 ## 2026-08-25 — a paired document overclaimed what randomized interleaving buys
 
 **What the document said.** `session.notes` on the 2026-08-25 canonical paired
@@ -110,8 +150,10 @@ a computation. The medians, the paired ratio 0.8484 and its interval
 the withdrawn wording only in `session.notes` and `provenance.bench_sha`.
 
 **Fix.** The sentence is corrected in `Emit-PairedSession.ps1`, which is the
-single source of that text, and the canonical document re-emitted from the same
-session object. The two 2026-08-24 paired documents carry the same sentence and
+single source of that text. The canonical document is **not** re-emitted today:
+the `ac_power` defect recorded above means an emission on battery would write a
+false power claim into it, and trading a wording overclaim for a false fact is
+not a fix. The document carries the corrected sentence from the next session. The two 2026-08-24 paired documents carry the same sentence and
 are deliberately left alone: they are already withdrawn as Keld-versus-Tauri
 results, and rewriting a withdrawn record makes the history less legible, not
 more.

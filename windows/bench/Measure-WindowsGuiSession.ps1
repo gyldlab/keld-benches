@@ -308,9 +308,39 @@ if ($CanonicalPayload) {
   Write-Output "keld arm staged at $staged (index.html replaced with the canonical page)"
 }
 
+function Get-PowerState {
+  <#
+    Sampled at BOTH session boundaries and stamped into the session, because
+    HARNESS-CONTRACT.md requires AC power DURING the measurement. The emitter
+    used to read this at emission time instead, so the same session emitted
+    twice could yield two different publication verdicts: the 2026-08-25
+    canonical session ran on AC and published eligible, then re-emitting it
+    hours later on battery produced ac_power false and NOT_ON_AC_POWER. The
+    field described the machine when the document was written, not when the
+    measurement ran, and it failed in both directions -- a session measured on
+    battery and emitted on AC would have published a false AC claim.
+
+    Win32_Battery.BatteryStatus 1 is "discharging"; anything else (2 = on AC)
+    means mains power. A machine with no battery device is a desktop and is
+    always on AC.
+  #>
+  $bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1
+  $onAc = $true
+  if ($bat) { $onAc = ($bat.BatteryStatus -ne 1) }
+  return [ordered]@{
+    ac_power        = [bool]$onAc
+    battery_status  = if ($bat) { [int]$bat.BatteryStatus } else { $null }
+    charge_percent  = if ($bat) { [int]$bat.EstimatedChargeRemaining } else { $null }
+    sampled_utc     = (Get-Date).ToUniversalTime().ToString('o')
+    method          = 'Win32_Battery.BatteryStatus; 1 = discharging, absent battery device = desktop on AC'
+  }
+}
+
 $wv2Start = Get-Wv2Version
 Write-Output "session start: WebView2 $wv2Start, seed $Seed, $Rounds rounds x $($ARMS.Count) arms"
 $thermalStart = Invoke-ThermalProbe -Label 'start'
+$powerStart = Get-PowerState
+Write-Host ("  power[start]: ac={0} battery_status={1} charge={2}" -f $powerStart.ac_power, $powerStart.battery_status, $powerStart.charge_percent)
 
 $records = New-Object System.Collections.ArrayList
 foreach ($a in $ARMS) {
@@ -383,6 +413,8 @@ if ($ThermalGateEveryRounds -gt 0) {
   [void]$gateEvents.Add((Invoke-ThermalGate -AfterRound $Rounds))
 }
 $thermalEnd = Invoke-ThermalProbe -Label 'end'
+$powerEnd = Get-PowerState
+Write-Host ("  power[end]: ac={0} battery_status={1} charge={2}" -f $powerEnd.ac_power, $powerEnd.battery_status, $powerEnd.charge_percent)
 $wv2End = Get-Wv2Version
 $integrity = 'ok'
 if ($wv2Start -ne $wv2End) { $integrity = "WEBVIEW2_CHANGED_MIDSESSION $wv2Start -> $wv2End" }
@@ -394,6 +426,7 @@ $out = [ordered]@{
   schedule = $schedule
   webview2_start = $wv2Start; webview2_end = $wv2End; integrity = $integrity
   thermal_start = $thermalStart; thermal_end = $thermalEnd
+  power_start = $powerStart; power_end = $powerEnd
   # The runner hashes ITSELF at session time. The emitter used to hash the
   # file on disk when the document was written, so editing the runner between
   # the run and a re-emission silently changed provenance.harness.sha256 to a

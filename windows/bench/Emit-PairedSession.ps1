@@ -254,8 +254,22 @@ Write-Output ("paired rounds=$($ratioArr.Count)  median ratio=$([math]::Round((G
 $os = Get-CimInstance Win32_OperatingSystem
 $cs = Get-CimInstance Win32_ComputerSystem
 $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name.Trim()
-$bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue
-$ac = $true; if ($bat) { $ac = ($bat.BatteryStatus -ne 1) }
+# AC power is read from the SESSION, never sampled here. Sampling at emission
+# time described the machine when the document was written rather than when the
+# measurement ran: the 2026-08-25 canonical session ran on AC and published
+# eligible, and re-emitting that same session hours later on battery produced
+# ac_power false and a NOT_ON_AC_POWER block. One session, two verdicts, neither
+# of them a fact about the measurement. It failed the other way too -- measure on
+# battery, emit on AC, and the document would have carried a false AC claim past
+# the publication gate.
+#
+# Fail closed: a session with no power record cannot be emitted at all.
+if ($null -eq $sess.power_start -or $null -eq $sess.power_end) {
+  throw "PROVENANCE FAILED: the session JSON has no power_start/power_end. Re-run with a runner that samples AC power at both session boundaries; reading it now would record the machine's state at emission, not during the measurement."
+}
+$acStart = [bool]$sess.power_start.ac_power
+$acEnd   = [bool]$sess.power_end.ac_power
+$ac      = $acStart -and $acEnd
 # The block below says eligibility is DERIVED, never hand-authored -- and the
 # thermal check then read -ThermalStart/-ThermalEnd, which the operator types.
 # In practice they matched the measurement, but a gate that reads what someone
@@ -306,7 +320,13 @@ if ($thermalSuspect) {
   $reasons += [ordered]@{ code='THERMAL_REFERENCE_SUSPECT'; label='a boundary probe ran FASTER than the claimed quiet-baseline floor, so the floor is not a quiet baseline and every ratio against it is understated' }
 }
 if (-not $ac) {
-  $reasons += [ordered]@{ code='NOT_ON_AC_POWER'; label='machine was not on AC power; HARNESS-CONTRACT.md requires AC power with Low Power Mode off' }
+  # Named per boundary: a machine unplugged partway through is a different
+  # failure from one that was never plugged in, and the operator needs to know
+  # which, since only one of them invalidates part of the run.
+  $where = if (-not $acStart -and -not $acEnd) { 'at both session boundaries' }
+           elseif (-not $acStart) { 'at the session start' }
+           else { 'at the session end (unplugged mid-session)' }
+  $reasons += [ordered]@{ code='NOT_ON_AC_POWER'; label="machine was not on AC power $where; HARNESS-CONTRACT.md requires AC power with Low Power Mode off" }
 }
 if (-not $payloadSha) {
   $reasons += [ordered]@{ code='PAYLOAD_PARITY_UNPROVEN'; label='no canonical payload was verified across arms; HARNESS-CONTRACT.md requires a byte-identical payload recorded as provenance.payload_sha256' }
