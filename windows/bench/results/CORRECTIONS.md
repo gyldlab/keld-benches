@@ -89,6 +89,36 @@ must disclose that rather than imply full parity.
 
 ---
 
+## 2026-08-25 — a paired document overclaimed what randomized interleaving buys
+
+**What the document said.** `session.notes` on the 2026-08-25 canonical paired
+document read "order shuffled within the round, so drift over the session
+cannot land on one arm."
+
+**Why that is wrong.** Round-major pairing plus within-round shuffling does buy
+a great deal: each arm gets exactly one sample per round, so a session-scale
+trend is sampled by both arms alike instead of accumulating on one, and no arm
+systematically occupies the first slot. What it does not buy is the absence of
+drift. Within a round the second arm is still measured later than the first by
+about one launch. Shuffling randomizes *which* arm that is, converting a
+systematic order effect into a random one; it does not remove the gap. "Cannot"
+was an absolute the method does not support.
+
+Numbers are unaffected: this is a claim about what the design controls for, not
+a computation. The medians, the paired ratio 0.8484 and its interval
+[0.846864, 0.849548] are unchanged, and the re-emitted document differs from
+the withdrawn wording only in `session.notes` and `provenance.bench_sha`.
+
+**Fix.** The sentence is corrected in `Emit-PairedSession.ps1`, which is the
+single source of that text, and the canonical document re-emitted from the same
+session object. The two 2026-08-24 paired documents carry the same sentence and
+are deliberately left alone: they are already withdrawn as Keld-versus-Tauri
+results, and rewriting a withdrawn record makes the history less legible, not
+more.
+
+Found by CodeRabbit on gyldlab/keld#93, reviewing the scoreboard row that
+repeated the claim.
+
 ## 2026-08-25 — a raw sidecar was paired with a document from a different session
 
 **Affected file**
