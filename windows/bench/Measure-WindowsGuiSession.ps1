@@ -308,6 +308,33 @@ if ($CanonicalPayload) {
   Write-Output "keld arm staged at $staged (index.html replaced with the canonical page)"
 }
 
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class KeldPowerLine {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SYSTEM_POWER_STATUS {
+        public byte ACLineStatus;
+        public byte BatteryFlag;
+        public byte BatteryLifePercent;
+        public byte SystemStatusFlag;
+        public int  BatteryLifeTime;
+        public int  BatteryFullLifeTime;
+    }
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS status);
+
+    public static SYSTEM_POWER_STATUS Read() {
+        SYSTEM_POWER_STATUS s;
+        if (!GetSystemPowerStatus(out s)) {
+            throw new InvalidOperationException("GetSystemPowerStatus failed: " + Marshal.GetLastWin32Error());
+        }
+        return s;
+    }
+}
+"@ -ErrorAction SilentlyContinue
+
 function Get-PowerState {
   <#
     Sampled at BOTH session boundaries and stamped into the session, because
@@ -320,19 +347,58 @@ function Get-PowerState {
     measurement ran, and it failed in both directions -- a session measured on
     battery and emitted on AC would have published a false AC claim.
 
-    Win32_Battery.BatteryStatus 1 is "discharging"; anything else (2 = on AC)
-    means mains power. A machine with no battery device is a desktop and is
-    always on AC.
+    THE COUNTER IS ACLineStatus, NOT Win32_Battery.BatteryStatus. The first
+    version of this function tested `BatteryStatus -ne 1`, which is wrong twice
+    over. Per Win32_Battery documentation `1` is "Other", not "discharging";
+    `4` (Low) and `5` (Critical) are unambiguously discharging and that test
+    called both of them AC. BatteryStatus reports the BATTERY's charge state and
+    no value of it establishes the AC line. GetSystemPowerStatus answers the
+    actual question: ACLineStatus 0 = offline, 1 = online, 255 = unknown.
+
+    Fails CLOSED. Unknown is not AC: an unavailable reading returns $null, and
+    every consumer must treat that as not-on-AC rather than as a pass. The first
+    version defaulted $onAc = $true when the query failed or no battery was
+    found, which is the same fail-open the thermal cooling gate already had to
+    have fixed out of it.
+
+    A desktop with no battery is genuinely on AC and GetSystemPowerStatus says
+    so directly (ACLineStatus 1), so no special case is needed for it.
   #>
-  $bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1
-  $onAc = $true
-  if ($bat) { $onAc = ($bat.BatteryStatus -ne 1) }
+  # NOT $error: that is a PowerShell automatic variable (the session's error
+  # collection). Assigning to it shadows the collection for the rest of the
+  # scope and silently changes what `$error[0]` means to any caller.
+  $acPower = $null
+  $lineStatus = $null
+  $batteryFlag = $null
+  $percent = $null
+  $powerError = $null
+
+  if (-not ('KeldPowerLine' -as [type])) {
+    $powerError = 'the GetSystemPowerStatus binding could not be created (Add-Type failed)'
+  } else {
+    try {
+      $st = [KeldPowerLine]::Read()
+      $lineStatus = [int]$st.ACLineStatus
+      $batteryFlag = [int]$st.BatteryFlag
+      $percent = if ($st.BatteryLifePercent -eq 255) { $null } else { [int]$st.BatteryLifePercent }
+      switch ($lineStatus) {
+        0 { $acPower = $false }
+        1 { $acPower = $true }
+        default { $powerError = "ACLineStatus reported $lineStatus (255 = unknown); AC state is not established" }
+      }
+    } catch {
+      $powerError = "GetSystemPowerStatus failed: $($_.Exception.Message)"
+    }
+  }
+
   return [ordered]@{
-    ac_power        = [bool]$onAc
-    battery_status  = if ($bat) { [int]$bat.BatteryStatus } else { $null }
-    charge_percent  = if ($bat) { [int]$bat.EstimatedChargeRemaining } else { $null }
+    ac_power        = $acPower
+    ac_line_status  = $lineStatus
+    battery_flag    = $batteryFlag
+    charge_percent  = $percent
+    power_error     = $powerError
     sampled_utc     = (Get-Date).ToUniversalTime().ToString('o')
-    method          = 'Win32_Battery.BatteryStatus; 1 = discharging, absent battery device = desktop on AC'
+    method          = 'kernel32!GetSystemPowerStatus ACLineStatus; 0 = offline, 1 = online, 255 = unknown (null ac_power, fails closed)'
   }
 }
 
@@ -340,7 +406,7 @@ $wv2Start = Get-Wv2Version
 Write-Output "session start: WebView2 $wv2Start, seed $Seed, $Rounds rounds x $($ARMS.Count) arms"
 $thermalStart = Invoke-ThermalProbe -Label 'start'
 $powerStart = Get-PowerState
-Write-Host ("  power[start]: ac={0} battery_status={1} charge={2}" -f $powerStart.ac_power, $powerStart.battery_status, $powerStart.charge_percent)
+Write-Host ("  power[start]: ac={0} ACLineStatus={1} charge={2} err={3}" -f $powerStart.ac_power, $powerStart.ac_line_status, $powerStart.charge_percent, $powerStart.power_error)
 
 $records = New-Object System.Collections.ArrayList
 foreach ($a in $ARMS) {
@@ -414,7 +480,7 @@ if ($ThermalGateEveryRounds -gt 0) {
 }
 $thermalEnd = Invoke-ThermalProbe -Label 'end'
 $powerEnd = Get-PowerState
-Write-Host ("  power[end]: ac={0} battery_status={1} charge={2}" -f $powerEnd.ac_power, $powerEnd.battery_status, $powerEnd.charge_percent)
+Write-Host ("  power[end]: ac={0} ACLineStatus={1} charge={2} err={3}" -f $powerEnd.ac_power, $powerEnd.ac_line_status, $powerEnd.charge_percent, $powerEnd.power_error)
 $wv2End = Get-Wv2Version
 $integrity = 'ok'
 if ($wv2Start -ne $wv2End) { $integrity = "WEBVIEW2_CHANGED_MIDSESSION $wv2Start -> $wv2End" }

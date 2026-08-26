@@ -267,9 +267,13 @@ $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name.Trim()
 if ($null -eq $sess.power_start -or $null -eq $sess.power_end) {
   throw "PROVENANCE FAILED: the session JSON has no power_start/power_end. Re-run with a runner that samples AC power at both session boundaries; reading it now would record the machine's state at emission, not during the measurement."
 }
-$acStart = [bool]$sess.power_start.ac_power
-$acEnd   = [bool]$sess.power_end.ac_power
-$ac      = $acStart -and $acEnd
+# $null means the reading was UNAVAILABLE or ACLineStatus was 255 (unknown).
+# Unknown is not AC. Kept distinct from $false so the blocking reason can say
+# which it was: "we measured battery" and "we could not tell" are different
+# facts for whoever has to decide whether to re-run.
+$acStart = $sess.power_start.ac_power
+$acEnd   = $sess.power_end.ac_power
+$ac      = ($acStart -eq $true) -and ($acEnd -eq $true)
 # The block below says eligibility is DERIVED, never hand-authored -- and the
 # thermal check then read -ThermalStart/-ThermalEnd, which the operator types.
 # In practice they matched the measurement, but a gate that reads what someone
@@ -323,10 +327,17 @@ if (-not $ac) {
   # Named per boundary: a machine unplugged partway through is a different
   # failure from one that was never plugged in, and the operator needs to know
   # which, since only one of them invalidates part of the run.
-  $where = if (-not $acStart -and -not $acEnd) { 'at both session boundaries' }
-           elseif (-not $acStart) { 'at the session start' }
-           else { 'at the session end (unplugged mid-session)' }
-  $reasons += [ordered]@{ code='NOT_ON_AC_POWER'; label="machine was not on AC power $where; HARNESS-CONTRACT.md requires AC power with Low Power Mode off" }
+  $describe = {
+    param($v, $boundary, $probe)
+    if ($v -eq $false) { return "on battery at the session $boundary" }
+    if ($null -eq $v)  { return "of unknown AC state at the session $boundary ($($probe.power_error))" }
+    return $null
+  }
+  $parts = @(
+    (& $describe $acStart 'start' $sess.power_start)
+    (& $describe $acEnd   'end'   $sess.power_end)
+  ) | Where-Object { $_ }
+  $reasons += [ordered]@{ code='NOT_ON_AC_POWER'; label=("machine was " + ($parts -join ', and ') + "; HARNESS-CONTRACT.md requires AC power with Low Power Mode off") }
 }
 if (-not $payloadSha) {
   $reasons += [ordered]@{ code='PAYLOAD_PARITY_UNPROVEN'; label='no canonical payload was verified across arms; HARNESS-CONTRACT.md requires a byte-identical payload recorded as provenance.payload_sha256' }

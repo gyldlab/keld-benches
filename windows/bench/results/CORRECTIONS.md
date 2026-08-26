@@ -122,6 +122,24 @@ refuses to emit a session that has none, rather than substituting its own
 reading. `NOT_ON_AC_POWER` now names which boundary failed, because a machine
 unplugged mid-session is a different fault from one that was never plugged in.
 
+**The counter is `GetSystemPowerStatus.ACLineStatus`, not
+`Win32_Battery.BatteryStatus`.** The first version of this fix tested
+`BatteryStatus -ne 1`, which is wrong twice over. Per the `Win32_Battery`
+documentation, `1` is "Other", not "discharging"; `4` (Low) and `5` (Critical)
+are unambiguously discharging and that test classified both as AC. No value of
+`BatteryStatus` establishes the AC line at all — it reports the battery's charge
+state. `GetSystemPowerStatus` answers the actual question: `ACLineStatus` 0 is
+offline, 1 is online, 255 is unknown.
+
+It also **failed open**: `$onAc` defaulted to `$true` when the query failed or
+no battery was found, so an unavailable reading published as AC. That is the
+same fail-open the thermal cooling gate had already had to have fixed out of it.
+Unknown now yields `null`, and every consumer treats `null` as not-on-AC. The
+emitter keeps `null` distinct from `false` so the blocking reason can say which
+it was: "we measured battery" and "we could not tell" are different facts for
+whoever decides whether to re-run. A desktop with no battery needs no special
+case — `ACLineStatus` reports 1 directly.
+
 **Consequence for the published document.** It stays as published at
 `b30d145`. It cannot be re-emitted until a session exists that carries a power
 record, so the unrelated `session.notes` correction below also waits for the
