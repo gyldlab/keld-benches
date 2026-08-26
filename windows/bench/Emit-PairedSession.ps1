@@ -180,6 +180,16 @@ foreach ($id in $armIds) {
         engine_process_count  = [int]$d.engine_process_count
         framework_ws_kib      = [double]$d.framework_ws_kib
         framework_private_kib = [double]$d.framework_private_kib
+        # The `other` lane and the true keld-process sum reach the DOCUMENT, not
+        # just the raw sidecar. Emitting them only in the sidecar would leave a
+        # published document whose framework_ws_kib still understates the sum by
+        # the size of that lane, with nothing in the document able to show it --
+        # which is the defect this PR exists to fix, moved one file over.
+        # Older sessions have no such fields; $null is correct for them and the
+        # schema's diagnostics map accepts it.
+        other_ws_kib          = if ($null -ne $d.other_ws_kib) { [double]$d.other_ws_kib } else { $null }
+        other_process_count   = if ($null -ne $d.other_process_count) { [int]$d.other_process_count } else { $null }
+        keld_processes_ws_kib = if ($null -ne $d.keld_processes_ws_kib) { [double]$d.keld_processes_ws_kib } else { $null }
         tree_ws_kib           = [double]$d.tree_ws_kib
         native_window_ms      = [double]$d.native_window_ms
         settle_ms             = [double]$d.settle_ms
