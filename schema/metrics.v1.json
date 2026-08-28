@@ -1,6 +1,6 @@
 {
   "registry_version": 1,
-  "description": "Metric contract registry for keld-benches. Source of truth for WHICH metrics exist, their units, oracles, budgets, and sample policy. Encodes the named contracts of Keld docs/research/49-falsifiable-bench-and-test-ladder.md (falsifiable scoreboard §1, cache-state classes §3.1, sample policy §5). Adding a metric = adding one entry here; the result document shape (schema/result.v1.schema.json) does not change. Correctness/security gates precede performance: a faster run that fails a required gate is invalid.",
+  "description": "Metric contract registry for keld-benches. Source of truth for WHICH metrics exist, their units, oracles, budgets, and sample policy. Encodes the named contracts of Keld docs/research/library/quality-evidence/49-falsifiable-bench-and-test-ladder.md (falsifiable scoreboard §1, cache-state classes §3.1, sample policy §5). Adding a metric = adding one entry here; the result document shape (schema/result.v1.schema.json) does not change. Correctness/security gates precede performance: a faster run that fails a required gate is invalid.",
   "cache_states": {
     "boot-cold": "First launch after reboot / clean VM snapshot; one sample per boot.",
     "fresh-process": "Complete prior process coalition removed; fresh profile; OS caches uncontrolled.",

@@ -8,7 +8,7 @@ never a parallel result format.
 
 This contract encodes the named metric contracts, cache-state classes, paired
 bootstrap statistics, and >5% regression rule of Keld's research note
-`docs/research/49-falsifiable-bench-and-test-ladder.md`. It does not reinvent
+`docs/research/library/quality-evidence/49-falsifiable-bench-and-test-ladder.md`. It does not reinvent
 them; when that note and this file disagree, fixing the disagreement is the
 task.
 

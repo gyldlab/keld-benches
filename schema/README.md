@@ -28,5 +28,5 @@ python3 schema/check.py   # from the repo root; requires jsonschema
 
 Metric ids, units, oracles, budgets, cache-state classes, sample policy, and
 the 1.05 ratio regression rule are taken from Keld's research note
-`docs/research/49-falsifiable-bench-and-test-ladder.md` (private repo). This
+`docs/research/library/quality-evidence/49-falsifiable-bench-and-test-ladder.md` (private repo). This
 registry is the machine-readable encoding, not a second source of truth.
