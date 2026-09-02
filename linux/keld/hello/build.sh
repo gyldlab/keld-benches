@@ -190,7 +190,10 @@ if [ -e "$output_dir" ] || [ -L "$output_dir" ]; then
   echo "refusing to overwrite output created during build: $output_dir" >&2
   exit 73
 fi
-mv -T -n "$staged" "$output_dir"
+if ! mv -T -n "$staged" "$output_dir"; then
+  echo "could not atomically install benchmark artifacts: $output_dir" >&2
+  exit 74
+fi
 if [ -e "$staged" ] || [ -L "$staged" ]; then
   find "$staged" -type f -delete
   rmdir "$staged"

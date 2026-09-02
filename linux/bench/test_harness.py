@@ -134,7 +134,11 @@ class ProcessOwnershipTests(unittest.TestCase):
     def test_cleanup_terminates_owned_descendant_group(self) -> None:
         program = (
             "import signal,subprocess,sys; "
-            "child=subprocess.Popen([sys.executable,'-c','import signal; signal.pause()']); "
+            "child_program=\"import signal; signal.signal(signal.SIGTERM,signal.SIG_IGN); "
+            "print('ready',flush=True); signal.pause()\"; "
+            "child=subprocess.Popen([sys.executable,'-c',child_program],"
+            "stdout=subprocess.PIPE,text=True); "
+            "child.stdout.readline(); "
             "print(child.pid,flush=True); signal.pause()"
         )
         process = subprocess.Popen(

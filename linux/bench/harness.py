@@ -350,7 +350,6 @@ class OwnedProcess:
 
             remaining = _process_group_members(self.identity.process_group)
             if remaining:
-                self._signal_group(signal.SIGKILL)
                 selector = selectors.DefaultSelector()
                 descriptors: list[int] = []
                 try:
@@ -359,6 +358,16 @@ class OwnedProcess:
                             descriptor = os.pidfd_open(member.pid)
                         except ProcessLookupError:
                             continue
+                        current = _proc_identity(member.pid)
+                        if current is None:
+                            os.close(descriptor)
+                            continue
+                        if current.start_ticks != member.start_ticks:
+                            os.close(descriptor)
+                            raise HarnessError(
+                                "descendant PID was reused before generation-bound cleanup"
+                            )
+                        signal.pidfd_send_signal(descriptor, signal.SIGKILL)
                         descriptors.append(descriptor)
                         selector.register(descriptor, selectors.EVENT_READ)
                     deadline = time.monotonic() + 2
