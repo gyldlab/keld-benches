@@ -8,6 +8,7 @@ import subprocess
 import sys
 import unittest
 import urllib.parse
+from unittest import mock
 
 from harness import (
     BeaconServer,
@@ -106,6 +107,10 @@ class BeaconTests(unittest.TestCase):
 
 
 class ProcessOwnershipTests(unittest.TestCase):
+    def test_transient_truncated_proc_stat_is_unavailable(self) -> None:
+        with mock.patch("pathlib.Path.read_text", return_value="123 (exiting) Z"):
+            self.assertIsNone(_proc_identity(123))
+
     def test_generation_mismatch_blocks_group_signal(self) -> None:
         process = subprocess.Popen(
             [sys.executable, "-c", "import signal; signal.pause()"],

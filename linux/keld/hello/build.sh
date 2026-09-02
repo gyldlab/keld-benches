@@ -86,7 +86,11 @@ worktree="$temporary_root/source"
 target_dir="$temporary_root/target"
 product_artifact="$temporary_root/keld-host-product"
 verified_dir="$temporary_root/recipe"
+staged=
 cleanup() {
+  if [ -n "$staged" ] && { [ -e "$staged" ] || [ -L "$staged" ]; }; then
+    rm -rf -- "$staged"
+  fi
   rm -rf -- "$temporary_root"
 }
 trap cleanup EXIT HUP INT TERM

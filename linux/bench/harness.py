@@ -287,14 +287,16 @@ class ProcessIdentity:
 def _proc_identity(pid: int) -> ProcessIdentity | None:
     try:
         raw = pathlib.Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
-    except FileNotFoundError:
+    except (FileNotFoundError, ProcessLookupError, PermissionError):
+        return None
+    if not raw:
         return None
     close = raw.rfind(")")
     if close < 0:
-        raise HarnessError(f"/proc/{pid}/stat had no command terminator")
+        return None
     fields = raw[close + 2 :].split()
     if len(fields) < 20:
-        raise HarnessError(f"/proc/{pid}/stat was truncated")
+        return None
     if fields[0] == "Z":
         return None
     return ProcessIdentity(pid=pid, process_group=int(fields[2]), start_ticks=int(fields[19]))
