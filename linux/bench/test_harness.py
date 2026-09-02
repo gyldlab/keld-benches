@@ -162,6 +162,7 @@ class StatisticsTests(unittest.TestCase):
         summary = summarize(self.samples(478_208))
         self.assertEqual(summary["valid_samples"], 1)
         self.assertEqual(summary["median"], 478_208)
+        self.assertIsInstance(summary["median"], int)
         self.assertNotIn("bootstrap_ci95", summary)
 
     def test_observations_use_nearest_rank_and_bootstrap_median(self) -> None:

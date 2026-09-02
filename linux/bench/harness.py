@@ -457,7 +457,7 @@ def percentile(values: list[float], fraction: float) -> float:
 
 
 def summarize(samples: list[dict[str, Any]]) -> dict[str, Any]:
-    values = [float(sample["value"]) for sample in samples if sample["valid"]]
+    values = [sample["value"] for sample in samples if sample["valid"]]
     if not values:
         return {"valid_samples": 0, "median": None, "min": None, "max": None}
     summary: dict[str, Any] = {
