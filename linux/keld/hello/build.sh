@@ -10,8 +10,20 @@ source_repo=$1
 source_sha=$2
 output_dir=$3
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-recipe_root=$(git -C "$script_dir" rev-parse --show-toplevel)
-recipe_prefix=$(git -C "$script_dir" rev-parse --show-prefix)
+clean_git() {
+  /usr/bin/env -i \
+    HOME=/var/empty \
+    PATH=/usr/bin:/bin \
+    LC_ALL=C \
+    GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_NO_REPLACE_OBJECTS=1 \
+    GIT_OPTIONAL_LOCKS=0 \
+    GIT_TERMINAL_PROMPT=0 \
+    /usr/bin/git "$@"
+}
+recipe_root=$(clean_git -C "$script_dir" rev-parse --show-toplevel)
+recipe_prefix=$(clean_git -C "$script_dir" rev-parse --show-prefix)
 patch_path="$script_dir/keld-bench-url.patch"
 payload_path="$script_dir/index.html"
 
@@ -35,35 +47,35 @@ if [ "$recipe_prefix" != "linux/keld/hello/" ]; then
   exit 65
 fi
 
-source_remote=$(git -C "$source_repo" config --get remote.origin.url || true)
+source_remote=$(clean_git -C "$source_repo" config --local --no-includes --get remote.origin.url || true)
 case "$source_remote" in
   https://github.com/gyldlab/keld|https://github.com/gyldlab/keld.git|git@github.com:gyldlab/keld|git@github.com:gyldlab/keld.git) ;;
   *) echo "source origin must be the canonical gyldlab/keld repository" >&2; exit 65 ;;
 esac
-recipe_remote=$(git -C "$recipe_root" config --get remote.origin.url || true)
+recipe_remote=$(clean_git -C "$recipe_root" config --local --no-includes --get remote.origin.url || true)
 case "$recipe_remote" in
   https://github.com/gyldlab/keld-benches|https://github.com/gyldlab/keld-benches.git|git@github.com:gyldlab/keld-benches|git@github.com:gyldlab/keld-benches.git) ;;
   *) echo "recipe origin must be the canonical gyldlab/keld-benches repository" >&2; exit 65 ;;
 esac
 
-resolved_sha=$(git -C "$source_repo" rev-parse --verify "$source_sha^{commit}")
+resolved_sha=$(clean_git -C "$source_repo" rev-parse --verify "$source_sha^{commit}")
 if [ "$resolved_sha" != "$source_sha" ]; then
   echo "SOURCE_GIT_SHA did not resolve exactly" >&2
   exit 65
 fi
-if ! git ls-remote --heads https://github.com/gyldlab/keld.git | awk -v sha="$source_sha" '$1 == sha { found = 1 } END { exit found ? 0 : 1 }'; then
+if ! clean_git ls-remote --heads https://github.com/gyldlab/keld.git | awk -v sha="$source_sha" '$1 == sha { found = 1 } END { exit found ? 0 : 1 }'; then
   echo "SOURCE_GIT_SHA must be a branch head advertised by canonical origin" >&2
   exit 65
 fi
 
-recipe_commit=$(git -C "$recipe_root" rev-parse --verify HEAD^{commit})
+recipe_commit=$(clean_git -C "$recipe_root" rev-parse --verify HEAD^{commit})
 for relative in linux/keld/hello/build.sh linux/keld/hello/index.html linux/keld/hello/keld-bench-url.patch; do
-  if ! git -C "$recipe_root" diff --quiet HEAD -- "$relative" || \
-     ! git -C "$recipe_root" diff --cached --quiet HEAD -- "$relative"; then
+  if ! clean_git -C "$recipe_root" diff --quiet HEAD -- "$relative" || \
+     ! clean_git -C "$recipe_root" diff --cached --quiet HEAD -- "$relative"; then
     echo "recipe input differs from commit: $relative" >&2
     exit 65
   fi
-  if ! git -C "$recipe_root" cat-file -e "$recipe_commit:$relative"; then
+  if ! clean_git -C "$recipe_root" cat-file -e "$recipe_commit:$relative"; then
     echo "recipe input is absent from commit: $relative" >&2
     exit 65
   fi
@@ -79,16 +91,16 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 mkdir -m 700 "$verified_dir"
-git -C "$recipe_root" show "$recipe_commit:linux/keld/hello/build.sh" > "$verified_dir/build.sh"
-git -C "$recipe_root" show "$recipe_commit:linux/keld/hello/index.html" > "$verified_dir/index.html"
-git -C "$recipe_root" show "$recipe_commit:linux/keld/hello/keld-bench-url.patch" > "$verified_dir/keld-bench-url.patch"
+clean_git -C "$recipe_root" show "$recipe_commit:linux/keld/hello/build.sh" > "$verified_dir/build.sh"
+clean_git -C "$recipe_root" show "$recipe_commit:linux/keld/hello/index.html" > "$verified_dir/index.html"
+clean_git -C "$recipe_root" show "$recipe_commit:linux/keld/hello/keld-bench-url.patch" > "$verified_dir/keld-bench-url.patch"
 cmp -s "$0" "$verified_dir/build.sh" || { echo "executed build.sh differs from committed bytes" >&2; exit 65; }
 cmp -s "$payload_path" "$verified_dir/index.html" || { echo "payload differs from committed bytes" >&2; exit 65; }
 cmp -s "$patch_path" "$verified_dir/keld-bench-url.patch" || { echo "adapter patch differs from committed bytes" >&2; exit 65; }
 
-git -c protocol.file.allow=never init "$worktree" >/dev/null
-git -C "$worktree" -c protocol.file.allow=never fetch --depth=1 https://github.com/gyldlab/keld.git "$source_sha"
-git -C "$worktree" -c core.hooksPath=/dev/null checkout --detach "$source_sha"
+clean_git -c protocol.file.allow=never init "$worktree" >/dev/null
+clean_git -C "$worktree" -c protocol.file.allow=never fetch --depth=1 https://github.com/gyldlab/keld.git "$source_sha"
+clean_git -C "$worktree" -c core.hooksPath=/dev/null checkout --detach "$source_sha"
 
 rustc_version=$(rustc -Vv | paste -sd ';' -)
 cargo_version=$(cargo -V)
@@ -97,8 +109,8 @@ cargo_version=$(cargo -V)
   CARGO_TARGET_DIR="$target_dir" cargo build --release --locked -p keld-host
 )
 cp "$target_dir/release/keld-host" "$product_artifact"
-git -C "$worktree" apply --check "$verified_dir/keld-bench-url.patch"
-git -C "$worktree" apply "$verified_dir/keld-bench-url.patch"
+clean_git -C "$worktree" apply --check "$verified_dir/keld-bench-url.patch"
+clean_git -C "$worktree" apply "$verified_dir/keld-bench-url.patch"
 (
   cd "$worktree"
   CARGO_TARGET_DIR="$target_dir" cargo build --release --locked -p keld-host
@@ -174,7 +186,13 @@ if [ -e "$output_dir" ] || [ -L "$output_dir" ]; then
   echo "refusing to overwrite output created during build: $output_dir" >&2
   exit 73
 fi
-mv -T "$staged" "$output_dir"
+mv -T -n "$staged" "$output_dir"
+if [ -e "$staged" ] || [ -L "$staged" ]; then
+  find "$staged" -type f -delete
+  rmdir "$staged"
+  echo "refusing to overwrite output created during build: $output_dir" >&2
+  exit 73
+fi
 
 printf 'product_artifact=%s/keld-host-product\n' "$output_dir"
 printf 'benchmark_artifact=%s/keld-host-bench\n' "$output_dir"
