@@ -148,12 +148,25 @@
           "required": ["path"],
           "properties": {
             "path": {
-              "type": "string",
-              "pattern": "^(macos|windows|linux)/bench/",
+              "$ref": "#/$defs/benchPath",
               "description": "Repo-relative harness entry point (e.g. 'windows/bench/Measure-FirstPaint.ps1'). Never an absolute path."
             },
             "sha256": { "$ref": "#/$defs/sha256", "description": "SHA-256 of the harness entry-point file, when the harness is a compiled artifact use the binary hash." },
-            "version": { "type": "string" }
+            "version": { "type": "string" },
+            "modules": {
+              "type": "array",
+              "minItems": 1,
+              "description": "Every interpreted source module that owns measurement logic, including the entry point.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["path", "sha256"],
+                "properties": {
+                  "path": { "$ref": "#/$defs/benchPath" },
+                  "sha256": { "$ref": "#/$defs/sha256" }
+                }
+              }
+            }
           }
         },
         "fixtures": {
@@ -223,6 +236,10 @@
     }
   },
   "$defs": {
+    "benchPath": {
+      "type": "string",
+      "pattern": "^(macos|windows|linux)/bench/[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$"
+    },
     "gitSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
     "interval": {

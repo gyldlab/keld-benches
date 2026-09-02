@@ -14,23 +14,22 @@ task.
 
 ## Top-priority gap, stated before any restructure
 
-**Windows and Linux still have no committed `keld/` fixture.** macOS now has
-[`macos/keld/hello/`](./macos/keld/hello/), merged in PR #7; the remaining gaps
-are:
+**Windows still has no committed `keld/` fixture.** macOS has
+[`macos/keld/hello/`](./macos/keld/hello/), merged in PR #7, and Linux now has
+[`linux/keld/hello/`](./linux/keld/hello/) plus the first contract-shaped Linux
+harness. The remaining Windows gap is:
 
 - The Windows harness measures Keld by splicing a beacon into
   `keld-wv` sources inside the private Keld repo at `-Prepare` time and
   building `keld-host.exe` there. No committed SHA in *this* repo reproduces
   the Keld arm.
-- Linux has nothing.
 
-First fixture work on either remaining OS MUST be `{os}/keld/hello/` (a committed build
-recipe producing a Release artifact with bound provenance, following the
-KEL-64 `macos/keld/hello/build.sh` pattern), before any new competitor arm or
-metric lands. This gap is independent of, and ranked above, everything below.
-Correcting a historical table from an already-committed raw file is not new
-fixture or metric work and does not make that pre-contract result publication
-eligible.
+First fixture work on Windows MUST be `windows/keld/hello/` (a committed build
+recipe producing a Release artifact with bound provenance, following the KEL-64
+`macos/keld/hello/build.sh` pattern), before any new Windows competitor arm or
+metric lands. Correcting a historical table from an already-committed raw file
+is not new fixture or metric work and does not make that pre-contract result
+publication eligible.
 
 ## 1. Layout convention
 
@@ -139,6 +138,8 @@ Every `run` emits one JSON document conforming to
   SHA-256, complete environment block, AC power / Low Power Mode off / nominal
   thermal state, and byte-identical canonical payload across arms
   (`provenance.payload_sha256`).
+- `provenance.harness` names and hashes the entry point; interpreted harnesses
+  also list and hash every imported measurement module in `modules`.
 
 Validate any document with:
 

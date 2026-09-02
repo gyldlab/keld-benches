@@ -109,6 +109,16 @@ else:
         ("absolute harness path is rejected",
          mutated(lambda d: d["provenance"]["harness"].update(
              path="/Users/nobody/bench.ps1"))),
+        ("absolute interpreted-module path is rejected",
+         mutated(lambda d: d["provenance"]["harness"].update(modules=[{
+             "path": "/tmp/harness.py",
+             "sha256": "0" * 64,
+         }]))),
+        ("interpreted-module traversal path is rejected",
+         mutated(lambda d: d["provenance"]["harness"].update(modules=[{
+             "path": "linux/bench/../private.py",
+             "sha256": "0" * 64,
+         }]))),
         ("unknown per-sample field is rejected",
          mutated(lambda d: d["arms"][0]["samples"][0].update(surprise=1))),
         ("sample without validity flag is rejected",

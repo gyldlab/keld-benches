@@ -105,7 +105,7 @@
       "implementations": {
         "windows": "windows/bench/Measure-FirstPaint.ps1 (pre-contract; see windows/bench/CONTRACT.md)",
         "macos": "KEL-64 harness (feature branch, macos/harness -> macos/bench on merge)",
-        "linux": "none"
+        "linux": "linux/bench/run.py"
       }
     },
     {
@@ -159,7 +159,11 @@
       "cache_states": ["fresh-process"],
       "sample_class": "gui-paint-rss",
       "status": "active",
-      "note": "Existing MEASUREMENTS.md disk tables predate this registry; new disk results use one document per lane."
+      "note": "Existing MEASUREMENTS.md disk tables predate this registry; new disk results use one document per lane.",
+      "implementations": {
+        "windows": "windows/bench/Emit-Kel25Documents.ps1 (historical emitter)",
+        "linux": "linux/bench/run.py"
+      }
     },
     {
       "id": "PACK-UPDATE",
