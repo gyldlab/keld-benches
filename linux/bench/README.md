@@ -109,4 +109,5 @@ python3 schema/check.py
 
 The negative controls cover template port/nonce substitution, stale nonce,
 single-rAF, malformed query, hidden/unfocused document, duplicate beacon,
-silent-arm timeout, PID-generation mismatch, and descendant process cleanup.
+silent-arm timeout, PID-generation mismatch, descendant process cleanup,
+missing WebKit membership, generation churn, and excessive RSS drift.
