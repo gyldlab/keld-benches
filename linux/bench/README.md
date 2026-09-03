@@ -2,7 +2,7 @@
 
 `run.py` is the Linux implementation of the repository-wide metric-runner
 contract. It reads `schema/metrics.v1.json`, emits
-`schema/result.v1.schema.json`, and currently implements:
+`schema/result.v2.schema.json`, and currently implements:
 
 - `PAINT-OPPORTUNITY`: external monotonic spawn-to-double-rAF image beacon for
   the `linux/keld/hello` WebKitGTK diagnostic window;

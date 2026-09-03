@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+import os
+import pathlib
+import selectors
 import signal
 import subprocess
 import sys
@@ -19,6 +22,7 @@ from harness import (
     ProcessIdentity,
     ROOT,
     _proc_identity,
+    _paint_attempt,
     render_payload,
     request,
     summarize,
@@ -113,13 +117,74 @@ class ProcessOwnershipTests(unittest.TestCase):
         with mock.patch("pathlib.Path.read_text", return_value="123 (exiting) Z"):
             self.assertIsNone(_proc_identity(123))
 
+    def test_fast_exit_is_reaped_and_retained_as_a_rejected_sample_reason(self) -> None:
+        process = subprocess.Popen(
+            [sys.executable, "-c", "raise SystemExit(7)"],
+            start_new_session=True,
+        )
+        descriptor = os.pidfd_open(process.pid)
+        selector = selectors.DefaultSelector()
+        try:
+            selector.register(descriptor, selectors.EVENT_READ)
+            self.assertTrue(selector.select(2), "child must exit before ownership capture")
+        finally:
+            selector.close()
+            os.close(descriptor)
+        owner = OwnedProcess(process)
+        self.assertEqual(owner.exit_code, 7)
+        self.assertIsNone(owner.identity)
+        self.assertEqual(process.returncode, 7)
+        self.assertFalse(owner.cleanup())
+
+    def test_fast_exit_becomes_an_invalid_sample_instead_of_aborting(self) -> None:
+        sample = _paint_attempt(pathlib.Path("/usr/bin/false"), TEMPLATE, 1, 1)
+        self.assertFalse(sample["valid"])
+        self.assertEqual(sample["reject_reason"], "process_exited_1")
+        self.assertIsNone(sample["value"])
+
+    def test_fast_exit_cleanup_reaps_a_surviving_process_group_child(self) -> None:
+        child_program = (
+            "import signal; signal.signal(signal.SIGTERM,signal.SIG_IGN); "
+            "print('ready',flush=True); signal.pause()"
+        )
+        parent_program = (
+            "import subprocess,sys; "
+            f"child=subprocess.Popen([sys.executable,'-c',{child_program!r}],"
+            "stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True); "
+            "child.stdout.readline(); "
+            "print(child.pid,flush=True); raise SystemExit(9)"
+        )
+        process = subprocess.Popen(
+            [sys.executable, "-c", parent_program],
+            start_new_session=True,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        assert process.stdout is not None
+        child_pid = int(process.stdout.readline().strip())
+        descriptor = os.pidfd_open(process.pid)
+        selector = selectors.DefaultSelector()
+        try:
+            selector.register(descriptor, selectors.EVENT_READ)
+            self.assertTrue(selector.select(2), "parent must exit before ownership capture")
+        finally:
+            selector.close()
+            os.close(descriptor)
+            process.stdout.close()
+        owner = OwnedProcess(process)
+        self.assertEqual(owner.exit_code, 9)
+        self.assertTrue(owner.cleanup())
+        self.assertIsNone(_proc_identity(child_pid))
+
     def test_generation_mismatch_blocks_group_signal(self) -> None:
         process = subprocess.Popen(
             [sys.executable, "-c", "import signal; signal.pause()"],
             start_new_session=True,
         )
         owner = OwnedProcess(process)
+        self.assertIsNotNone(owner.identity)
         original = owner.identity
+        assert original is not None
         try:
             owner.identity = ProcessIdentity(
                 pid=original.pid,

@@ -5,9 +5,11 @@ The shared, OS-agnostic half of the metric-runner contract
 
 | File | Owns |
 |---|---|
-| [`result.v1.schema.json`](./result.v1.schema.json) | The one shape every result document has (JSON Schema draft 2020-12) |
+| [`result.v1.schema.json`](./result.v1.schema.json) | Frozen historical result shape (JSON Schema draft 2020-12) |
+| [`result.v2.schema.json`](./result.v2.schema.json) | Current shape: normalized harness paths and interpreted-module provenance |
 | [`metrics.v1.json`](./metrics.v1.json) | Which metrics exist: id, unit, oracle, budget, cache states, sample policy, per-OS status |
-| [`check.py`](./check.py) | Falsifiable contract check — schema validity, registry invariants, examples, negative controls |
+| [`result_contract.py`](./result_contract.py) | Cross-field semantic policy that JSON Schema cannot express |
+| [`check.py`](./check.py) | Falsifiable contract check — every schema version, registry invariants, examples, semantic checks, negative controls |
 | [`examples/`](./examples/) | Documents that MUST validate (currently: the real KEL-65 Windows session converted to v1) |
 
 ```bash
@@ -19,6 +21,10 @@ python3 schema/check.py   # from the repo root; requires jsonschema
 - The **schema version** changes only by adding a new
   `result.vN.schema.json` file; existing documents keep validating against
   their own version. Never edit a shipped version's shape.
+- Version 2 adds complete interpreted-harness module provenance and requires an
+  exact module entry matching the top-level harness path/hash before policy-v2
+  results may set `publication.eligible: true`. Policy-v1/v1 documents remain
+  unchanged.
 - The **registry version** (`registry_version`) bumps when an existing
   metric's id, unit, oracle, or budget changes. *Adding* a metric entry is
   backward-compatible and does not bump the version.

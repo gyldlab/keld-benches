@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate result.v1 documents against the schema AND the metric registry.
+"""Validate versioned result documents against their schema and the registry.
 
 Exists because schema/check.py validates the schema and schema/examples/ but
 never reads {os}/bench/results/ — a forged document with metric.id "not a real
@@ -10,7 +10,8 @@ it just wrote is well-formed; Run-KipcEcho.ps1 already calls a checker,
 Emit-Kel25Documents.ps1 previously did not.
 
 Checks per document:
-  1. JSON Schema Draft 2020-12 against schema/result.v1.schema.json
+  1. JSON Schema Draft 2020-12 against schema/result.vN.schema.json selected
+     from the document's integer schema_version
   2. no UTF-8 BOM (strict parsers reject it; PS 5.1 Set-Content -Encoding utf8
      emits one, which is how the older windows-first-paint*.json got theirs)
   3. metric.id is registered in schema/metrics.v1.json
@@ -47,10 +48,12 @@ def main(argv):
         print("usage: validate_result_v1.py <repo-root> <document.json> [more...]", file=sys.stderr)
         return 3
     root = argv[1]
-    schema = json.load(open(os.path.join(root, 'schema', 'result.v1.schema.json'), encoding='utf-8'))
+    sys.path.insert(0, os.path.join(root, 'schema'))
+    from result_contract import semantic_problems
+
     registry = json.load(open(os.path.join(root, 'schema', 'metrics.v1.json'), encoding='utf-8'))
     known = {m['id']: m for m in registry['metrics']}
-    validator = Draft202012Validator(schema)
+    validators = {}
 
     failures = 0
     for path in argv[2:]:
@@ -92,8 +95,28 @@ def main(argv):
             failures += 1
             continue
 
-        for err in sorted(validator.iter_errors(doc), key=lambda e: list(e.path)):
-            problems.append(f"schema: {list(err.path)}: {err.message}")
+        schema_version = doc.get('schema_version')
+        if not isinstance(schema_version, int) or isinstance(schema_version, bool):
+            problems.append(f"schema_version {schema_version!r} is not an integer")
+            validator = None
+        else:
+            schema_path = os.path.join(
+                root, 'schema', f'result.v{schema_version}.schema.json')
+            if not os.path.isfile(schema_path):
+                problems.append(
+                    f"schema_version {schema_version} has no {os.path.basename(schema_path)}")
+                validator = None
+            else:
+                if schema_version not in validators:
+                    versioned_schema = json.load(open(schema_path, encoding='utf-8'))
+                    Draft202012Validator.check_schema(versioned_schema)
+                    validators[schema_version] = Draft202012Validator(versioned_schema)
+                validator = validators[schema_version]
+
+        if validator is not None:
+            for err in sorted(validator.iter_errors(doc), key=lambda e: list(e.path)):
+                problems.append(f"schema: {list(err.path)}: {err.message}")
+        problems.extend(f"semantic: {problem}" for problem in semantic_problems(doc))
 
         metric = doc.get('metric', {})
         mid = metric.get('id')

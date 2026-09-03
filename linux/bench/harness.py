@@ -16,6 +16,7 @@ import selectors
 import signal
 import statistics
 import subprocess
+import sys
 import threading
 import time
 import urllib.parse
@@ -28,7 +29,8 @@ from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 REGISTRY_PATH = ROOT / "schema" / "metrics.v1.json"
-SCHEMA_PATH = ROOT / "schema" / "result.v1.schema.json"
+SCHEMA_VERSION = 2
+SCHEMA_PATH = ROOT / "schema" / f"result.v{SCHEMA_VERSION}.schema.json"
 HARNESS_PATH = ROOT / "linux" / "bench" / "run.py"
 MODULE_PATH = ROOT / "linux" / "bench" / "harness.py"
 TEMPLATE_PATH = ROOT / "linux" / "keld" / "hello" / "index.html"
@@ -455,6 +457,8 @@ def _process_memory(identity: ProcessIdentity, leader_pid: int) -> tuple[str, in
 
 
 def _memory_snapshot(owner: "OwnedProcess") -> MemorySnapshot | None:
+    if owner.identity is None:
+        return None
     leader = _proc_identity(owner.identity.pid)
     if leader is None:
         return None
@@ -503,78 +507,115 @@ class OwnedProcess:
     """Linux process-group owner anchored by the leader's kernel generation."""
 
     def __init__(self, process: subprocess.Popen[bytes]) -> None:
+        self.process = process
+        self.process_group = process.pid
+        self.identity: ProcessIdentity | None = None
+        self.exit_code: int | None = None
+        self._leader_pidfd: int | None = None
         identity = _proc_identity(process.pid)
-        if identity is None or identity.process_group != process.pid:
+        if identity is None:
+            exit_code = process.poll()
+            if exit_code is not None:
+                self.exit_code = exit_code
+                return
+            raise HarnessError("spawned benchmark process identity was transiently unavailable")
+        if identity.process_group != process.pid:
             raise HarnessError("spawned benchmark process did not own a fresh process group")
         try:
             self._leader_pidfd = os.pidfd_open(process.pid)
         except (AttributeError, OSError) as error:
             raise HarnessError(f"Linux pidfd_open is required for generation-bound cleanup: {error}") from error
-        self.process = process
         self.identity = identity
 
     def _signal_group(self, requested_signal: int) -> None:
+        if self.identity is None:
+            return
         current = _proc_identity(self.identity.pid)
         if current is not None and current.start_ticks != self.identity.start_ticks:
             raise HarnessError("benchmark leader PID was reused; refusing to signal its process group")
         try:
-            os.killpg(self.identity.process_group, requested_signal)
+            os.killpg(self.process_group, requested_signal)
         except ProcessLookupError:
             return
 
-    def cleanup(self) -> None:
+    def _terminate_remaining_members(self) -> bool:
+        remaining = _process_group_members(self.process_group)
+        if not remaining:
+            return False
+        selector = selectors.DefaultSelector()
+        descriptors: list[int] = []
         try:
-            self._signal_group(signal.SIGTERM)
-            try:
-                self.process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                self._signal_group(signal.SIGKILL)
+            for member in remaining:
+                try:
+                    descriptor = os.pidfd_open(member.pid)
+                except ProcessLookupError:
+                    continue
+                current = _proc_identity(member.pid)
+                if current is None:
+                    os.close(descriptor)
+                    continue
+                if current.start_ticks != member.start_ticks:
+                    os.close(descriptor)
+                    raise HarnessError(
+                        "descendant PID was reused before generation-bound cleanup"
+                    )
+                try:
+                    signal.pidfd_send_signal(descriptor, signal.SIGTERM)
+                except ProcessLookupError:
+                    os.close(descriptor)
+                    continue
+                descriptors.append(descriptor)
+                selector.register(descriptor, selectors.EVENT_READ)
+
+            deadline = time.monotonic() + 1
+            while selector.get_map():
+                timeout = deadline - time.monotonic()
+                if timeout <= 0:
+                    break
+                for key, _mask in selector.select(timeout):
+                    selector.unregister(key.fd)
+            for key in list(selector.get_map().values()):
+                try:
+                    signal.pidfd_send_signal(key.fd, signal.SIGKILL)
+                except ProcessLookupError:
+                    selector.unregister(key.fd)
+            deadline = time.monotonic() + 2
+            while selector.get_map():
+                timeout = deadline - time.monotonic()
+                if timeout <= 0:
+                    break
+                for key, _mask in selector.select(timeout):
+                    selector.unregister(key.fd)
+        finally:
+            selector.close()
+            for descriptor in descriptors:
+                os.close(descriptor)
+        survivors = _process_group_members(self.process_group)
+        if survivors:
+            raise HarnessError(
+                "generation-bound cleanup left process-group members: "
+                + ",".join(str(member.pid) for member in survivors)
+            )
+        return True
+
+    def cleanup(self) -> bool:
+        owned_generation = self.identity is not None
+        try:
+            if owned_generation:
+                self._signal_group(signal.SIGTERM)
                 try:
                     self.process.wait(timeout=2)
-                except subprocess.TimeoutExpired as error:
-                    raise HarnessError("benchmark leader survived SIGKILL") from error
-
-            remaining = _process_group_members(self.identity.process_group)
-            if remaining:
-                selector = selectors.DefaultSelector()
-                descriptors: list[int] = []
-                try:
-                    for member in remaining:
-                        try:
-                            descriptor = os.pidfd_open(member.pid)
-                        except ProcessLookupError:
-                            continue
-                        current = _proc_identity(member.pid)
-                        if current is None:
-                            os.close(descriptor)
-                            continue
-                        if current.start_ticks != member.start_ticks:
-                            os.close(descriptor)
-                            raise HarnessError(
-                                "descendant PID was reused before generation-bound cleanup"
-                            )
-                        signal.pidfd_send_signal(descriptor, signal.SIGKILL)
-                        descriptors.append(descriptor)
-                        selector.register(descriptor, selectors.EVENT_READ)
-                    deadline = time.monotonic() + 2
-                    while selector.get_map():
-                        timeout = deadline - time.monotonic()
-                        if timeout <= 0:
-                            break
-                        for key, _mask in selector.select(timeout):
-                            selector.unregister(key.fd)
-                finally:
-                    selector.close()
-                    for descriptor in descriptors:
-                        os.close(descriptor)
-            survivors = _process_group_members(self.identity.process_group)
-            if survivors:
-                raise HarnessError(
-                    "generation-bound cleanup left process-group members: "
-                    + ",".join(str(member.pid) for member in survivors)
-                )
+                except subprocess.TimeoutExpired:
+                    self._signal_group(signal.SIGKILL)
+                    try:
+                        self.process.wait(timeout=2)
+                    except subprocess.TimeoutExpired as error:
+                        raise HarnessError("benchmark leader survived SIGKILL") from error
+            removed_members = self._terminate_remaining_members()
         finally:
-            os.close(self._leader_pidfd)
+            if self._leader_pidfd is not None:
+                os.close(self._leader_pidfd)
+        return owned_generation or removed_members
 
 
 def _paint_attempt(artifact: pathlib.Path, template: bytes, run_number: int, timeout: float) -> dict[str, Any]:
@@ -625,8 +666,7 @@ def _paint_attempt(artifact: pathlib.Path, template: bytes, run_number: int, tim
     finally:
         try:
             if owner is not None:
-                owner.cleanup()
-                cleanup_bound = True
+                cleanup_bound = owner.cleanup()
             elif process is not None and process.poll() is None:
                 process.kill()
                 process.wait(timeout=2)
@@ -725,8 +765,7 @@ def _memory_attempt(
     finally:
         try:
             if owner is not None:
-                owner.cleanup()
-                cleanup_bound = True
+                cleanup_bound = owner.cleanup()
             elif process is not None and process.poll() is None:
                 process.kill()
                 process.wait(timeout=2)
@@ -994,11 +1033,22 @@ def validate_result(document: dict[str, Any]) -> None:
     try:
         from jsonschema import Draft202012Validator
     except ImportError as error:
-        raise HarnessError("jsonschema is required to validate result.v1 output") from error
+        raise HarnessError(f"jsonschema is required to validate result.v{SCHEMA_VERSION} output") from error
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     errors = sorted(Draft202012Validator(schema).iter_errors(document), key=lambda item: item.json_path)
     if errors:
-        raise HarnessError(f"result.v1 validation failed at {errors[0].json_path}: {errors[0].message}")
+        raise HarnessError(
+            f"result.v{SCHEMA_VERSION} validation failed at "
+            f"{errors[0].json_path}: {errors[0].message}"
+        )
+    sys.path.insert(0, str(ROOT / "schema"))
+    from result_contract import semantic_problems
+
+    problems = semantic_problems(document)
+    if problems:
+        raise HarnessError(
+            f"result.v{SCHEMA_VERSION} semantic validation failed: {problems[0]}"
+        )
 
 
 def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
@@ -1111,7 +1161,7 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
     )
     finished_utc = utc_now()
     document = {
-        "schema_version": 1,
+        "schema_version": SCHEMA_VERSION,
         "metric": {
             "id": args.metric,
             "unit": contract["unit"],
@@ -1169,7 +1219,7 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
             }
         ],
         "publication": {
-            "policy_version": 1,
+            "policy_version": 2,
             "requested": args.publish,
             "eligible": not reasons,
             "reasons": reasons,

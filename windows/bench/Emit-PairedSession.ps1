@@ -1,4 +1,4 @@
-# Emit a result.v1 document for a paired, round-major interleaved GUI session.
+# Emit a result.v2 document for a paired, round-major interleaved GUI session.
 #
 # WHAT IS COMPARED, AND WHY ONLY THIS
 # -----------------------------------
@@ -52,6 +52,7 @@ if ($tree -ne 'clean' -and -not $AllowDirtyTree) {
 }
 $runnerRel = 'windows/bench/Measure-WindowsGuiSession.ps1'
 $emitRel   = 'windows/bench/Emit-PairedSession.ps1'
+$provenanceRel = 'windows/bench/Provenance.ps1'
 # The keld ARTIFACT must actually correspond to keld_sha. Assert-BlobAtCommit
 # validates bench harness files against bench_sha, but nothing validated the
 # measured Keld binary -- and on 2026-08-25 the Keld repo moved to a commit
@@ -82,7 +83,7 @@ Write-Output ("keld artifact provenance OK: exe {0:u} >= commit {1:u}" -f $keldE
 # closed with a message naming a missing stamp that was in fact present.
 $sess = Get-Content $SessionJson -Raw | ConvertFrom-Json
 
-$null = Assert-BlobAtCommit -Repo $BenchRepo -Sha $benchSha -RepoRelPath $runnerRel
+$runnerBlobSha = Assert-BlobAtCommit -Repo $BenchRepo -Sha $benchSha -RepoRelPath $runnerRel
 # Provenance names the runner that PRODUCED this session, not whatever is on
 # disk now. Recomputing here made a re-emission after a runner edit cite a
 # harness that never ran the session: on 2026-08-25 it silently moved from
@@ -91,9 +92,26 @@ $runnerSha = [string]$sess.harness_sha256
 if ([string]::IsNullOrWhiteSpace($runnerSha)) {
   throw "PROVENANCE FAILED: the session JSON has no harness_sha256. Re-run with a runner that stamps its own hash; hashing the current file would name a harness that may not have produced this session."
 }
+if ($runnerSha -ne $runnerBlobSha) {
+  throw "PROVENANCE FAILED: session harness_sha256 does not match $runnerRel at bench_sha $benchSha. Re-run the measurement with the committed runner."
+}
+$emitBlobSha = Assert-BlobAtCommit -Repo $BenchRepo -Sha $benchSha -RepoRelPath $emitRel
+$provenanceBlobSha = Assert-BlobAtCommit -Repo $BenchRepo -Sha $benchSha -RepoRelPath $provenanceRel
+$runnerModules = @(
+  [ordered]@{ path = $runnerRel; sha256 = $runnerSha }
+  [ordered]@{ path = $emitRel; sha256 = $emitBlobSha }
+  [ordered]@{ path = $provenanceRel; sha256 = $provenanceBlobSha }
+)
+$incompleteRunnerModules = @($runnerModules | Where-Object {
+  [string]::IsNullOrWhiteSpace([string]$_.path) -or
+  [string]::IsNullOrWhiteSpace([string]$_.sha256)
+})
+$runnerModulesComplete = ($runnerModules.Count -eq 3) -and
+  ($incompleteRunnerModules.Count -eq 0) -and
+  ($runnerModules[0].path -eq $runnerRel) -and
+  ($runnerModules[0].sha256 -eq $runnerSha)
 Write-Output ("harness sha256 (stamped at session time): " + $runnerSha.Substring(0,16))
-$null      = Assert-BlobAtCommit -Repo $BenchRepo -Sha $benchSha -RepoRelPath $emitRel
-Write-Output "provenance OK: runner=$($runnerSha.Substring(0,16))"
+Write-Output "provenance OK: runner=$($runnerSha.Substring(0,16)) modules=$($runnerModules.Count)"
 
 # --- payload parity, PROVEN from the measured artifact ------------------------
 # HARNESS-CONTRACT.md requires a byte-identical canonical payload across arms,
@@ -250,7 +268,7 @@ $ci = Get-PairedRatioCi95 -Ratios $ratioArr
 $verdict = 'INCONCLUSIVE'
 $THRESH = 1.05
 # Fewer than two paired rounds leaves $ci null, and the comparison block was
-# still emitted with both bounds as JSON null -- which result.v1.schema.json
+# still emitted with both bounds as JSON null -- which result.v2.schema.json
 # rejects, so the document could not have validated. Refuse here, where the
 # reason is a sentence rather than a schema path.
 if ($null -eq $ci) {
@@ -309,6 +327,10 @@ if ($thermalStartState -eq 'nominal' -and $thermalEndState -eq 'nominal' -and -n
 # checks are mechanical, evaluated against THIS document and the registry policy.
 $reasons = @()
 $policySamples = 30   # metrics.v1.json sample_policy: gui-paint-rss
+
+if (-not $runnerModulesComplete) {
+  $reasons += [ordered]@{ code='HARNESS_MODULES_UNPROVEN'; label='publication policy v2 requires the complete interpreted measurement module list and sha256 values' }
+}
 
 foreach ($a in $arms) {
   if ($a.statistics.valid_samples -lt $policySamples) {
@@ -402,7 +424,12 @@ Write-Output ("session finished_utc (closing thermal probe): {0}" -f $finishedUt
 # appends, and a conditional key added after the fact would land past fixtures.
 $provenance = [ordered]@{
   bench_sha = $benchSha; bench_tree_state = $tree; keld_sha = $keldSha
-  harness = [ordered]@{ path = $runnerRel; sha256 = $runnerSha; version = 'kel25-paired-gui-v1' }
+  harness = [ordered]@{
+    path = $runnerRel
+    sha256 = $runnerSha
+    version = 'kel25-paired-gui-v1'
+    modules = $runnerModules
+  }
 }
 if ($payloadSha) { $provenance['payload_sha256'] = $payloadSha }
 $provenance['fixtures'] = @(
@@ -411,7 +438,7 @@ $provenance['fixtures'] = @(
 )
 
 $doc = [ordered]@{
-  schema_version = 1
+  schema_version = 2
   metric = [ordered]@{ id = 'MEM-IDLE'; unit = 'KiB'; registry_version = 1 }
   cache_state = 'fresh-process'
   session = [ordered]@{
@@ -444,7 +471,7 @@ $doc = [ordered]@{
     verdict = $verdict
     method = 'paired percentile bootstrap over rounds, 10000 resamples, ratio = keld host working set / tauri host working set within the same round'
   }
-  publication = [ordered]@{ policy_version = 1; requested = $true; eligible = $eligible; reasons = $reasons }
+  publication = [ordered]@{ policy_version = 2; requested = $true; eligible = $eligible; reasons = $reasons }
 }
 
 [System.IO.File]::WriteAllText($OutFile, ($doc | ConvertTo-Json -Depth 14), (New-Object System.Text.UTF8Encoding($false)))

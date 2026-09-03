@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/gyldlab/keld-benches/main/schema/result.v1.schema.json",
-  "title": "keld-benches result document v1",
+  "$id": "https://raw.githubusercontent.com/gyldlab/keld-benches/main/schema/result.v2.schema.json",
+  "title": "keld-benches result document v2",
   "description": "One measurement session for exactly one metric contract on one OS, one machine, one cache-state class. Metric identity comes from schema/metrics.v1.json (the registry owns WHICH metrics exist; this schema owns the SHAPE every result shares). Cross-session absolutes are not comparable; comparisons are valid only within one document.",
   "type": "object",
   "additionalProperties": false,
@@ -17,7 +17,7 @@
   ],
   "properties": {
     "schema_version": {
-      "const": 1,
+      "const": 2,
       "description": "Bump only with a new schema/result.vN.schema.json file. Consumers reject unknown versions; they never guess."
     },
     "metric": {
@@ -148,12 +148,25 @@
           "required": ["path"],
           "properties": {
             "path": {
-              "type": "string",
-              "pattern": "^(macos|windows|linux)/bench/",
+              "$ref": "#/$defs/benchPath",
               "description": "Repo-relative harness entry point (e.g. 'windows/bench/Measure-FirstPaint.ps1'). Never an absolute path."
             },
             "sha256": { "$ref": "#/$defs/sha256", "description": "SHA-256 of the harness entry-point file, when the harness is a compiled artifact use the binary hash." },
-            "version": { "type": "string" }
+            "version": { "type": "string" },
+            "modules": {
+              "type": "array",
+              "minItems": 1,
+              "description": "Every interpreted source module that owns measurement logic, including the entry point.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["path", "sha256"],
+                "properties": {
+                  "path": { "$ref": "#/$defs/benchPath" },
+                  "sha256": { "$ref": "#/$defs/sha256" }
+                }
+              }
+            }
           }
         },
         "fixtures": {
@@ -204,7 +217,7 @@
       "required": ["policy_version", "requested", "eligible", "reasons"],
       "description": "Mirrors the macOS KEL-64 harness publication block. eligible=false documents remain valid diagnostics; they must not feed scoreboard 'vs' cells.",
       "properties": {
-        "policy_version": { "type": "integer", "minimum": 1 },
+        "policy_version": { "type": "integer", "minimum": 1, "description": "Policy v2 requires complete interpreted-harness module provenance before eligible=true; v1 remains valid for immutable historical documents." },
         "requested": { "type": "boolean" },
         "eligible": { "type": "boolean" },
         "reasons": {
@@ -222,7 +235,38 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "publication": {
+            "properties": {
+              "policy_version": { "minimum": 2 },
+              "eligible": { "const": true }
+            },
+            "required": ["policy_version", "eligible"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "provenance": {
+            "properties": {
+              "harness": {
+                "required": ["path", "sha256", "modules"],
+                "$comment": "schema/result_contract.py enforces that modules contains an entry exactly matching harness.path and harness.sha256; JSON Schema draft 2020-12 cannot express cross-field equality."
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
+    "benchPath": {
+      "type": "string",
+      "pattern": "^(macos|windows|linux)/bench/[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$"
+    },
     "gitSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
     "interval": {
