@@ -13,6 +13,8 @@ from unittest import mock
 from harness import (
     BeaconServer,
     HarnessError,
+    MemorySnapshot,
+    MemoryStability,
     OwnedProcess,
     ProcessIdentity,
     ROOT,
@@ -181,6 +183,67 @@ class StatisticsTests(unittest.TestCase):
         self.assertEqual(summary["bootstrap_ci95"]["resamples"], 10_000)
         self.assertLessEqual(summary["bootstrap_ci95"]["lower"], 2.5)
         self.assertGreaterEqual(summary["bootstrap_ci95"]["upper"], 2.5)
+
+
+class MemoryStabilityTests(unittest.TestCase):
+    @staticmethod
+    def snapshot(
+        *,
+        generation: int = 20,
+        engine_processes: int = 1,
+        main_rss_kib: int = 10_000,
+        total_rss_kib: int = 30_000,
+    ) -> MemorySnapshot:
+        return MemorySnapshot(
+            membership=(
+                (10, 10, "keld-host"),
+                (20, generation, "webkit-web"),
+            ),
+            process_classes="keld-host:1,webkit-web:1",
+            process_count=2,
+            engine_processes=engine_processes,
+            main_rss_kib=main_rss_kib,
+            helper_rss_kib=total_rss_kib - main_rss_kib,
+            total_rss_kib=total_rss_kib,
+            main_private_dirty_kib=1_000,
+            helper_private_dirty_kib=2_000,
+            total_private_dirty_kib=3_000,
+        )
+
+    def test_four_identical_memberships_with_bounded_drift_are_stable(self) -> None:
+        stability = MemoryStability()
+        accepted = [
+            stability.observe(
+                self.snapshot(main_rss_kib=10_000 + offset, total_rss_kib=30_000 + offset)
+            )
+            for offset in (0, 10, 20, 30)
+        ]
+        self.assertEqual(accepted, [False, False, False, True])
+        self.assertLessEqual(stability.drift_percent(), 1.0)
+
+    def test_missing_engine_floor_never_stabilizes(self) -> None:
+        stability = MemoryStability()
+        for _ in range(6):
+            self.assertFalse(stability.observe(self.snapshot(engine_processes=0)))
+        self.assertEqual(stability.last_reject_reason, "engine_process_floor_missing")
+
+    def test_generation_churn_resets_the_stability_window(self) -> None:
+        stability = MemoryStability()
+        for _ in range(3):
+            self.assertFalse(stability.observe(self.snapshot()))
+        self.assertFalse(stability.observe(self.snapshot(generation=21)))
+        self.assertEqual(stability.last_reject_reason, "membership_churn")
+        self.assertEqual(len(stability.history), 1)
+
+    def test_rss_drift_resets_the_stability_window(self) -> None:
+        stability = MemoryStability()
+        for _ in range(3):
+            self.assertFalse(stability.observe(self.snapshot()))
+        self.assertFalse(
+            stability.observe(self.snapshot(main_rss_kib=11_000, total_rss_kib=33_000))
+        )
+        self.assertEqual(stability.last_reject_reason, "rss_drift_exceeded")
+        self.assertEqual(len(stability.history), 1)
 
 
 if __name__ == "__main__":

@@ -35,7 +35,7 @@ Fixtures are organized **by operating system first**, then framework:
 | [`windows/bench/`](./windows/bench/) | **harness + results** | First-paint / RSS oracle (`Measure-FirstPaint.ps1`) + negative controls |
 | [`windows/winui/hello/`](./windows/winui/hello/) | contract only | Windows native floor (Win32/WinUI + WebView2) — app not implemented |
 | [`linux/keld/hello/`](./linux/keld/hello/) | **Release recipe** | Keld product host + loopback-navigation benchmark adapter |
-| [`linux/bench/`](./linux/bench/) | **harness** | Linux `PAINT-OPPORTUNITY` + raw-host `DISK`, with negative controls |
+| [`linux/bench/`](./linux/bench/) | **harness** | Linux `PAINT-OPPORTUNITY`, `MEM-IDLE`, and raw-host `DISK`, with negative controls |
 | [`linux/{electron,electrobun,neutralino,nwjs,tauri,wails}/hello/`](./linux/) | stub READMEs | Linux competitor packs (AppImage / deb / etc.) |
 | [`linux/gtk4/hello/`](./linux/gtk4/hello/) | contract only | Linux native floor (GTK4 + WebKitGTK) — app not implemented |
 

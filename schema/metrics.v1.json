@@ -138,7 +138,11 @@
       "cache_states": ["fresh-process", "warm-cache"],
       "sample_class": "gui-paint-rss",
       "status": "active",
-      "note": "The scored value is the Keld-owned (main) RSS; helper/total/private-dirty are per-run diagnostics so lanes are never blended."
+      "note": "The scored value is the Keld-owned (main) RSS; helper/total/private-dirty are per-run diagnostics so lanes are never blended.",
+      "implementations": {
+        "windows": "windows/bench/Measure-KeldIdleRss.ps1 (pre-contract)",
+        "linux": "linux/bench/run.py"
+      }
     },
     {
       "id": "CRASH-RECOVERY",

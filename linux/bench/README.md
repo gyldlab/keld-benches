@@ -6,6 +6,9 @@ contract. It reads `schema/metrics.v1.json`, emits
 
 - `PAINT-OPPORTUNITY`: external monotonic spawn-to-double-rAF image beacon for
   the `linux/keld/hello` WebKitGTK diagnostic window;
+- `MEM-IDLE`: Keld main RSS after the same paint beacon and a stable,
+  generation-identical process census, with helpers/tree/private dirty kept as
+  separate diagnostics;
 - `DISK`: exact bytes of the unpatched Release `keld-host` raw-binary lane.
 
 The paint arm is intentionally `role: diagnostic`. Linux's KEL-96/T4 no-flag
@@ -13,6 +16,10 @@ application boot has not landed, so this measures `keld-host --hello`, not app
 first paint, Bun readiness, or app-link lifecycle. The result always records
 `DIAGNOSTIC_HELLO_ONLY` and cannot become a published scoreboard verdict by
 collecting more samples.
+
+`MEM-IDLE` also uses the loopback-navigation adapter so the harness can prove
+content readiness before sampling. It is diagnostic rather than an unmodified
+product score; `DISK` alone reads the separate unpatched Release artifact.
 
 ## Build and run
 
@@ -44,6 +51,19 @@ python3 linux/bench/run.py run \
   --out linux/bench/results/paint-opportunity/DATE.linux-keld.fresh-process.json
 ```
 
+Measure idle memory after paint and stability:
+
+```bash
+python3 linux/bench/run.py run \
+  --metric MEM-IDLE \
+  --fixture linux/keld/hello \
+  --artifact-dir linux/keld/hello/dist \
+  --samples 5 \
+  --cache-state fresh-process \
+  --label linux-keld-memory \
+  --out linux/bench/results/mem-idle/DATE.linux-keld-memory.fresh-process.json
+```
+
 Measure the raw production host binary:
 
 ```bash
@@ -72,6 +92,10 @@ absolute source or artifact path.
 - Each launch owns a fresh process group. `/proc/<pid>/stat` start ticks and a
   Linux pidfd bind cleanup to the spawned generation before the group is
   signalled.
+- Memory succeeds only after four identical PID/start-time/class censuses with
+  at least one WebKit process and at most 1% drift in both main and total-tree
+  RSS. Main RSS is the metric value; helper RSS, total RSS, and main/helper/total
+  private dirty are diagnostics.
 - The environment block records distro/kernel, CPU/RAM, WebKitGTK version,
   power profile, and X11/Wayland/desktop facts. Thermal state remains
   `unverified` unless an independent Linux probe is added later.

@@ -19,6 +19,7 @@ import subprocess
 import threading
 import time
 import urllib.parse
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -32,8 +33,11 @@ HARNESS_PATH = ROOT / "linux" / "bench" / "run.py"
 MODULE_PATH = ROOT / "linux" / "bench" / "harness.py"
 TEMPLATE_PATH = ROOT / "linux" / "keld" / "hello" / "index.html"
 FIXTURE_PATH = "linux/keld/hello"
-IMPLEMENTED_METRICS = ("PAINT-OPPORTUNITY", "DISK")
-SUPPORTED_PAINT_STATES = ("fresh-process", "warm-cache")
+IMPLEMENTED_METRICS = ("PAINT-OPPORTUNITY", "MEM-IDLE", "DISK")
+SUPPORTED_GUI_STATES = ("fresh-process", "warm-cache")
+MEMORY_STABLE_SNAPSHOTS = 4
+MEMORY_MAX_DRIFT_RATIO = 0.01
+MEMORY_SAMPLE_INTERVAL_SECONDS = 0.1
 NONCE_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 LABEL_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ONE_PIXEL_GIF = bytes.fromhex(
@@ -284,6 +288,70 @@ class ProcessIdentity:
     start_ticks: int
 
 
+@dataclass(frozen=True)
+class MemorySnapshot:
+    """One generation-bound process-tree memory census."""
+
+    membership: tuple[tuple[int, int, str], ...]
+    process_classes: str
+    process_count: int
+    engine_processes: int
+    main_rss_kib: int
+    helper_rss_kib: int
+    total_rss_kib: int
+    main_private_dirty_kib: int
+    helper_private_dirty_kib: int
+    total_private_dirty_kib: int
+
+
+class MemoryStability:
+    """Accept only identical process membership with bounded RSS drift."""
+
+    def __init__(
+        self,
+        required_snapshots: int = MEMORY_STABLE_SNAPSHOTS,
+        maximum_drift_ratio: float = MEMORY_MAX_DRIFT_RATIO,
+    ) -> None:
+        self.required_snapshots = required_snapshots
+        self.maximum_drift_ratio = maximum_drift_ratio
+        self.history: list[MemorySnapshot] = []
+        self.last_reject_reason = "engine_process_floor_missing"
+
+    @staticmethod
+    def _drift(values: list[int]) -> float:
+        return (max(values) - min(values)) / max(1, min(values))
+
+    def observe(self, snapshot: MemorySnapshot) -> bool:
+        if snapshot.engine_processes == 0:
+            self.history.clear()
+            self.last_reject_reason = "engine_process_floor_missing"
+            return False
+        if self.history and snapshot.membership != self.history[-1].membership:
+            self.history = [snapshot]
+            self.last_reject_reason = "membership_churn"
+            return False
+        self.history.append(snapshot)
+        if len(self.history) < self.required_snapshots:
+            self.last_reject_reason = "stability_window_incomplete"
+            return False
+        self.history = self.history[-self.required_snapshots :]
+        main_drift = self._drift([item.main_rss_kib for item in self.history])
+        total_drift = self._drift([item.total_rss_kib for item in self.history])
+        if max(main_drift, total_drift) > self.maximum_drift_ratio:
+            self.history = [snapshot]
+            self.last_reject_reason = "rss_drift_exceeded"
+            return False
+        self.last_reject_reason = ""
+        return True
+
+    def drift_percent(self) -> float:
+        if not self.history:
+            return 0.0
+        main_drift = self._drift([item.main_rss_kib for item in self.history])
+        total_drift = self._drift([item.total_rss_kib for item in self.history])
+        return round(max(main_drift, total_drift) * 100, 4)
+
+
 def _proc_identity(pid: int) -> ProcessIdentity | None:
     try:
         raw = pathlib.Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
@@ -311,6 +379,124 @@ def _process_group_members(process_group: int) -> list[ProcessIdentity]:
         if identity is not None and identity.process_group == process_group:
             members.append(identity)
     return members
+
+
+def _read_proc_text(path: pathlib.Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8")
+    except (FileNotFoundError, ProcessLookupError, PermissionError):
+        return None
+
+
+def _process_class(pid: int, leader_pid: int) -> str | None:
+    if pid == leader_pid:
+        return "keld-host"
+    try:
+        command = pathlib.Path(f"/proc/{pid}/cmdline").read_bytes()
+    except (FileNotFoundError, ProcessLookupError, PermissionError):
+        return None
+    lowered = command.replace(b"\0", b" ").lower()
+    if b"webkitwebprocess" in lowered:
+        return "webkit-web"
+    if b"webkitnetworkprocess" in lowered:
+        return "webkit-network"
+    if b"webkitgpuprocess" in lowered:
+        return "webkit-gpu"
+    if b"xdg-dbus-proxy" in lowered:
+        return "sandbox-dbus-proxy"
+    if b"bwrap" in lowered or b"bubblewrap" in lowered:
+        return "sandbox-wrapper"
+    return "other-descendant"
+
+
+def _process_memory(identity: ProcessIdentity, leader_pid: int) -> tuple[str, int, int] | None:
+    try:
+        descriptor = os.pidfd_open(identity.pid)
+    except ProcessLookupError:
+        return None
+    try:
+        current = _proc_identity(identity.pid)
+        if current is None:
+            return None
+        if current.start_ticks != identity.start_ticks:
+            raise HarnessError("PID was reused during the memory census")
+        process_class = _process_class(identity.pid, leader_pid)
+        statm = _read_proc_text(pathlib.Path(f"/proc/{identity.pid}/statm"))
+        smaps = _read_proc_text(pathlib.Path(f"/proc/{identity.pid}/smaps_rollup"))
+        if process_class is None or statm is None or smaps is None:
+            return None
+        statm_fields = statm.split()
+        if len(statm_fields) < 2:
+            return None
+        try:
+            rss_kib = int(statm_fields[1]) * os.sysconf("SC_PAGE_SIZE") // 1024
+        except ValueError:
+            return None
+        private_dirty_kib: int | None = None
+        for line in smaps.splitlines():
+            if line.startswith("Private_Dirty:"):
+                fields = line.split()
+                if len(fields) >= 2:
+                    try:
+                        private_dirty_kib = int(fields[1])
+                    except ValueError:
+                        return None
+                break
+        if private_dirty_kib is None:
+            return None
+        after = _proc_identity(identity.pid)
+        if after is None:
+            return None
+        if after.start_ticks != identity.start_ticks:
+            raise HarnessError("PID was reused while memory counters were read")
+        return process_class, rss_kib, private_dirty_kib
+    finally:
+        os.close(descriptor)
+
+
+def _memory_snapshot(owner: "OwnedProcess") -> MemorySnapshot | None:
+    leader = _proc_identity(owner.identity.pid)
+    if leader is None:
+        return None
+    if leader.start_ticks != owner.identity.start_ticks:
+        raise HarnessError("benchmark leader PID was reused during memory census")
+    members = sorted(
+        _process_group_members(owner.identity.process_group), key=lambda item: item.pid
+    )
+    observations: list[tuple[ProcessIdentity, str, int, int]] = []
+    for identity in members:
+        observation = _process_memory(identity, owner.identity.pid)
+        if observation is None:
+            return None
+        process_class, rss_kib, private_dirty_kib = observation
+        observations.append((identity, process_class, rss_kib, private_dirty_kib))
+    main = [item for item in observations if item[0].pid == owner.identity.pid]
+    if len(main) != 1:
+        return None
+    main_rss_kib = main[0][2]
+    main_private_dirty_kib = main[0][3]
+    total_rss_kib = sum(item[2] for item in observations)
+    total_private_dirty_kib = sum(item[3] for item in observations)
+    classes = Counter(item[1] for item in observations)
+    engine_processes = sum(
+        count for process_class, count in classes.items() if process_class.startswith("webkit-")
+    )
+    return MemorySnapshot(
+        membership=tuple(
+            (item[0].pid, item[0].start_ticks, item[1]) for item in observations
+        ),
+        process_classes=",".join(
+            f"{process_class}:{classes[process_class]}" for process_class in sorted(classes)
+        ),
+        process_count=len(observations),
+        engine_processes=engine_processes,
+        main_rss_kib=main_rss_kib,
+        helper_rss_kib=total_rss_kib - main_rss_kib,
+        total_rss_kib=total_rss_kib,
+        main_private_dirty_kib=main_private_dirty_kib,
+        helper_private_dirty_kib=total_private_dirty_kib - main_private_dirty_kib,
+        total_private_dirty_kib=total_private_dirty_kib,
+    )
 
 
 class OwnedProcess:
@@ -462,6 +648,125 @@ def _paint_attempt(artifact: pathlib.Path, template: bytes, run_number: int, tim
     }
 
 
+def _memory_attempt(
+    artifact: pathlib.Path,
+    template: bytes,
+    run_number: int,
+    timeout: float,
+) -> dict[str, Any]:
+    server = BeaconServer(template)
+    server.start()
+    environment = os.environ.copy()
+    environment["KELD_BENCH_URL"] = server.page_url
+    started_ns = time.monotonic_ns()
+    process: subprocess.Popen[bytes] | None = None
+    owner: OwnedProcess | None = None
+    cleanup_bound = False
+    exited_before_ready = False
+    reject_reason: str | None = None
+    value: int | None = None
+    stable: MemorySnapshot | None = None
+    drift_percent: float | None = None
+    paint_ms: float | None = None
+    stability = MemoryStability()
+    poll_wait = threading.Event()
+    try:
+        process = subprocess.Popen(
+            [str(artifact), "--hello", "--title", "Keld Linux benchmark"],
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        owner = OwnedProcess(process)
+        deadline = time.monotonic() + timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            if server.wait_for_beacon(min(remaining, 0.1)):
+                break
+            if process.poll() is not None:
+                exited_before_ready = True
+                break
+        beacon = server.snapshot()
+        if beacon.accepted_ns is None:
+            if exited_before_ready:
+                reject_reason = f"process_exited_{process.returncode}"
+            elif beacon.rejections:
+                reject_reason = beacon.rejections[-1]
+            else:
+                reject_reason = "beacon_timeout"
+        elif beacon.protocol_error is not None:
+            reject_reason = beacon.protocol_error
+        else:
+            paint_ms = round((beacon.accepted_ns - started_ns) / 1_000_000, 3)
+            while True:
+                if process.poll() is not None:
+                    exited_before_ready = True
+                    reject_reason = f"process_exited_{process.returncode}"
+                    break
+                current_beacon = server.snapshot()
+                if current_beacon.protocol_error is not None:
+                    reject_reason = current_beacon.protocol_error
+                    break
+                snapshot = _memory_snapshot(owner)
+                if snapshot is not None and stability.observe(snapshot):
+                    stable = snapshot
+                    drift_percent = stability.drift_percent()
+                    value = snapshot.main_rss_kib
+                    break
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    reject_reason = stability.last_reject_reason or "memory_stability_timeout"
+                    break
+                poll_wait.wait(min(MEMORY_SAMPLE_INTERVAL_SECONDS, remaining))
+    finally:
+        try:
+            if owner is not None:
+                owner.cleanup()
+                cleanup_bound = True
+            elif process is not None and process.poll() is None:
+                process.kill()
+                process.wait(timeout=2)
+        finally:
+            server.close()
+
+    beacon = server.snapshot()
+    diagnostics: dict[str, int | float | str | bool | None] = {
+        "paint_ms": paint_ms,
+        "page_requests": beacon.page_requests,
+        "beacon_requests": beacon.beacon_requests,
+        "process_exit_before_ready": exited_before_ready,
+        "cleanup_generation_bound": cleanup_bound,
+        "stability_snapshots": MEMORY_STABLE_SNAPSHOTS if stable is not None else 0,
+        "stability_interval_ms": int(MEMORY_SAMPLE_INTERVAL_SECONDS * 1000),
+        "rss_drift_percent": drift_percent,
+        "processes": stable.process_count if stable is not None else None,
+        "engine_processes": stable.engine_processes if stable is not None else None,
+        "process_classes": stable.process_classes if stable is not None else None,
+        "helper_rss_kib": stable.helper_rss_kib if stable is not None else None,
+        "total_tree_rss_kib": stable.total_rss_kib if stable is not None else None,
+        "main_private_dirty_kib": (
+            stable.main_private_dirty_kib if stable is not None else None
+        ),
+        "helper_private_dirty_kib": (
+            stable.helper_private_dirty_kib if stable is not None else None
+        ),
+        "total_private_dirty_kib": (
+            stable.total_private_dirty_kib if stable is not None else None
+        ),
+    }
+    return {
+        "run": run_number,
+        "value": value,
+        "valid": value is not None,
+        "reject_reason": reject_reason,
+        "diagnostics": diagnostics,
+    }
+
+
 def percentile(values: list[float], fraction: float) -> float:
     ordered = sorted(values)
     return ordered[max(0, math.ceil(fraction * len(ordered)) - 1)]
@@ -564,8 +869,10 @@ def _power_state() -> tuple[bool, bool, str]:
 
 
 def _environment(provenance: dict[str, Any], metric_id: str) -> tuple[dict[str, Any], str]:
-    if metric_id == "PAINT-OPPORTUNITY" and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
-        raise HarnessError("PAINT-OPPORTUNITY requires a reachable X11 or Wayland display")
+    if metric_id in {"PAINT-OPPORTUNITY", "MEM-IDLE"} and not (
+        os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
+    ):
+        raise HarnessError(f"{metric_id} requires a reachable X11 or Wayland display")
     os_release: dict[str, str] = {}
     for line in pathlib.Path("/etc/os-release").read_text(encoding="utf-8").splitlines():
         if "=" in line:
@@ -663,11 +970,16 @@ def _publication_reasons(
         add("LOW_POWER_MODE_ENABLED", "Linux low-power mode was enabled")
     if power.get("thermal_state") != "nominal":
         add("THERMAL_STATE_UNVERIFIED", "Linux thermal state was not independently verified")
-    if metric_id == "PAINT-OPPORTUNITY":
-        add("NO_PAIRED_ARM", "Linux paint session currently contains only the Keld arm")
+    if metric_id in {"PAINT-OPPORTUNITY", "MEM-IDLE"}:
+        add("NO_PAIRED_ARM", f"Linux {metric_id} session currently contains only the Keld arm")
         add(
             "DIAGNOSTIC_HELLO_ONLY",
             "Linux no-flag app boot is unavailable; this measures keld-host --hello only",
+        )
+    if metric_id == "MEM-IDLE":
+        add(
+            "BENCHMARK_ADAPTER_ARTIFACT",
+            "memory is sampled after the committed loopback-navigation paint adapter",
         )
     if metric_id == "DISK":
         add("SINGLE_LANE_DIAGNOSTIC", "DISK records one raw host lane with no paired arm")
@@ -698,9 +1010,9 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
         raise HarnessError("--samples must be in 1..=1000")
     if not LABEL_PATTERN.fullmatch(args.label):
         raise HarnessError("--label must be lowercase kebab-case")
-    if args.metric == "PAINT-OPPORTUNITY" and args.cache_state not in SUPPORTED_PAINT_STATES:
+    if args.metric in {"PAINT-OPPORTUNITY", "MEM-IDLE"} and args.cache_state not in SUPPORTED_GUI_STATES:
         raise HarnessError(
-            "Linux PAINT-OPPORTUNITY currently supports fresh-process and warm-cache"
+            f"Linux {args.metric} currently supports fresh-process and warm-cache"
         )
     if args.metric == "DISK" and (args.cache_state != "fresh-process" or args.samples != 1):
         raise HarnessError("Linux DISK requires --cache-state fresh-process --samples 1")
@@ -743,6 +1055,26 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
             "External monotonic spawn-to-double-rAF image-beacon proxy. Linux no-flag app boot "
             "is not implemented, so this is the keld-host --hello diagnostic window only. "
             f"Power evidence: {power_evidence}."
+        )
+    elif args.metric == "MEM-IDLE":
+        if args.cache_state == "warm-cache":
+            priming = _memory_attempt(bench_artifact, template, 0, args.timeout_seconds)
+            if not priming["valid"]:
+                raise HarnessError(f"warm-cache priming launch failed: {priming['reject_reason']}")
+        samples = [
+            _memory_attempt(bench_artifact, template, run, args.timeout_seconds)
+            for run in range(1, args.samples + 1)
+        ]
+        artifact = bench_artifact
+        artifact_record = provenance["artifacts"]["benchmark_adapter"]
+        role = "diagnostic"
+        lane = "webkitgtk"
+        notes = (
+            "Main-process RSS scored only after one valid double-rAF beacon and four "
+            "generation-identical process censuses with <=1% main/tree RSS drift. Helper "
+            "RSS, total tree RSS, and private dirty remain diagnostics. The committed "
+            "loopback-navigation adapter makes this KEL-28 evidence diagnostic, not an "
+            f"unmodified product score. Power evidence: {power_evidence}."
         )
     else:
         artifact = product_artifact
