@@ -179,6 +179,50 @@ else:
         "interpreted-module traversal path is rejected",
     )
 
+    fixture_traversal = copy.deepcopy(policy_v2)
+    fixture_traversal["provenance"]["fixtures"] = [
+        {"path": "linux/keld/../../outside", "sha": "0" * 40}
+    ]
+    fixture_traversal["arms"][0]["fixture_path"] = "linux/keld/../../outside"
+    check(
+        not validator_v2.is_valid(fixture_traversal),
+        "policy-v2 fixture traversal paths are rejected",
+    )
+
+    shallow_fixture = copy.deepcopy(policy_v2)
+    shallow_fixture["provenance"]["fixtures"] = [
+        {"path": "linux/keld", "sha": "0" * 40}
+    ]
+    shallow_fixture["arms"][0]["fixture_path"] = "linux/keld"
+    check(
+        not validator_v2.is_valid(shallow_fixture),
+        "policy-v2 fixture paths require OS, framework, and fixture segments",
+    )
+
+    valid_without_value = copy.deepcopy(policy_v2)
+    valid_without_value["arms"][0]["samples"][0].pop("value")
+    check(
+        not validator_v2.is_valid(valid_without_value),
+        "policy-v2 valid sample without value is rejected",
+    )
+
+    invalid_without_reason = copy.deepcopy(policy_v2)
+    invalid_without_reason["arms"][0]["samples"][0].update(valid=False, value=None)
+    invalid_without_reason["arms"][0]["samples"][0].pop("reject_reason", None)
+    check(
+        not validator_v2.is_valid(invalid_without_reason),
+        "policy-v2 invalid sample without rejection reason is rejected",
+    )
+
+    invalid_with_value = copy.deepcopy(policy_v2)
+    invalid_with_value["arms"][0]["samples"][0].update(
+        valid=False, value=1, reject_reason="expected failure"
+    )
+    check(
+        not validator_v2.is_valid(invalid_with_value),
+        "policy-v2 invalid sample with numeric value is rejected",
+    )
+
     policy_v2_mismatch = copy.deepcopy(policy_v2)
     policy_v2_mismatch["provenance"]["harness"]["sha256"] = "1" * 64
     check(

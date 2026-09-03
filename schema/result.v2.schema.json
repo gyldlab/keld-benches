@@ -178,8 +178,7 @@
             "required": ["path"],
             "properties": {
               "path": {
-                "type": "string",
-                "pattern": "^(macos|windows|linux)/[a-z0-9-]+/",
+                "$ref": "#/$defs/fixturePath",
                 "description": "OS-qualified repo-relative fixture path (e.g. 'windows/tauri/hello')."
               },
               "sha": { "$ref": "#/$defs/gitSha", "description": "Commit the fixture tree was built from, when it differs from bench_sha." }
@@ -263,6 +262,10 @@
     }
   ],
   "$defs": {
+    "fixturePath": {
+      "type": "string",
+      "pattern": "^(macos|windows|linux)/[a-z0-9-]+/[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$"
+    },
     "benchPath": {
       "type": "string",
       "pattern": "^(macos|windows|linux)/bench/[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$"
@@ -322,8 +325,7 @@
           }
         },
         "fixture_path": {
-          "type": "string",
-          "pattern": "^(macos|windows|linux)/[a-z0-9-]+/",
+          "$ref": "#/$defs/fixturePath",
           "description": "OS-qualified fixture path for this arm. Omitted only for arms measured from an external repo (the current keld gap; see HARNESS-CONTRACT.md)."
         },
         "artifact": {
@@ -352,6 +354,31 @@
             "type": "object",
             "additionalProperties": false,
             "required": ["run", "valid"],
+            "allOf": [
+              {
+                "if": {
+                  "properties": { "valid": { "const": true } },
+                  "required": ["valid"]
+                },
+                "then": {
+                  "required": ["value"],
+                  "properties": { "value": { "not": { "type": "null" } } }
+                }
+              },
+              {
+                "if": {
+                  "properties": { "valid": { "const": false } },
+                  "required": ["valid"]
+                },
+                "then": {
+                  "required": ["value", "reject_reason"],
+                  "properties": {
+                    "value": { "type": "null" },
+                    "reject_reason": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            ],
             "properties": {
               "run": { "type": "integer", "minimum": 1 },
               "value": {

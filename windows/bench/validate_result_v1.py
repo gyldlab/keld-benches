@@ -51,7 +51,8 @@ def main(argv):
     sys.path.insert(0, os.path.join(root, 'schema'))
     from result_contract import semantic_problems
 
-    registry = json.load(open(os.path.join(root, 'schema', 'metrics.v1.json'), encoding='utf-8'))
+    with open(os.path.join(root, 'schema', 'metrics.v1.json'), encoding='utf-8') as registry_file:
+        registry = json.load(registry_file)
     known = {m['id']: m for m in registry['metrics']}
     validators = {}
 
@@ -59,7 +60,8 @@ def main(argv):
     for path in argv[2:]:
         name = os.path.basename(path)
         problems = []
-        raw = open(path, 'rb').read()
+        with open(path, 'rb') as document_file:
+            raw = document_file.read()
         if raw[:3] == b'\xef\xbb\xbf':
             problems.append("file starts with a UTF-8 BOM")
         # `json.loads` accepts the bare literals NaN, Infinity and -Infinity as
@@ -108,17 +110,25 @@ def main(argv):
                 validator = None
             else:
                 if schema_version not in validators:
-                    versioned_schema = json.load(open(schema_path, encoding='utf-8'))
+                    with open(schema_path, encoding='utf-8') as schema_file:
+                        versioned_schema = json.load(schema_file)
                     Draft202012Validator.check_schema(versioned_schema)
                     validators[schema_version] = Draft202012Validator(versioned_schema)
                 validator = validators[schema_version]
 
-        if validator is not None:
-            for err in sorted(validator.iter_errors(doc), key=lambda e: list(e.path)):
-                problems.append(f"schema: {list(err.path)}: {err.message}")
+        if validator is None:
+            failures += 1
+            print(f"FAIL {name}")
+            for problem in problems:
+                print(f"       - {problem}")
+            continue
+
+        for err in sorted(validator.iter_errors(doc), key=lambda e: list(e.path)):
+            problems.append(f"schema: {list(err.path)}: {err.message}")
         problems.extend(f"semantic: {problem}" for problem in semantic_problems(doc))
 
-        metric = doc.get('metric', {})
+        metric_value = doc.get('metric', {})
+        metric = metric_value if isinstance(metric_value, dict) else {}
         mid = metric.get('id')
         if mid not in known:
             problems.append(f"metric.id {mid!r} is not in schema/metrics.v1.json")
@@ -132,10 +142,17 @@ def main(argv):
                     f"cache_state {doc.get('cache_state')!r} not allowed for {mid} "
                     f"(registry allows {spec['cache_states']})")
 
-        for arm in doc.get('arms', []):
+        arms_value = doc.get('arms', [])
+        arms = arms_value if isinstance(arms_value, list) else []
+        for arm in arms:
+            if not isinstance(arm, dict):
+                continue
             aid = arm.get('arm_id', '?')
             samples = arm.get('samples', [])
             stats = arm.get('statistics', {})
+            samples = samples if isinstance(samples, list) else []
+            stats = stats if isinstance(stats, dict) else {}
+            samples = [sample for sample in samples if isinstance(sample, dict)]
             valid = [s for s in samples if s.get('valid')]
             if stats.get('valid_samples') != len(valid):
                 problems.append(
@@ -143,11 +160,16 @@ def main(argv):
                     f"but {len(valid)} samples have valid=true")
             nums = [s['value'] for s in valid
                     if isinstance(s.get('value'), (int, float)) and not isinstance(s.get('value'), bool)]
-            if nums and stats.get('median') is not None:
+            median_value = stats.get('median')
+            numeric_median = (
+                isinstance(median_value, (int, float))
+                and not isinstance(median_value, bool)
+            )
+            if nums and numeric_median:
                 recomputed = median(nums)
-                if abs(recomputed - float(stats['median'])) > 1e-6:
+                if abs(recomputed - float(median_value)) > 1e-6:
                     problems.append(
-                        f"arm {aid}: statistics.median={stats['median']} does not recompute "
+                        f"arm {aid}: statistics.median={median_value} does not recompute "
                         f"from valid samples (got {recomputed})")
 
         if problems:

@@ -151,6 +151,7 @@ Validate any document with:
 
 ```bash
 python3 schema/check.py          # schema + registry + examples + negative controls
+python3 windows/bench/test_validate_result_v1.py  # version dispatch failure controls
 ```
 
 Validate the historical medians published from the pre-contract Windows raw
