@@ -58,16 +58,6 @@ case "$recipe_remote" in
   *) echo "recipe origin must be the canonical gyldlab/keld-benches repository" >&2; exit 65 ;;
 esac
 
-resolved_sha=$(clean_git -C "$source_repo" rev-parse --verify "$source_sha^{commit}")
-if [ "$resolved_sha" != "$source_sha" ]; then
-  echo "SOURCE_GIT_SHA did not resolve exactly" >&2
-  exit 65
-fi
-if ! clean_git ls-remote --heads https://github.com/gyldlab/keld.git | awk -v sha="$source_sha" '$1 == sha { found = 1 } END { exit found ? 0 : 1 }'; then
-  echo "SOURCE_GIT_SHA must be a branch head advertised by canonical origin" >&2
-  exit 65
-fi
-
 recipe_commit=$(clean_git -C "$recipe_root" rev-parse --verify HEAD^{commit})
 for relative in linux/keld/hello/build.sh linux/keld/hello/index.html linux/keld/hello/keld-bench-url.patch; do
   if ! clean_git -C "$recipe_root" diff --quiet HEAD -- "$relative" || \
@@ -103,8 +93,16 @@ cmp -s "$payload_path" "$verified_dir/index.html" || { echo "payload differs fro
 cmp -s "$patch_path" "$verified_dir/keld-bench-url.patch" || { echo "adapter patch differs from committed bytes" >&2; exit 65; }
 
 clean_git -c protocol.file.allow=never init "$worktree" >/dev/null
-clean_git -C "$worktree" -c protocol.file.allow=never fetch --depth=1 https://github.com/gyldlab/keld.git "$source_sha"
-clean_git -C "$worktree" -c core.hooksPath=/dev/null checkout --detach "$source_sha"
+if ! clean_git -C "$worktree" -c protocol.file.allow=never fetch --depth=1 https://github.com/gyldlab/keld.git "$source_sha"; then
+  echo "SOURCE_GIT_SHA is unavailable from canonical Keld origin" >&2
+  exit 69
+fi
+fetched_sha=$(clean_git -C "$worktree" rev-parse --verify FETCH_HEAD^{commit})
+if [ "$fetched_sha" != "$source_sha" ]; then
+  echo "canonical Keld origin did not return the requested SOURCE_GIT_SHA" >&2
+  exit 65
+fi
+clean_git -C "$worktree" -c core.hooksPath=/dev/null checkout --detach "$fetched_sha"
 
 rustc_version=$(rustc -Vv | paste -sd ';' -)
 cargo_version=$(cargo -V)

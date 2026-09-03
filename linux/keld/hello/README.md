@@ -1,7 +1,7 @@
 # Keld hello — Linux
 
 This is the first committed Linux Keld fixture. It builds the shipping
-`keld-host` in Release mode from an immutable public Keld branch head and
+`keld-host` in Release mode from an immutable public Keld commit and
 applies one benchmark-only adapter: `KELD_BENCH_URL` may replace the built-in
 inline hello document with the harness's IPv4-loopback URL.
 
@@ -19,8 +19,11 @@ not claim Bun readiness, app-link lifecycle, or application first paint.
 ## Build
 
 Use a clean checkout of this repository and a local clone of canonical Keld.
-The selected Keld SHA must be a full commit currently advertised as a branch
-head by `gyldlab/keld`.
+The selected Keld SHA must be a full 40-character commit reachable from
+`gyldlab/keld`; the recipe fetches that exact object from the sanitized
+canonical HTTPS origin and verifies `FETCH_HEAD` before checkout. The commit
+does not need to remain a moving branch head, so historical result recipes stay
+rebuildable after `main` advances.
 
 ```bash
 linux/keld/hello/build.sh \

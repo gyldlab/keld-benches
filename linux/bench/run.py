@@ -16,7 +16,7 @@ def parser() -> argparse.ArgumentParser:
     commands.add_parser("list-metrics", help="list registry metrics implemented on Linux")
     run = commands.add_parser("run", help="run one Linux metric")
     run.add_argument("--metric", required=True, choices=IMPLEMENTED_METRICS)
-    run.add_argument("--fixture", required=True)
+    run.add_argument("--fixture", required=True, action="append")
     run.add_argument("--artifact-dir", required=True)
     run.add_argument("--samples", type=int, required=True)
     run.add_argument(

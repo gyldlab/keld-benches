@@ -1004,8 +1004,11 @@ def validate_result(document: dict[str, Any]) -> None:
 def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
     registry = load_registry()
     contract = metric_contract(registry, args.metric)
-    if args.fixture != FIXTURE_PATH:
-        raise HarnessError(f"Linux harness currently implements only --fixture {FIXTURE_PATH}")
+    if args.fixture != [FIXTURE_PATH]:
+        raise HarnessError(
+            f"Linux harness currently requires exactly one --fixture {FIXTURE_PATH}; "
+            "additional arms land only with their committed Linux fixtures"
+        )
     if args.samples < 1 or args.samples > 1000:
         raise HarnessError("--samples must be in 1..=1000")
     if not LABEL_PATTERN.fullmatch(args.label):
