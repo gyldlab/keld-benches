@@ -28,9 +28,11 @@ floors do not exist cross-OS.
 The fixture is a C11 `GtkApplication` with one `GtkApplicationWindow` and one
 WebKitGTK 6.0 `WebKitWebView`. It accepts only a loopback runner URL shaped as
 `http://127.0.0.1:<port>/run/<32-lowercase-hex>/index.html`, waits for the
-window to become active without a fixed delay, focuses the webview, and then
-loads the runner-owned canonical payload. Missing or non-loopback input exits
-64 before GTK creates a resource.
+window's one-shot mapped notification without polling or a fixed delay,
+focuses the webview, and then loads the runner-owned canonical payload. Its
+WebKit policy handler rejects every new-window request and every navigation or
+redirect whose URI is not the exact approved URL. Missing or non-loopback
+input exits 64 before GTK creates a resource.
 
 This uses the GTK 4 and WebKitGTK 6.0 C APIs directly. GTK documents the
 `GtkApplication`/`GtkApplicationWindow` lifecycle and `pkg-config gtk4` build

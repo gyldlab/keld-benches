@@ -3,14 +3,15 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 enum { CONFIG_ERROR = 64 };
 
 typedef struct {
-  GtkWindow *window;
   WebKitWebView *web_view;
   char *url;
+  gulong map_handler;
 } ViewState;
 
 static bool is_lower_hex_nonce(const char *value, size_t length) {
@@ -62,20 +63,46 @@ static bool is_benchmark_url(const char *value) {
 
 static void free_view_state(void *data) {
   ViewState *state = data;
-  g_object_unref(state->web_view);
-  g_object_unref(state->window);
   g_free(state->url);
   g_free(state);
 }
 
-static gboolean load_when_active(void *data) {
-  ViewState *state = data;
-  if (!gtk_window_is_active(state->window)) {
-    return G_SOURCE_CONTINUE;
+static gboolean decide_policy(WebKitWebView *web_view,
+                              WebKitPolicyDecision *decision,
+                              WebKitPolicyDecisionType decision_type,
+                              void *data) {
+  (void)web_view;
+  const ViewState *state = data;
+  const char *requested_url = NULL;
+  if (decision_type == WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION) {
+    WebKitNavigationPolicyDecision *navigation_decision =
+        WEBKIT_NAVIGATION_POLICY_DECISION(decision);
+    WebKitNavigationAction *action =
+        webkit_navigation_policy_decision_get_navigation_action(navigation_decision);
+    WebKitURIRequest *request = webkit_navigation_action_get_request(action);
+    requested_url = webkit_uri_request_get_uri(request);
   }
+  if (decision_type == WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION &&
+      requested_url != NULL && strcmp(requested_url, state->url) == 0) {
+    webkit_policy_decision_use(decision);
+    return TRUE;
+  }
+  if (decision_type == WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION ||
+      decision_type == WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION) {
+    webkit_policy_decision_ignore(decision);
+    g_printerr("KELD-BENCH-URL-BLOCKED\n");
+    fflush(stderr);
+    return TRUE;
+  }
+  return FALSE;
+}
+
+static void load_when_mapped(GtkWidget *window, void *data) {
+  ViewState *state = data;
+  g_signal_handler_disconnect(window, state->map_handler);
+  state->map_handler = 0;
   gtk_widget_grab_focus(GTK_WIDGET(state->web_view));
   webkit_web_view_load_uri(state->web_view, state->url);
-  return G_SOURCE_REMOVE;
 }
 
 static void activate(GtkApplication *application, void *data) {
@@ -87,10 +114,11 @@ static void activate(GtkApplication *application, void *data) {
   gtk_window_set_child(GTK_WINDOW(window), web_view);
 
   ViewState *state = g_new0(ViewState, 1);
-  state->window = g_object_ref(GTK_WINDOW(window));
-  state->web_view = g_object_ref(WEBKIT_WEB_VIEW(web_view));
+  state->web_view = WEBKIT_WEB_VIEW(web_view);
   state->url = g_strdup(url);
-  g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, load_when_active, state, free_view_state);
+  g_object_set_data_full(G_OBJECT(window), "keld-bench-state", state, free_view_state);
+  g_signal_connect(web_view, "decide-policy", G_CALLBACK(decide_policy), state);
+  state->map_handler = g_signal_connect(window, "map", G_CALLBACK(load_when_mapped), state);
   gtk_window_present(GTK_WINDOW(window));
 }
 
