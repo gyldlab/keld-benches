@@ -667,30 +667,30 @@ They measured a Tauri binary that embedded a paint-beacon-instrumented page.
 These three documents supply the startup/RSS/binary-size observations requested
 by KEL-25/KEL-28 for the current Linux hello slice:
 
-- [`PAINT-OPPORTUNITY`, 30 runs](./linux/bench/results/paint-opportunity/2026-09-03.kel90-linux-keld-30.fresh-process.json)
-- [`MEM-IDLE`, 30 runs](./linux/bench/results/mem-idle/2026-09-03.kel90-linux-keld-memory-30.fresh-process.json)
-- [`DISK`, one deterministic artifact](./linux/bench/results/disk/2026-09-03.kel90-linux-keld-host.fresh-process.json)
+- [`PAINT-OPPORTUNITY`, 30 runs](./linux/bench/results/paint-opportunity/2026-09-03.kel90-linux-keld-rebuildable-30.fresh-process.json)
+- [`MEM-IDLE`, 30 runs](./linux/bench/results/mem-idle/2026-09-03.kel90-linux-keld-memory-rebuildable-30.fresh-process.json)
+- [`DISK`, one deterministic artifact](./linux/bench/results/disk/2026-09-03.kel90-linux-keld-host-rebuildable.fresh-process.json)
 
 Environment: Ubuntu 26.04.1 LTS, kernel 7.0.0-30-generic, Intel i5-10500H,
 GNOME Wayland, WebKitGTK 2.52.6, AC power, balanced profile. Keld source is
 `8cb7934baf1636f58e96519a2ce63635d8e698bb`; the remotely advertised
-measurement recipe is `6978efd357264a846836af796af900d68e2db49e`.
+measurement recipe is `eaa565cd0b75ce7e0760d085c4025277363c0b5a`.
 Every run started from a clean process coalition and all 60 GUI attempts
 completed their nonce-bound visible/focused double-rAF beacon and
 generation-bound cleanup.
 
 | Metric/lane | Median | Min | Max | p90 | Bootstrap CI95 |
 |---|---:|---:|---:|---:|---:|
-| Paint opportunity | **823.039 ms** | 309.706 | 848.703 | 836.886 | [815.910, 826.455] |
-| Keld host RSS | **163,548 KiB** | 163,264 | 163,868 | 163,704 | [163,512, 163,598] |
-| WebKit/helper RSS diagnostic | 232,232 KiB | 231,148 | 232,608 | — | — |
-| Total process-tree RSS diagnostic | 395,804 KiB | 394,836 | 396,264 | — | — |
+| Paint opportunity | **822.379 ms** | 309.429 | 863.299 | 844.505 | [819.370, 832.935] |
+| Keld host RSS | **163,526 KiB** | 163,224 | 163,828 | 163,680 | [163,472, 163,592] |
+| WebKit/helper RSS diagnostic | 232,284 KiB | 231,428 | 232,736 | — | — |
+| Total process-tree RSS diagnostic | 395,818 KiB | 395,016 | 396,476 | — | — |
 
 The memory session held exactly three process classes in every accepted
 stability window: one `keld-host`, one `webkit-network`, and one `webkit-web`.
 Each sample required four generation-identical censuses and at most 1% main/tree
-RSS drift; observed per-sample drift was 0.0244–0.1123%. Median private-dirty
-diagnostics were 26,682 KiB main, 31,568 KiB helpers, and 58,244 KiB total.
+RSS drift; observed per-sample drift was 0.0222–0.1113%. Median private-dirty
+diagnostics were 26,652 KiB main, 31,556 KiB helpers, and 58,206 KiB total.
 
 The unmodified Release `keld-host` is **954,680 bytes**, SHA-256
 `d479740ef8f85f8f9c25a123a870d2286aba038df531bbd77e93711f934347d3`.
@@ -707,9 +707,16 @@ memory therefore also records `BENCHMARK_ADAPTER_ARTIFACT`. DISK is a single
 raw-host lane, where repeating a deterministic file-size read thirty times
 would manufacture sample count rather than evidence.
 
-The 823.039 ms and 163,548 KiB medians sit above architecture targets, but they
+The 822.379 ms and 163,526 KiB medians sit above architecture targets, but they
 are diagnostics, not pass/fail verdicts or a cross-OS comparison. The paint
 minimum is a real fresh-process observation under uncontrolled OS caches, not a
 separate warm-cache class and not a value to publish alone. This section does
 not close KEL-28: real X11, a non-Debian distro, window controls, and the full
 no-flag product path remain unverified.
+
+The earlier same-day `kel90-linux-keld-30`, `kel90-linux-keld-memory-30`, and
+`kel90-linux-keld-host` documents remain immutable but are superseded by the
+three documents linked above. Their build recipe required the Keld SHA to
+remain a live branch head, which would make historical reproduction fail after
+`main` moved. Recipe `eaa565c` instead fetches the exact recorded commit from
+canonical origin and verifies the returned object before checkout.
