@@ -224,7 +224,7 @@ implementation mandate — the apps land in their own PRs.
 |---|---|---|---|
 | macOS | `macos/swift/appkit-wk/`, `macos/swift/swiftui-wk/` | AppKit / SwiftUI + WKWebView | sources committed, measured |
 | Windows | `windows/winui/hello/` | Win32 (or WinUI 3) + WebView2 | contract committed, app absent |
-| Linux | `linux/gtk4/hello/` | GTK4 + WebKitGTK | contract committed, app absent |
+| Linux | `linux/gtk4/hello/` | GTK4 + WebKitGTK | sources + Release recipe; runner integration pending |
 
 Each native fixture MUST: create one window, load the canonical hello payload
 in the OS system webview, emit the standard double-rAF beacon with no
