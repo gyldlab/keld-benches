@@ -1,0 +1,850 @@
+{
+  "arms": [
+    {
+      "arm_id": "keld-linux-host",
+      "artifact": {
+        "basename": "keld-host-bench",
+        "sha256": "6fef087d556646b7dad7fc7d66a162fec935d0eb3d233f3ccb26bde733861dc4",
+        "version": "8cb7934baf16"
+      },
+      "fixture_path": "linux/keld/hello",
+      "framework": {
+        "name": "Keld",
+        "version": "8cb7934baf16"
+      },
+      "lane": "webkitgtk",
+      "role": "diagnostic",
+      "samples": [
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31568,
+            "helper_rss_kib": 232400,
+            "main_private_dirty_kib": 26704,
+            "page_requests": 1,
+            "paint_ms": 803.591,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0232,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58272,
+            "total_tree_rss_kib": 396248
+          },
+          "reject_reason": null,
+          "run": 1,
+          "valid": true,
+          "value": 163848
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31592,
+            "helper_rss_kib": 232104,
+            "main_private_dirty_kib": 26680,
+            "page_requests": 1,
+            "paint_ms": 811.554,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0283,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58272,
+            "total_tree_rss_kib": 395956
+          },
+          "reject_reason": null,
+          "run": 2,
+          "valid": true,
+          "value": 163852
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31568,
+            "helper_rss_kib": 232808,
+            "main_private_dirty_kib": 26768,
+            "page_requests": 1,
+            "paint_ms": 800.678,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0272,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58336,
+            "total_tree_rss_kib": 396444
+          },
+          "reject_reason": null,
+          "run": 3,
+          "valid": true,
+          "value": 163636
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31560,
+            "helper_rss_kib": 232292,
+            "main_private_dirty_kib": 26672,
+            "page_requests": 1,
+            "paint_ms": 821.499,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0269,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58232,
+            "total_tree_rss_kib": 396064
+          },
+          "reject_reason": null,
+          "run": 4,
+          "valid": true,
+          "value": 163772
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31220,
+            "helper_rss_kib": 232092,
+            "main_private_dirty_kib": 26656,
+            "page_requests": 1,
+            "paint_ms": 808.63,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.1122,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 57876,
+            "total_tree_rss_kib": 395760
+          },
+          "reject_reason": null,
+          "run": 5,
+          "valid": true,
+          "value": 163668
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31572,
+            "helper_rss_kib": 232256,
+            "main_private_dirty_kib": 26680,
+            "page_requests": 1,
+            "paint_ms": 801.625,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0273,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58252,
+            "total_tree_rss_kib": 395944
+          },
+          "reject_reason": null,
+          "run": 6,
+          "valid": true,
+          "value": 163688
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31568,
+            "helper_rss_kib": 232460,
+            "main_private_dirty_kib": 26692,
+            "page_requests": 1,
+            "paint_ms": 804.586,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0252,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58260,
+            "total_tree_rss_kib": 396168
+          },
+          "reject_reason": null,
+          "run": 7,
+          "valid": true,
+          "value": 163708
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31572,
+            "helper_rss_kib": 232408,
+            "main_private_dirty_kib": 26688,
+            "page_requests": 1,
+            "paint_ms": 831.768,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0222,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58260,
+            "total_tree_rss_kib": 395916
+          },
+          "reject_reason": null,
+          "run": 8,
+          "valid": true,
+          "value": 163508
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31580,
+            "helper_rss_kib": 232480,
+            "main_private_dirty_kib": 26692,
+            "page_requests": 1,
+            "paint_ms": 817.134,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0269,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58272,
+            "total_tree_rss_kib": 396276
+          },
+          "reject_reason": null,
+          "run": 9,
+          "valid": true,
+          "value": 163796
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31572,
+            "helper_rss_kib": 232936,
+            "main_private_dirty_kib": 26708,
+            "page_requests": 1,
+            "paint_ms": 816.888,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0222,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58280,
+            "total_tree_rss_kib": 396692
+          },
+          "reject_reason": null,
+          "run": 10,
+          "valid": true,
+          "value": 163756
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31644,
+            "helper_rss_kib": 232300,
+            "main_private_dirty_kib": 26648,
+            "page_requests": 1,
+            "paint_ms": 346.698,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0464,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58292,
+            "total_tree_rss_kib": 396028
+          },
+          "reject_reason": null,
+          "run": 11,
+          "valid": true,
+          "value": 163728
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31632,
+            "helper_rss_kib": 232480,
+            "main_private_dirty_kib": 26644,
+            "page_requests": 1,
+            "paint_ms": 303.032,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0464,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58276,
+            "total_tree_rss_kib": 396224
+          },
+          "reject_reason": null,
+          "run": 12,
+          "valid": true,
+          "value": 163744
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31560,
+            "helper_rss_kib": 232288,
+            "main_private_dirty_kib": 26672,
+            "page_requests": 1,
+            "paint_ms": 805.576,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0263,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58232,
+            "total_tree_rss_kib": 395708
+          },
+          "reject_reason": null,
+          "run": 13,
+          "valid": true,
+          "value": 163420
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31568,
+            "helper_rss_kib": 232408,
+            "main_private_dirty_kib": 26680,
+            "page_requests": 1,
+            "paint_ms": 824.726,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0269,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58248,
+            "total_tree_rss_kib": 396092
+          },
+          "reject_reason": null,
+          "run": 14,
+          "valid": true,
+          "value": 163684
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31560,
+            "helper_rss_kib": 232508,
+            "main_private_dirty_kib": 26652,
+            "page_requests": 1,
+            "paint_ms": 809.146,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0273,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58212,
+            "total_tree_rss_kib": 396136
+          },
+          "reject_reason": null,
+          "run": 15,
+          "valid": true,
+          "value": 163628
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31516,
+            "helper_rss_kib": 232112,
+            "main_private_dirty_kib": 26660,
+            "page_requests": 1,
+            "paint_ms": 834.405,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0269,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58176,
+            "total_tree_rss_kib": 395900
+          },
+          "reject_reason": null,
+          "run": 16,
+          "valid": true,
+          "value": 163788
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31564,
+            "helper_rss_kib": 232204,
+            "main_private_dirty_kib": 26696,
+            "page_requests": 1,
+            "paint_ms": 806.643,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0273,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58260,
+            "total_tree_rss_kib": 396004
+          },
+          "reject_reason": null,
+          "run": 17,
+          "valid": true,
+          "value": 163800
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31568,
+            "helper_rss_kib": 232592,
+            "main_private_dirty_kib": 26704,
+            "page_requests": 1,
+            "paint_ms": 815.186,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0244,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58272,
+            "total_tree_rss_kib": 396416
+          },
+          "reject_reason": null,
+          "run": 18,
+          "valid": true,
+          "value": 163824
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31564,
+            "helper_rss_kib": 232600,
+            "main_private_dirty_kib": 26688,
+            "page_requests": 1,
+            "paint_ms": 807.345,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0242,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58252,
+            "total_tree_rss_kib": 396132
+          },
+          "reject_reason": null,
+          "run": 19,
+          "valid": true,
+          "value": 163532
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31492,
+            "helper_rss_kib": 232168,
+            "main_private_dirty_kib": 26676,
+            "page_requests": 1,
+            "paint_ms": 849.498,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0364,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58168,
+            "total_tree_rss_kib": 395968
+          },
+          "reject_reason": null,
+          "run": 20,
+          "valid": true,
+          "value": 163800
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31572,
+            "helper_rss_kib": 232384,
+            "main_private_dirty_kib": 26680,
+            "page_requests": 1,
+            "paint_ms": 808.536,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0273,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58252,
+            "total_tree_rss_kib": 396164
+          },
+          "reject_reason": null,
+          "run": 21,
+          "valid": true,
+          "value": 163780
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31560,
+            "helper_rss_kib": 232608,
+            "main_private_dirty_kib": 26688,
+            "page_requests": 1,
+            "paint_ms": 807.571,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0242,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58248,
+            "total_tree_rss_kib": 396248
+          },
+          "reject_reason": null,
+          "run": 22,
+          "valid": true,
+          "value": 163640
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31576,
+            "helper_rss_kib": 232596,
+            "main_private_dirty_kib": 26668,
+            "page_requests": 1,
+            "paint_ms": 800.04,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0242,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58244,
+            "total_tree_rss_kib": 396208
+          },
+          "reject_reason": null,
+          "run": 23,
+          "valid": true,
+          "value": 163612
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31568,
+            "helper_rss_kib": 232568,
+            "main_private_dirty_kib": 26652,
+            "page_requests": 1,
+            "paint_ms": 812.155,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0244,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58220,
+            "total_tree_rss_kib": 396344
+          },
+          "reject_reason": null,
+          "run": 24,
+          "valid": true,
+          "value": 163776
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31448,
+            "helper_rss_kib": 232512,
+            "main_private_dirty_kib": 26656,
+            "page_requests": 1,
+            "paint_ms": 821.171,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0555,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58104,
+            "total_tree_rss_kib": 396188
+          },
+          "reject_reason": null,
+          "run": 25,
+          "valid": true,
+          "value": 163676
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31636,
+            "helper_rss_kib": 232592,
+            "main_private_dirty_kib": 26620,
+            "page_requests": 1,
+            "paint_ms": 309.162,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0464,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58256,
+            "total_tree_rss_kib": 396272
+          },
+          "reject_reason": null,
+          "run": 26,
+          "valid": true,
+          "value": 163680
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31632,
+            "helper_rss_kib": 232116,
+            "main_private_dirty_kib": 26652,
+            "page_requests": 1,
+            "paint_ms": 346.035,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0465,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58284,
+            "total_tree_rss_kib": 395516
+          },
+          "reject_reason": null,
+          "run": 27,
+          "valid": true,
+          "value": 163400
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31484,
+            "helper_rss_kib": 232088,
+            "main_private_dirty_kib": 26684,
+            "page_requests": 1,
+            "paint_ms": 831.669,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0344,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58168,
+            "total_tree_rss_kib": 395652
+          },
+          "reject_reason": null,
+          "run": 28,
+          "valid": true,
+          "value": 163564
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31572,
+            "helper_rss_kib": 232432,
+            "main_private_dirty_kib": 26696,
+            "page_requests": 1,
+            "paint_ms": 801.642,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0263,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58268,
+            "total_tree_rss_kib": 395944
+          },
+          "reject_reason": null,
+          "run": 29,
+          "valid": true,
+          "value": 163512
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "engine_processes": 2,
+            "helper_private_dirty_kib": 31624,
+            "helper_rss_kib": 232508,
+            "main_private_dirty_kib": 26696,
+            "page_requests": 1,
+            "paint_ms": 297.706,
+            "process_classes": "keld-host:1,webkit-network:1,webkit-web:1",
+            "process_exit_before_ready": false,
+            "processes": 3,
+            "rss_drift_percent": 0.0465,
+            "stability_interval_ms": 100,
+            "stability_snapshots": 4,
+            "total_private_dirty_kib": 58320,
+            "total_tree_rss_kib": 396124
+          },
+          "reject_reason": null,
+          "run": 30,
+          "valid": true,
+          "value": 163616
+        }
+      ],
+      "statistics": {
+        "bootstrap_ci95": {
+          "lower": 163638.0,
+          "resamples": 10000,
+          "upper": 163764.0
+        },
+        "max": 163852,
+        "median": 163686.0,
+        "min": 163400,
+        "p90": 163800,
+        "valid_samples": 30
+      }
+    }
+  ],
+  "cache_state": "fresh-process",
+  "environment": {
+    "display": "session=wayland;desktop=ubuntu:GNOME;display=:0;wayland=wayland-0",
+    "engine": {
+      "name": "WebKitGTK",
+      "version": "2.52.6"
+    },
+    "hardware": {
+      "arch": "x86_64",
+      "cpu": "Intel(R) Core(TM) i5-10500H CPU @ 2.50GHz",
+      "ram_bytes": 24558964736
+    },
+    "os": {
+      "build": "7.0.0-30-generic",
+      "name": "linux",
+      "version": "Ubuntu 26.04.1 LTS"
+    },
+    "power": {
+      "ac_power": true,
+      "low_power_mode": false,
+      "thermal_state": "unverified"
+    },
+    "toolchains": [
+      {
+        "name": "rustc",
+        "version": "rustc 1.97.1 (8bab26f4f 2026-07-14);binary: rustc;commit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452;commit-date: 2026-07-14;host: x86_64-unknown-linux-gnu;release: 1.97.1;LLVM version: 22.1.6"
+      },
+      {
+        "name": "cargo",
+        "version": "cargo 1.97.1 (c980f4866 2026-06-30)"
+      }
+    ]
+  },
+  "metric": {
+    "id": "MEM-IDLE",
+    "registry_version": 1,
+    "unit": "KiB"
+  },
+  "provenance": {
+    "bench_sha": "e6704174bf0480864d64aabdef9e925a2919f516",
+    "bench_tree_state": "clean",
+    "fixtures": [
+      {
+        "path": "linux/keld/hello",
+        "sha": "e6704174bf0480864d64aabdef9e925a2919f516"
+      }
+    ],
+    "harness": {
+      "modules": [
+        {
+          "path": "linux/bench/run.py",
+          "sha256": "50b49e9e1fd6399c4ae5746f1b2bffb761e2fc958e1d2c1600d0f351771a61d3"
+        },
+        {
+          "path": "linux/bench/harness.py",
+          "sha256": "7c742a78b6a652fa577c347f5bb3803ab034d86448c6fd2fc49d1f162e196181"
+        }
+      ],
+      "path": "linux/bench/run.py",
+      "sha256": "50b49e9e1fd6399c4ae5746f1b2bffb761e2fc958e1d2c1600d0f351771a61d3",
+      "version": "1.0.0"
+    },
+    "keld_sha": "8cb7934baf1636f58e96519a2ce63635d8e698bb",
+    "payload_sha256": "77e0e3edccf3d4a8dd2ff5a1c3bce03282716b936684fecae500a41018c56f01"
+  },
+  "publication": {
+    "eligible": false,
+    "policy_version": 2,
+    "reasons": [
+      {
+        "code": "THERMAL_STATE_UNVERIFIED",
+        "label": "Linux thermal state was not independently verified"
+      },
+      {
+        "code": "NO_PAIRED_ARM",
+        "label": "Linux MEM-IDLE session currently contains only the Keld arm"
+      },
+      {
+        "code": "DIAGNOSTIC_HELLO_ONLY",
+        "label": "Linux no-flag app boot is unavailable; this measures keld-host --hello only"
+      },
+      {
+        "code": "BENCHMARK_ADAPTER_ARTIFACT",
+        "label": "memory is sampled after the committed loopback-navigation paint adapter"
+      }
+    ],
+    "requested": false
+  },
+  "schema_version": 2,
+  "session": {
+    "finished_utc": "2026-09-03T14:44:35.380920Z",
+    "interleaving": "none",
+    "label": "kel90-linux-keld-memory-v2-30",
+    "notes": "Main-process RSS scored only after one valid double-rAF beacon and four generation-identical process censuses with <=1% main/tree RSS drift. Helper RSS, total tree RSS, and private dirty remain diagnostics. The committed loopback-navigation adapter makes this KEL-28 evidence diagnostic, not an unmodified product score. Power evidence: sysfs-power-supply;power-profile=balanced.",
+    "requested_samples": 30,
+    "started_utc": "2026-09-03T14:43:58.365932Z"
+  }
+}
