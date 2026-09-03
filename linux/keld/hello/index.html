@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="keld-bench-origin" content="http://127.0.0.1:__KELD_BENCH_PORT__" />
+    <meta name="keld-bench-nonce" content="__KELD_BENCH_NONCE__" />
+    <title>Keld Linux benchmark</title>
+    <style>
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        color: #e8eef5;
+        background: #0b0f14;
+        font-family: system-ui, sans-serif;
+      }
+      main { text-align: center; }
+      p { opacity: 0.75; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Keld</h1>
+      <p>Linux WebKitGTK paint-opportunity fixture.</p>
+    </main>
+    <script>
+      "use strict";
+      const origin = "http://127.0.0.1:__KELD_BENCH_PORT__";
+      const nonce = "__KELD_BENCH_NONCE__";
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const query = new URLSearchParams({
+            nonce,
+            phase: "double-raf",
+            visibility: document.visibilityState,
+            focus: document.hasFocus() ? "1" : "0",
+          });
+          const beacon = new Image(1, 1);
+          beacon.alt = "";
+          beacon.src = `${origin}/run/${nonce}/paint.gif?${query}`;
+          document.body.appendChild(beacon);
+        });
+      });
+    </script>
+  </body>
+</html>

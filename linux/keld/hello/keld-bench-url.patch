@@ -1,0 +1,30 @@
+diff --git a/crates/keld-wv/src/hello/mod.rs b/crates/keld-wv/src/hello/mod.rs
+--- a/crates/keld-wv/src/hello/mod.rs
++++ b/crates/keld-wv/src/hello/mod.rs
+@@ -30,9 +30,25 @@ pub const DEFAULT_HTML: &str = r#"<!DOCTYPE html>
+ /// Creation spec for the hello slice: `title`, inline HTML, default 960×640.
+ #[must_use]
+ pub(crate) fn hello_spec(title: &str, html: &str) -> WebviewSpec {
++    let initial = std::env::var("KELD_BENCH_URL").map_or_else(
++        |_| NavTarget::Html(html.to_owned()),
++        |url| {
++            let loopback = url
++                .strip_prefix("http://127.0.0.1:")
++                .and_then(|tail| tail.split_once('/'))
++                .is_some_and(|(port, path)| {
++                    port.parse::<u16>().is_ok() && path.starts_with("run/")
++                });
++            assert!(
++                loopback,
++                "KELD_BENCH_URL must use the harness IPv4 loopback listener"
++            );
++            NavTarget::Url(url)
++        },
++    );
+     WebviewSpec {
+         title: title.to_owned(),
+-        initial: NavTarget::Html(html.to_owned()),
++        initial,
+         ..WebviewSpec::default()
+     }
+ }

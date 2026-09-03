@@ -1,6 +1,6 @@
 {
   "registry_version": 1,
-  "description": "Metric contract registry for keld-benches. Source of truth for WHICH metrics exist, their units, oracles, budgets, and sample policy. Encodes the named contracts of Keld docs/research/library/quality-evidence/49-falsifiable-bench-and-test-ladder.md (falsifiable scoreboard §1, cache-state classes §3.1, sample policy §5). Adding a metric = adding one entry here; the result document shape (schema/result.v1.schema.json) does not change. Correctness/security gates precede performance: a faster run that fails a required gate is invalid.",
+  "description": "Metric contract registry for keld-benches. Source of truth for WHICH metrics exist, their units, oracles, budgets, and sample policy. Encodes the named contracts of Keld docs/research/library/quality-evidence/49-falsifiable-bench-and-test-ladder.md (falsifiable scoreboard §1, cache-state classes §3.1, sample policy §5). Adding a metric = adding one entry here; it does not change any versioned result-document shape. Correctness/security gates precede performance: a faster run that fails a required gate is invalid.",
   "cache_states": {
     "boot-cold": "First launch after reboot / clean VM snapshot; one sample per boot.",
     "fresh-process": "Complete prior process coalition removed; fresh profile; OS caches uncontrolled.",
@@ -105,7 +105,7 @@
       "implementations": {
         "windows": "windows/bench/Measure-FirstPaint.ps1 (pre-contract; see windows/bench/CONTRACT.md)",
         "macos": "KEL-64 harness (feature branch, macos/harness -> macos/bench on merge)",
-        "linux": "none"
+        "linux": "linux/bench/run.py"
       }
     },
     {
@@ -138,7 +138,11 @@
       "cache_states": ["fresh-process", "warm-cache"],
       "sample_class": "gui-paint-rss",
       "status": "active",
-      "note": "The scored value is the Keld-owned (main) RSS; helper/total/private-dirty are per-run diagnostics so lanes are never blended."
+      "note": "The scored value is the Keld-owned (main) RSS; helper/total/private-dirty are per-run diagnostics so lanes are never blended.",
+      "implementations": {
+        "windows": "windows/bench/Measure-KeldIdleRss.ps1 (pre-contract)",
+        "linux": "linux/bench/run.py"
+      }
     },
     {
       "id": "CRASH-RECOVERY",
@@ -159,7 +163,11 @@
       "cache_states": ["fresh-process"],
       "sample_class": "gui-paint-rss",
       "status": "active",
-      "note": "Existing MEASUREMENTS.md disk tables predate this registry; new disk results use one document per lane."
+      "note": "Existing MEASUREMENTS.md disk tables predate this registry; new disk results use one document per lane.",
+      "implementations": {
+        "windows": "windows/bench/Emit-Kel25Documents.ps1 (historical emitter)",
+        "linux": "linux/bench/run.py"
+      }
     },
     {
       "id": "PACK-UPDATE",

@@ -14,29 +14,29 @@ task.
 
 ## Top-priority gap, stated before any restructure
 
-**Windows and Linux still have no committed `keld/` fixture.** macOS now has
-[`macos/keld/hello/`](./macos/keld/hello/), merged in PR #7; the remaining gaps
-are:
+**Windows still has no committed `keld/` fixture.** macOS has
+[`macos/keld/hello/`](./macos/keld/hello/), merged in PR #7, and Linux now has
+[`linux/keld/hello/`](./linux/keld/hello/) plus the first contract-shaped Linux
+harness. The remaining Windows gap is:
 
 - The Windows harness measures Keld by splicing a beacon into
   `keld-wv` sources inside the private Keld repo at `-Prepare` time and
   building `keld-host.exe` there. No committed SHA in *this* repo reproduces
   the Keld arm.
-- Linux has nothing.
 
-First fixture work on either remaining OS MUST be `{os}/keld/hello/` (a committed build
-recipe producing a Release artifact with bound provenance, following the
-KEL-64 `macos/keld/hello/build.sh` pattern), before any new competitor arm or
-metric lands. This gap is independent of, and ranked above, everything below.
-Correcting a historical table from an already-committed raw file is not new
-fixture or metric work and does not make that pre-contract result publication
-eligible.
+First fixture work on Windows MUST be `windows/keld/hello/` (a committed build
+recipe producing a Release artifact with bound provenance, following the KEL-64
+`macos/keld/hello/build.sh` pattern), before any new Windows competitor arm or
+metric lands. Correcting a historical table from an already-committed raw file
+is not new fixture or metric work and does not make that pre-contract result
+publication eligible.
 
 ## 1. Layout convention
 
 ```
 schema/                          # OS-agnostic: result schema, metric registry, check
-  result.v1.schema.json          #   the one document shape (versioned)
+  result.v1.schema.json          #   frozen historical document shape
+  result.v2.schema.json          #   current shape with module provenance
   metrics.v1.json                #   the one metric registry (versioned)
   check.py                       #   falsifiable contract check (run: python3 schema/check.py)
   examples/                      #   documents that MUST validate
@@ -117,8 +117,9 @@ least one OS harness; none may regress):
 
 ## 3. Result document
 
-Every `run` emits one JSON document conforming to
-`schema/result.v1.schema.json`:
+Every `run` emits one JSON document conforming to the file selected by its
+integer `schema_version`. Current interpreted harnesses emit v2; immutable v1
+documents continue to validate against frozen `schema/result.v1.schema.json`:
 
 - **UTF-8 without BOM.** (Two of four committed pre-contract result files
   carry a PowerShell BOM and are rejected by strict JSON parsers.)
@@ -139,11 +140,18 @@ Every `run` emits one JSON document conforming to
   SHA-256, complete environment block, AC power / Low Power Mode off / nominal
   thermal state, and byte-identical canonical payload across arms
   (`provenance.payload_sha256`).
+- `provenance.harness` names and hashes the entry point; interpreted harnesses
+  also list and hash every imported measurement module in `modules`.
+- Publication policy v2 makes that interpreted-module list mandatory before
+  `eligible: true`. Immutable policy-v1 documents remain schema-valid; new or
+  re-emitted interpreted-harness results use v2 and fail closed when module
+  provenance is incomplete.
 
 Validate any document with:
 
 ```bash
 python3 schema/check.py          # schema + registry + examples + negative controls
+python3 windows/bench/test_validate_result_v1.py  # version dispatch failure controls
 ```
 
 Validate the historical medians published from the pre-contract Windows raw
@@ -193,7 +201,7 @@ wrap-and-annotate, tracked in `windows/bench/CONTRACT.md`:
 | `-Arms keld,tauri,electron` | `--fixture` per arm from committed fixtures |
 | `-Runs 5` | `--samples N` + registry publication minimum |
 | implicit fresh-process | explicit `--cache-state` |
-| `meta` + flat `samples[]`, BOM UTF-8 | `result.v1` document, UTF-8 no BOM |
+| `meta` + flat `samples[]`, BOM UTF-8 | versioned result document, UTF-8 no BOM |
 | `windows-first-paint*.json`, overwritable | `results/paint-opportunity/<date>.<label>.<state>.json`, immutable |
 | absolute `D:\WORK\...` exe paths in samples | `artifact.basename` + SHA-256 only |
 | arm-by-arm execution | round-robin randomized interleaving for publication |

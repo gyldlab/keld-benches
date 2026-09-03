@@ -1,0 +1,486 @@
+{
+  "arms": [
+    {
+      "arm_id": "keld-linux-host",
+      "artifact": {
+        "basename": "keld-host-bench",
+        "sha256": "6fef087d556646b7dad7fc7d66a162fec935d0eb3d233f3ccb26bde733861dc4",
+        "version": "8cb7934baf16"
+      },
+      "fixture_path": "linux/keld/hello",
+      "framework": {
+        "name": "Keld",
+        "version": "8cb7934baf16"
+      },
+      "lane": "webkitgtk",
+      "role": "diagnostic",
+      "samples": [
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 1,
+          "valid": true,
+          "value": 804.142
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 2,
+          "valid": true,
+          "value": 812.596
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 3,
+          "valid": true,
+          "value": 804.671
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 4,
+          "valid": true,
+          "value": 810.933
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 5,
+          "valid": true,
+          "value": 811.969
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 6,
+          "valid": true,
+          "value": 817.498
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 7,
+          "valid": true,
+          "value": 829.85
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 8,
+          "valid": true,
+          "value": 297.824
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 9,
+          "valid": true,
+          "value": 827.268
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 10,
+          "valid": true,
+          "value": 827.224
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 11,
+          "valid": true,
+          "value": 798.26
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 12,
+          "valid": true,
+          "value": 816.103
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 13,
+          "valid": true,
+          "value": 844.675
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 14,
+          "valid": true,
+          "value": 819.707
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 15,
+          "valid": true,
+          "value": 847.155
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 16,
+          "valid": true,
+          "value": 304.906
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 17,
+          "valid": true,
+          "value": 812.638
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 18,
+          "valid": true,
+          "value": 842.097
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 19,
+          "valid": true,
+          "value": 814.076
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 20,
+          "valid": true,
+          "value": 814.092
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 21,
+          "valid": true,
+          "value": 797.452
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 22,
+          "valid": true,
+          "value": 805.671
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 23,
+          "valid": true,
+          "value": 833.501
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 24,
+          "valid": true,
+          "value": 858.46
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 25,
+          "valid": true,
+          "value": 324.233
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 26,
+          "valid": true,
+          "value": 807.874
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 27,
+          "valid": true,
+          "value": 836.854
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 28,
+          "valid": true,
+          "value": 813.478
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 29,
+          "valid": true,
+          "value": 802.295
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false
+          },
+          "reject_reason": null,
+          "run": 30,
+          "valid": true,
+          "value": 832.883
+        }
+      ],
+      "statistics": {
+        "bootstrap_ci95": {
+          "lower": 809.4035,
+          "resamples": 10000,
+          "upper": 823.4655
+        },
+        "max": 858.46,
+        "median": 813.777,
+        "min": 297.824,
+        "p90": 842.097,
+        "valid_samples": 30
+      }
+    }
+  ],
+  "cache_state": "fresh-process",
+  "environment": {
+    "display": "session=wayland;desktop=ubuntu:GNOME;display=:0;wayland=wayland-0",
+    "engine": {
+      "name": "WebKitGTK",
+      "version": "2.52.6"
+    },
+    "hardware": {
+      "arch": "x86_64",
+      "cpu": "Intel(R) Core(TM) i5-10500H CPU @ 2.50GHz",
+      "ram_bytes": 24558964736
+    },
+    "os": {
+      "build": "7.0.0-30-generic",
+      "name": "linux",
+      "version": "Ubuntu 26.04.1 LTS"
+    },
+    "power": {
+      "ac_power": true,
+      "low_power_mode": false,
+      "thermal_state": "unverified"
+    },
+    "toolchains": [
+      {
+        "name": "rustc",
+        "version": "rustc 1.97.1 (8bab26f4f 2026-07-14);binary: rustc;commit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452;commit-date: 2026-07-14;host: x86_64-unknown-linux-gnu;release: 1.97.1;LLVM version: 22.1.6"
+      },
+      {
+        "name": "cargo",
+        "version": "cargo 1.97.1 (c980f4866 2026-06-30)"
+      }
+    ]
+  },
+  "metric": {
+    "id": "PAINT-OPPORTUNITY",
+    "registry_version": 1,
+    "unit": "ms"
+  },
+  "provenance": {
+    "bench_sha": "e6704174bf0480864d64aabdef9e925a2919f516",
+    "bench_tree_state": "clean",
+    "fixtures": [
+      {
+        "path": "linux/keld/hello",
+        "sha": "e6704174bf0480864d64aabdef9e925a2919f516"
+      }
+    ],
+    "harness": {
+      "modules": [
+        {
+          "path": "linux/bench/run.py",
+          "sha256": "50b49e9e1fd6399c4ae5746f1b2bffb761e2fc958e1d2c1600d0f351771a61d3"
+        },
+        {
+          "path": "linux/bench/harness.py",
+          "sha256": "7c742a78b6a652fa577c347f5bb3803ab034d86448c6fd2fc49d1f162e196181"
+        }
+      ],
+      "path": "linux/bench/run.py",
+      "sha256": "50b49e9e1fd6399c4ae5746f1b2bffb761e2fc958e1d2c1600d0f351771a61d3",
+      "version": "1.0.0"
+    },
+    "keld_sha": "8cb7934baf1636f58e96519a2ce63635d8e698bb",
+    "payload_sha256": "77e0e3edccf3d4a8dd2ff5a1c3bce03282716b936684fecae500a41018c56f01"
+  },
+  "publication": {
+    "eligible": false,
+    "policy_version": 2,
+    "reasons": [
+      {
+        "code": "THERMAL_STATE_UNVERIFIED",
+        "label": "Linux thermal state was not independently verified"
+      },
+      {
+        "code": "NO_PAIRED_ARM",
+        "label": "Linux PAINT-OPPORTUNITY session currently contains only the Keld arm"
+      },
+      {
+        "code": "DIAGNOSTIC_HELLO_ONLY",
+        "label": "Linux no-flag app boot is unavailable; this measures keld-host --hello only"
+      }
+    ],
+    "requested": false
+  },
+  "schema_version": 2,
+  "session": {
+    "finished_utc": "2026-09-03T14:43:50.222588Z",
+    "interleaving": "none",
+    "label": "kel90-linux-keld-v2-30",
+    "notes": "External monotonic spawn-to-double-rAF image-beacon proxy. Linux no-flag app boot is not implemented, so this is the keld-host --hello diagnostic window only. Power evidence: sysfs-power-supply;power-profile=balanced.",
+    "requested_samples": 30,
+    "started_utc": "2026-09-03T14:43:12.078516Z"
+  }
+}
