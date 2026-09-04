@@ -5,17 +5,20 @@ contract. It reads `schema/metrics.v1.json`, emits
 `schema/result.v2.schema.json`, and currently implements:
 
 - `PAINT-OPPORTUNITY`: external monotonic spawn-to-double-rAF image beacon for
-  the `linux/keld/hello` WebKitGTK diagnostic window;
+  the `linux/keld/hello` WebKitGTK diagnostic window, either alone or paired
+  round-by-round with the `linux/gtk4/hello` native floor;
 - `MEM-IDLE`: Keld main RSS after the same paint beacon and a stable,
   generation-identical process census, with helpers/tree/private dirty kept as
   separate diagnostics;
 - `DISK`: exact bytes of the unpatched Release `keld-host` raw-binary lane.
 
-The paint arm is intentionally `role: diagnostic`. Linux's KEL-96/T4 no-flag
-application boot has not landed, so this measures `keld-host --hello`, not app
-first paint, Bun readiness, or app-link lifecycle. The result always records
+The Keld paint arm is intentionally `role: diagnostic`. Linux's KEL-96/T4
+no-flag application boot has landed, but this harness still measures the
+declared `keld-host --hello` benchmark adapter—not app first paint, Bun
+readiness, or app-link lifecycle. The result always records
 `DIAGNOSTIC_HELLO_ONLY` and cannot become a published scoreboard verdict by
-collecting more samples.
+collecting more samples. A paired native arm adds a within-session ratio but
+does not promote that diagnostic into a product claim.
 
 `MEM-IDLE` also uses the loopback-navigation adapter so the harness can prove
 content readiness before sampling. It is diagnostic rather than an unmodified
@@ -31,6 +34,12 @@ linux/keld/hello/build.sh \
   /path/to/keld \
   "$(git -C /path/to/keld rev-parse origin/main)" \
   "$PWD/linux/keld/hello/dist"
+```
+
+Build the landed GTK4/WebKitGTK 6.0 native fixture separately:
+
+```bash
+linux/gtk4/hello/build.sh "$PWD/linux/gtk4/hello/dist"
 ```
 
 List the metrics this OS harness implements:
@@ -49,6 +58,24 @@ python3 linux/bench/run.py run \
   --samples 5 \
   --cache-state fresh-process \
   --out linux/bench/results/paint-opportunity/DATE.linux-keld.fresh-process.json
+```
+
+Run the Keld adapter and GTK4 native floor in balanced randomized paired
+rounds. Each `--artifact-dir` maps positionally to the preceding fixture list;
+the harness rejects count mismatches, duplicates, unknown fixtures, and
+provenance swaps before measurement:
+
+```bash
+python3 linux/bench/run.py run \
+  --metric PAINT-OPPORTUNITY \
+  --fixture linux/keld/hello \
+  --artifact-dir linux/keld/hello/dist \
+  --fixture linux/gtk4/hello \
+  --artifact-dir linux/gtk4/hello/dist \
+  --samples 30 \
+  --cache-state fresh-process \
+  --label linux-keld-vs-gtk4 \
+  --out linux/bench/results/paint-opportunity/DATE.linux-keld-vs-gtk4.fresh-process.json
 ```
 
 Measure idle memory after paint and stability:
@@ -86,6 +113,12 @@ absolute source or artifact path.
 
 - One IPv4-loopback listener binds port `0`; the external monotonic clock is
   armed before process spawn.
+- Paired paint runs execute each arm exactly once per round. Within every
+  complete two-round block, each arm runs first once; the first order is
+  randomized. Samples retain their round and position, and the comparison
+  bootstraps matched per-round Keld/native ratios rather than pooling arms. If
+  either arm rejects a requested round, the result retains every sample, exits
+  `2`, and omits the comparison instead of deleting the failed pair.
 - The page and beacon are bound to one random nonce. A stale nonce, malformed
   query, wrong phase, hidden/unfocused document, or duplicate beacon is
   rejected rather than converted into a plausible number.

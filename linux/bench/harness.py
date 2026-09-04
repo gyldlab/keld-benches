@@ -34,7 +34,10 @@ SCHEMA_PATH = ROOT / "schema" / f"result.v{SCHEMA_VERSION}.schema.json"
 HARNESS_PATH = ROOT / "linux" / "bench" / "run.py"
 MODULE_PATH = ROOT / "linux" / "bench" / "harness.py"
 TEMPLATE_PATH = ROOT / "linux" / "keld" / "hello" / "index.html"
-FIXTURE_PATH = "linux/keld/hello"
+KELD_FIXTURE_PATH = "linux/keld/hello"
+GTK4_FIXTURE_PATH = "linux/gtk4/hello"
+FIXTURE_PATH = KELD_FIXTURE_PATH
+SUPPORTED_FIXTURES = (KELD_FIXTURE_PATH, GTK4_FIXTURE_PATH)
 IMPLEMENTED_METRICS = ("PAINT-OPPORTUNITY", "MEM-IDLE", "DISK")
 SUPPORTED_GUI_STATES = ("fresh-process", "warm-cache")
 MEMORY_STABLE_SNAPSHOTS = 4
@@ -77,6 +80,57 @@ def run_text(arguments: list[str], *, cwd: pathlib.Path | None = None) -> str:
     except (OSError, subprocess.SubprocessError) as error:
         raise HarnessError(f"command failed: {arguments[0]}: {error}") from error
     return completed.stdout.strip()
+
+
+def _verify_committed_file_digests(
+    commit: str,
+    recorded: Any,
+    expected_paths: set[str],
+    label: str,
+) -> None:
+    """Bind artifact source hashes to exact blobs in an ancestor benchmark commit."""
+    if not isinstance(recorded, dict) or set(recorded) != expected_paths:
+        raise HarnessError(f"{label} provenance has an incomplete committed file set")
+    git_environment = {
+        "PATH": "/usr/bin:/bin",
+        "LC_ALL": "C",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_NO_REPLACE_OBJECTS": "1",
+        "GIT_OPTIONAL_LOCKS": "0",
+    }
+    try:
+        ancestry = subprocess.run(
+            ["/usr/bin/git", "merge-base", "--is-ancestor", commit, "HEAD"],
+            cwd=ROOT,
+            env=git_environment,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise HarnessError(f"{label} provenance cannot verify commit ancestry") from error
+    if ancestry.returncode != 0:
+        raise HarnessError(f"{label} provenance commit is not an ancestor of this harness")
+    for path in sorted(expected_paths):
+        digest = recorded[path]
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise HarnessError(f"{label} provenance has an invalid digest for {path}")
+        try:
+            source = subprocess.run(
+                ["/usr/bin/git", "show", f"{commit}:{path}"],
+                cwd=ROOT,
+                env=git_environment,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=30,
+            ).stdout
+        except (OSError, subprocess.SubprocessError) as error:
+            raise HarnessError(f"{label} provenance cannot read committed file {path}") from error
+        if hashlib.sha256(source).hexdigest() != digest:
+            raise HarnessError(f"{label} provenance for {path} does not match committed bytes")
 
 
 def load_registry() -> dict[str, Any]:
@@ -618,7 +672,13 @@ class OwnedProcess:
         return owned_generation or removed_members
 
 
-def _paint_attempt(artifact: pathlib.Path, template: bytes, run_number: int, timeout: float) -> dict[str, Any]:
+def _paint_attempt(
+    artifact: pathlib.Path,
+    template: bytes,
+    run_number: int,
+    timeout: float,
+    arguments: tuple[str, ...] = ("--hello", "--title", "Keld Linux benchmark"),
+) -> dict[str, Any]:
     server = BeaconServer(template)
     server.start()
     environment = os.environ.copy()
@@ -632,7 +692,7 @@ def _paint_attempt(artifact: pathlib.Path, template: bytes, run_number: int, tim
     value: float | None = None
     try:
         process = subprocess.Popen(
-            [str(artifact), "--hello", "--title", "Keld Linux benchmark"],
+            [str(artifact), *arguments],
             env=environment,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
@@ -839,6 +899,111 @@ def summarize(samples: list[dict[str, Any]]) -> dict[str, Any]:
     return summary
 
 
+def fixture_artifact_pairs(
+    fixtures: list[str], artifact_dirs: list[str]
+) -> dict[str, pathlib.Path]:
+    """Bind every supported fixture to exactly one caller-supplied artifact directory."""
+    if len(fixtures) != len(artifact_dirs):
+        raise HarnessError("provide exactly one --artifact-dir per --fixture")
+    if len(set(fixtures)) != len(fixtures):
+        raise HarnessError("duplicate Linux fixture is not allowed")
+    unknown = set(fixtures) - set(SUPPORTED_FIXTURES)
+    if unknown:
+        raise HarnessError(f"unsupported Linux fixture: {sorted(unknown)[0]}")
+    return {
+        fixture: pathlib.Path(artifact_dir).resolve()
+        for fixture, artifact_dir in zip(fixtures, artifact_dirs, strict=True)
+    }
+
+
+def paired_round_orders(
+    arm_ids: tuple[str, ...], samples: int, generator: random.Random
+) -> list[tuple[str, str]]:
+    """Return two-arm round orders balanced across each complete two-round block."""
+    if len(arm_ids) != 2 or len(set(arm_ids)) != 2:
+        raise HarnessError("paired scheduling requires exactly two arms")
+    if samples < 1:
+        raise HarnessError("paired scheduling requires a positive sample count")
+    orders: list[tuple[str, str]] = []
+    for offset in range(0, samples, 2):
+        first = list(arm_ids)
+        generator.shuffle(first)
+        orders.append((first[0], first[1]))
+        if offset + 1 < samples:
+            orders.append((first[1], first[0]))
+    return orders
+
+
+def paired_ratio_comparison(
+    baseline_samples: list[dict[str, Any]],
+    candidate_samples: list[dict[str, Any]],
+    *,
+    threshold: float,
+    baseline_arm: str = "gtk4-native",
+    candidate_arm: str = "keld-linux-host",
+) -> dict[str, Any]:
+    """Bootstrap candidate/baseline ratios only for a complete paired session."""
+
+    if (
+        isinstance(threshold, bool)
+        or not isinstance(threshold, (int, float))
+        or not math.isfinite(threshold)
+        or threshold <= 1
+    ):
+        raise HarnessError("paired comparison threshold must be a finite number greater than one")
+
+    def by_round(samples: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
+        indexed: dict[int, dict[str, Any]] = {}
+        for sample in samples:
+            run = sample["run"]
+            if run in indexed:
+                raise HarnessError(f"duplicate sample for paired round {run}")
+            indexed[run] = sample
+        return indexed
+
+    baseline = by_round(baseline_samples)
+    candidate = by_round(candidate_samples)
+    if set(baseline) != set(candidate):
+        raise HarnessError("paired comparison requires identical round membership")
+    if any(not sample["valid"] for sample in (*baseline.values(), *candidate.values())):
+        raise HarnessError("paired comparison requires every matched round to be valid")
+    ratios: list[float] = []
+    for run in sorted(baseline):
+        baseline_sample = baseline[run]
+        candidate_sample = candidate[run]
+        baseline_value = float(baseline_sample["value"])
+        if baseline_value <= 0:
+            raise HarnessError("paired baseline values must be positive")
+        ratios.append(float(candidate_sample["value"]) / baseline_value)
+    if len(ratios) < 2:
+        raise HarnessError("paired comparison requires at least two valid matched rounds")
+
+    seed = hashlib.sha256(repr(ratios).encode("ascii")).digest()
+    generator = random.Random(seed)
+    medians = sorted(
+        statistics.median(generator.choices(ratios, k=len(ratios)))
+        for _ in range(10_000)
+    )
+    interval = {
+        "lower": round(medians[math.floor(0.025 * (len(medians) - 1))], 6),
+        "upper": round(medians[math.ceil(0.975 * (len(medians) - 1))], 6),
+    }
+    if interval["lower"] > threshold:
+        verdict = "FAIL"
+    elif interval["upper"] <= threshold:
+        verdict = "PASS"
+    else:
+        verdict = "INCONCLUSIVE"
+    return {
+        "baseline_arm": baseline_arm,
+        "candidate_arm": candidate_arm,
+        "ratio_ci95": interval,
+        "threshold": threshold,
+        "verdict": verdict,
+        "method": "paired percentile bootstrap over rounds, 10000 resamples; ratio = candidate/baseline",
+    }
+
+
 def _read_artifacts(artifact_dir: pathlib.Path) -> tuple[dict[str, Any], pathlib.Path, pathlib.Path]:
     provenance_path = artifact_dir / "provenance.json"
     try:
@@ -855,6 +1020,16 @@ def _read_artifacts(artifact_dir: pathlib.Path) -> tuple[dict[str, Any], pathlib
         value = provenance.get(field)
         if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{40}", value):
             raise HarnessError(f"artifact provenance has an invalid {field}")
+    _verify_committed_file_digests(
+        provenance["recipe_commit"],
+        provenance.get("recipe_files", {}),
+        {
+            "linux/keld/hello/build.sh",
+            "linux/keld/hello/index.html",
+            "linux/keld/hello/keld-bench-url.patch",
+        },
+        "Keld artifact",
+    )
     artifacts = provenance.get("artifacts", {})
     product = artifact_dir / "keld-host-product"
     adapter = artifact_dir / "keld-host-bench"
@@ -867,6 +1042,52 @@ def _read_artifacts(artifact_dir: pathlib.Path) -> tuple[dict[str, Any], pathlib
         if record.get("bytes") != path.stat().st_size:
             raise HarnessError(f"artifact size provenance mismatch: {path.name}")
     return provenance, product, adapter
+
+
+def _read_gtk4_artifact(artifact_dir: pathlib.Path) -> tuple[dict[str, Any], pathlib.Path]:
+    provenance_path = artifact_dir / "provenance.json"
+    try:
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise HarnessError(f"could not read GTK4 artifact provenance: {error}") from error
+    if provenance.get("schema_version") != 1:
+        raise HarnessError("unsupported GTK4 artifact provenance schema")
+    if provenance.get("fixture_repository") != "github.com/gyldlab/keld-benches":
+        raise HarnessError("GTK4 artifact provenance names a non-canonical fixture repository")
+    fixture_commit = provenance.get("fixture_commit")
+    if not isinstance(fixture_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", fixture_commit):
+        raise HarnessError("GTK4 artifact provenance has an invalid fixture_commit")
+    expected_files = {
+        "linux/gtk4/hello/build.sh",
+        "linux/gtk4/hello/main.c",
+    }
+    fixture_files = provenance.get("fixture_files")
+    if not isinstance(fixture_files, dict):
+        raise HarnessError("GTK4 artifact provenance has an invalid fixture file set")
+    _verify_committed_file_digests(
+        fixture_commit,
+        fixture_files,
+        expected_files,
+        "GTK4 artifact",
+    )
+
+    artifact = artifact_dir / "gtk4-webkit-hello"
+    record = provenance.get("artifact")
+    if not isinstance(record, dict):
+        raise HarnessError("GTK4 artifact provenance is missing its artifact record")
+    if artifact.is_symlink() or not artifact.is_file() or not os.access(artifact, os.X_OK):
+        raise HarnessError("GTK4 artifact is missing, non-regular, symlinked, or non-executable")
+    if record.get("basename") != artifact.name or record.get("sha256") != sha256_file(artifact):
+        raise HarnessError("GTK4 artifact provenance mismatch")
+    if record.get("bytes") != artifact.stat().st_size:
+        raise HarnessError("GTK4 artifact size provenance mismatch")
+    toolchains = provenance.get("toolchains")
+    if not isinstance(toolchains, dict) or any(
+        not isinstance(toolchains.get(name), str) or not toolchains[name]
+        for name in ("cc", "gtk4", "webkitgtk-6.0")
+    ):
+        raise HarnessError("GTK4 artifact provenance has incomplete toolchains")
+    return provenance, artifact
 
 
 def _power_state() -> tuple[bool, bool, str]:
@@ -957,6 +1178,7 @@ def _environment(provenance: dict[str, Any], metric_id: str) -> tuple[dict[str, 
         "toolchains": [
             {"name": "rustc", "version": str(toolchains.get("rustc", "unknown"))},
             {"name": "cargo", "version": str(toolchains.get("cargo", "unknown"))},
+            {"name": "webkit2gtk-4.1", "version": engine_version},
         ],
     }
     return environment, power_evidence
@@ -983,8 +1205,9 @@ def _publication_reasons(
     tree_state: str,
     advertised: bool,
     environment: dict[str, Any],
-    provenance: dict[str, Any],
+    recipe_commits: tuple[str, ...],
     bench_sha: str,
+    paired: bool,
 ) -> list[dict[str, str]]:
     reasons: list[dict[str, str]] = []
 
@@ -995,7 +1218,7 @@ def _publication_reasons(
         add("BENCH_TREE_DIRTY", "benchmark checkout was not clean before measurement")
     if not advertised:
         add("BENCH_SHA_UNPUBLISHED", "benchmark commit was not advertised by canonical origin")
-    if provenance.get("recipe_commit") != bench_sha:
+    if any(recipe_commit != bench_sha for recipe_commit in recipe_commits):
         add("ARTIFACT_RECIPE_MISMATCH", "artifact was not built from this benchmark commit")
     if valid_samples != requested_samples:
         add("INVALID_SAMPLES", "one or more requested measurements were rejected")
@@ -1010,10 +1233,11 @@ def _publication_reasons(
     if power.get("thermal_state") != "nominal":
         add("THERMAL_STATE_UNVERIFIED", "Linux thermal state was not independently verified")
     if metric_id in {"PAINT-OPPORTUNITY", "MEM-IDLE"}:
-        add("NO_PAIRED_ARM", f"Linux {metric_id} session currently contains only the Keld arm")
+        if not paired:
+            add("NO_PAIRED_ARM", f"Linux {metric_id} session currently contains only the Keld arm")
         add(
             "DIAGNOSTIC_HELLO_ONLY",
-            "Linux no-flag app boot is unavailable; this measures keld-host --hello only",
+            "the Keld arm measures keld-host --hello rather than no-flag product boot",
         )
     if metric_id == "MEM-IDLE":
         add(
@@ -1054,13 +1278,20 @@ def validate_result(document: dict[str, Any]) -> None:
 def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
     registry = load_registry()
     contract = metric_contract(registry, args.metric)
-    if args.fixture != [FIXTURE_PATH]:
-        raise HarnessError(
-            f"Linux harness currently requires exactly one --fixture {FIXTURE_PATH}; "
-            "additional arms land only with their committed Linux fixtures"
-        )
+    artifact_dirs = args.artifact_dir if isinstance(args.artifact_dir, list) else [args.artifact_dir]
+    artifact_by_fixture = fixture_artifact_pairs(args.fixture, artifact_dirs)
+    paired = set(args.fixture) == {KELD_FIXTURE_PATH, GTK4_FIXTURE_PATH}
+    if args.metric == "PAINT-OPPORTUNITY":
+        if set(args.fixture) not in ({KELD_FIXTURE_PATH}, {KELD_FIXTURE_PATH, GTK4_FIXTURE_PATH}):
+            raise HarnessError(
+                "Linux PAINT-OPPORTUNITY requires the Keld fixture alone or the exact Keld+GTK4 pair"
+            )
+    elif args.fixture != [KELD_FIXTURE_PATH]:
+        raise HarnessError(f"Linux {args.metric} currently requires exactly {KELD_FIXTURE_PATH}")
     if args.samples < 1 or args.samples > 1000:
         raise HarnessError("--samples must be in 1..=1000")
+    if paired and args.samples < 2:
+        raise HarnessError("paired PAINT-OPPORTUNITY requires at least two rounds")
     if not LABEL_PATTERN.fullmatch(args.label):
         raise HarnessError("--label must be lowercase kebab-case")
     if args.metric in {"PAINT-OPPORTUNITY", "MEM-IDLE"} and args.cache_state not in SUPPORTED_GUI_STATES:
@@ -1080,34 +1311,165 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
     if output.exists() or output.is_symlink():
         raise HarnessError(f"refusing to overwrite immutable result: {output.name}")
 
-    artifact_dir = pathlib.Path(args.artifact_dir).resolve()
-    provenance, product_artifact, bench_artifact = _read_artifacts(artifact_dir)
+    provenance, product_artifact, bench_artifact = _read_artifacts(
+        artifact_by_fixture[KELD_FIXTURE_PATH]
+    )
     bench_sha, tree_state, advertised = _git_state()
     environment, power_evidence = _environment(provenance, args.metric)
     started_utc = utc_now()
     template = TEMPLATE_PATH.read_bytes()
     payload_sha = hashlib.sha256(template).hexdigest()
-    expected_payload_sha = provenance.get("recipe_files", {}).get(FIXTURE_PATH + "/index.html")
+    expected_payload_sha = provenance.get("recipe_files", {}).get(
+        KELD_FIXTURE_PATH + "/index.html"
+    )
     if expected_payload_sha != payload_sha:
         raise HarnessError("fixture payload does not match artifact build provenance")
 
+    arms: list[dict[str, Any]] = []
+    recipe_commits = [provenance["recipe_commit"]]
+    fixtures = [{"path": KELD_FIXTURE_PATH, "sha": provenance["recipe_commit"]}]
+    comparison: dict[str, Any] | None = None
     if args.metric == "PAINT-OPPORTUNITY":
-        if args.cache_state == "warm-cache":
-            priming = _paint_attempt(bench_artifact, template, 0, args.timeout_seconds)
-            if not priming["valid"]:
-                raise HarnessError(f"warm-cache priming launch failed: {priming['reject_reason']}")
-        samples = [
-            _paint_attempt(bench_artifact, template, run, args.timeout_seconds)
-            for run in range(1, args.samples + 1)
+        paint_configs = [
+            {
+                "arm_id": "keld-linux-host",
+                "framework": {"name": "Keld", "version": provenance["source_git_sha"][:12]},
+                "fixture_path": KELD_FIXTURE_PATH,
+                "fixture_sha": provenance["recipe_commit"],
+                "artifact": bench_artifact,
+                "artifact_record": provenance["artifacts"]["benchmark_adapter"],
+                "artifact_version": provenance["source_git_sha"][:12],
+                "arguments": ("--hello", "--title", "Keld Linux benchmark"),
+                "role": "diagnostic",
+            }
         ]
-        artifact = bench_artifact
-        artifact_record = provenance["artifacts"]["benchmark_adapter"]
-        role = "diagnostic"
-        lane = "webkitgtk"
+        if paired:
+            gtk_provenance, gtk_artifact = _read_gtk4_artifact(
+                artifact_by_fixture[GTK4_FIXTURE_PATH]
+            )
+            gtk_toolchains = gtk_provenance["toolchains"]
+            runtime_gtk4_engine = run_text(["pkg-config", "--modversion", "webkitgtk-6.0"])
+            if gtk_toolchains["webkitgtk-6.0"] != runtime_gtk4_engine:
+                raise HarnessError(
+                    "GTK4 artifact and runtime use different webkitgtk-6.0 versions"
+                )
+            if runtime_gtk4_engine != environment["engine"]["version"]:
+                raise HarnessError(
+                    "Keld webkit2gtk-4.1 and GTK4 webkitgtk-6.0 use different engine releases"
+                )
+            environment["engine"]["name"] = "WebKitGTK (4.1 Keld / 6.0 GTK4)"
+            environment["toolchains"].extend(
+                {"name": name, "version": gtk_toolchains[name]}
+                for name in ("cc", "gtk4", "webkitgtk-6.0")
+            )
+            paint_configs.append(
+                {
+                    "arm_id": "gtk4-native",
+                    "framework": {
+                        "name": "GTK4 + WebKitGTK native",
+                        "version": gtk_toolchains["gtk4"],
+                    },
+                    "fixture_path": GTK4_FIXTURE_PATH,
+                    "fixture_sha": gtk_provenance["fixture_commit"],
+                    "artifact": gtk_artifact,
+                    "artifact_record": gtk_provenance["artifact"],
+                    "artifact_version": gtk_provenance["fixture_commit"][:12],
+                    "arguments": (),
+                    "role": "score",
+                }
+            )
+            recipe_commits.append(gtk_provenance["fixture_commit"])
+            fixtures.append(
+                {"path": GTK4_FIXTURE_PATH, "sha": gtk_provenance["fixture_commit"]}
+            )
+
+        if args.cache_state == "warm-cache":
+            for config in paint_configs:
+                priming = _paint_attempt(
+                    config["artifact"],
+                    template,
+                    0,
+                    args.timeout_seconds,
+                    config["arguments"],
+                )
+                if not priming["valid"]:
+                    raise HarnessError(
+                        f"warm-cache priming launch failed for {config['arm_id']}: "
+                        f"{priming['reject_reason']}"
+                    )
+
+        samples_by_arm: dict[str, list[dict[str, Any]]] = {
+            config["arm_id"]: [] for config in paint_configs
+        }
+        if paired:
+            config_by_id = {config["arm_id"]: config for config in paint_configs}
+            orders = paired_round_orders(
+                tuple(config_by_id), args.samples, random.SystemRandom()
+            )
+            for run, order in enumerate(orders, start=1):
+                for position, arm_id in enumerate(order, start=1):
+                    config = config_by_id[arm_id]
+                    sample = _paint_attempt(
+                        config["artifact"],
+                        template,
+                        run,
+                        args.timeout_seconds,
+                        config["arguments"],
+                    )
+                    sample["diagnostics"]["round_position"] = position
+                    samples_by_arm[arm_id].append(sample)
+        else:
+            config = paint_configs[0]
+            samples_by_arm[config["arm_id"]] = [
+                _paint_attempt(
+                    config["artifact"],
+                    template,
+                    run,
+                    args.timeout_seconds,
+                    config["arguments"],
+                )
+                for run in range(1, args.samples + 1)
+            ]
+
+        for config in paint_configs:
+            samples = samples_by_arm[config["arm_id"]]
+            arms.append(
+                {
+                    "arm_id": config["arm_id"],
+                    "framework": config["framework"],
+                    "fixture_path": config["fixture_path"],
+                    "artifact": {
+                        "sha256": config["artifact_record"]["sha256"],
+                        "basename": config["artifact"].name,
+                        "version": config["artifact_version"],
+                    },
+                    "lane": "webkitgtk",
+                    "role": config["role"],
+                    "samples": samples,
+                    "statistics": summarize(samples),
+                }
+            )
+        if paired:
+            by_id = {arm["arm_id"]: arm for arm in arms}
+            baseline = by_id["gtk4-native"]["samples"]
+            candidate = by_id["keld-linux-host"]["samples"]
+            if all(
+                arm["statistics"]["valid_samples"] == args.samples for arm in arms
+            ):
+                comparison = paired_ratio_comparison(
+                    baseline,
+                    candidate,
+                    threshold=registry["regression_rule"]["threshold_ratio"],
+                )
         notes = (
-            "External monotonic spawn-to-double-rAF image-beacon proxy. Linux no-flag app boot "
-            "is not implemented, so this is the keld-host --hello diagnostic window only. "
-            f"Power evidence: {power_evidence}."
+            "External monotonic spawn-to-double-rAF image-beacon proxy. The Keld arm uses "
+            "the declared keld-host --hello benchmark adapter rather than no-flag product boot. "
+            + (
+                "Every round runs Keld and GTK4 once with balanced randomized within-round order. "
+                if paired
+                else "This is a single-arm diagnostic. "
+            )
+            + f"Power evidence: {power_evidence}."
         )
     elif args.metric == "MEM-IDLE":
         if args.cache_state == "warm-cache":
@@ -1120,14 +1482,28 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
         ]
         artifact = bench_artifact
         artifact_record = provenance["artifacts"]["benchmark_adapter"]
-        role = "diagnostic"
-        lane = "webkitgtk"
         notes = (
             "Main-process RSS scored only after one valid double-rAF beacon and four "
             "generation-identical process censuses with <=1% main/tree RSS drift. Helper "
             "RSS, total tree RSS, and private dirty remain diagnostics. The committed "
             "loopback-navigation adapter makes this KEL-28 evidence diagnostic, not an "
             f"unmodified product score. Power evidence: {power_evidence}."
+        )
+        arms.append(
+            {
+                "arm_id": "keld-linux-host",
+                "framework": {"name": "Keld", "version": provenance["source_git_sha"][:12]},
+                "fixture_path": KELD_FIXTURE_PATH,
+                "artifact": {
+                    "sha256": artifact_record["sha256"],
+                    "basename": artifact.name,
+                    "version": provenance["source_git_sha"][:12],
+                },
+                "lane": "webkitgtk",
+                "role": "diagnostic",
+                "samples": samples,
+                "statistics": summarize(samples),
+            }
         )
     else:
         artifact = product_artifact
@@ -1141,23 +1517,38 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
                 "diagnostics": {"artifact_lane": "raw-host-binary"},
             }
         ]
-        role = "diagnostic"
-        lane = "raw-host-binary"
         notes = (
             "Byte count of the unpatched Release keld-host binary. This is a raw host lane, "
             f"not an installer or package. Power evidence: {power_evidence}."
         )
+        arms.append(
+            {
+                "arm_id": "keld-linux-host",
+                "framework": {"name": "Keld", "version": provenance["source_git_sha"][:12]},
+                "fixture_path": KELD_FIXTURE_PATH,
+                "artifact": {
+                    "sha256": artifact_record["sha256"],
+                    "basename": artifact.name,
+                    "version": provenance["source_git_sha"][:12],
+                },
+                "lane": "raw-host-binary",
+                "role": "diagnostic",
+                "samples": samples,
+                "statistics": summarize(samples),
+            }
+        )
 
-    summary = summarize(samples)
+    valid_samples = min(arm["statistics"]["valid_samples"] for arm in arms)
     reasons = _publication_reasons(
         metric_id=args.metric,
         requested_samples=args.samples,
-        valid_samples=summary["valid_samples"],
+        valid_samples=valid_samples,
         tree_state=tree_state,
         advertised=advertised,
         environment=environment,
-        provenance=provenance,
+        recipe_commits=tuple(recipe_commits),
         bench_sha=bench_sha,
+        paired=paired,
     )
     finished_utc = utc_now()
     document = {
@@ -1172,7 +1563,7 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
             "started_utc": started_utc,
             "finished_utc": finished_utc,
             "requested_samples": args.samples,
-            "interleaving": "none",
+            "interleaving": "round-robin-randomized" if paired else "none",
             "label": args.label,
             "notes": notes,
         },
@@ -1196,28 +1587,10 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
                     },
                 ],
             },
-            "fixtures": [{"path": FIXTURE_PATH, "sha": provenance["recipe_commit"]}],
+            "fixtures": fixtures,
             "payload_sha256": payload_sha,
         },
-        "arms": [
-            {
-                "arm_id": "keld-linux-host",
-                "framework": {
-                    "name": "Keld",
-                    "version": provenance["source_git_sha"][:12],
-                },
-                "fixture_path": FIXTURE_PATH,
-                "artifact": {
-                    "sha256": artifact_record["sha256"],
-                    "basename": artifact.name,
-                    "version": provenance["source_git_sha"][:12],
-                },
-                "lane": lane,
-                "role": role,
-                "samples": samples,
-                "statistics": summary,
-            }
-        ],
+        "arms": arms,
         "publication": {
             "policy_version": 2,
             "requested": args.publish,
@@ -1225,12 +1598,14 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
             "reasons": reasons,
         },
     }
+    if comparison is not None:
+        document["comparison"] = comparison
     validate_result(document)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("x", encoding="utf-8", newline="\n") as destination:
         json.dump(document, destination, indent=2, sort_keys=True)
         destination.write("\n")
-    failed = summary["valid_samples"] != args.samples
+    failed = any(arm["statistics"]["valid_samples"] != args.samples for arm in arms)
     return document, failed
 
 

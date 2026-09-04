@@ -37,7 +37,7 @@ Fixtures are organized **by operating system first**, then framework:
 | [`linux/keld/hello/`](./linux/keld/hello/) | **Release recipe** | Keld product host + loopback-navigation benchmark adapter |
 | [`linux/bench/`](./linux/bench/) | **harness** | Linux `PAINT-OPPORTUNITY`, `MEM-IDLE`, and raw-host `DISK`, with negative controls |
 | [`linux/{electron,electrobun,neutralino,nwjs,tauri,wails}/hello/`](./linux/) | stub READMEs | Linux competitor packs (AppImage / deb / etc.) |
-| [`linux/gtk4/hello/`](./linux/gtk4/hello/) | **sources + Release recipe** | Linux native floor (GTK4 + WebKitGTK 6.0); runner integration remains |
+| [`linux/gtk4/hello/`](./linux/gtk4/hello/) | **sources + Release recipe + paint arm** | Linux native floor (GTK4 + WebKitGTK 6.0) |
 
 Native floors are per-OS: Swift under `macos/` only, Win32/WinUI under
 `windows/` only, GTK4 under `linux/` only.

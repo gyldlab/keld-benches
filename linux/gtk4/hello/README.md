@@ -67,5 +67,7 @@ GTK4_FIXTURE_ARTIFACT="$PWD/linux/gtk4/hello/dist/gtk4-webkit-hello" \
   python3 linux/gtk4/hello/test_fixture.py
 ```
 
-This fixture PR does not add a benchmark result or performance claim. Linux
-runner integration and a paired Keld/native session are separate KEL-90 work.
+The Linux runner accepts this fixture as the native arm for paired
+`PAINT-OPPORTUNITY` sessions. A fixture or runner PR alone adds no benchmark
+result or performance claim; only an immutable result from a qualified run may
+state measured values.
