@@ -61,6 +61,18 @@ Rules:
   or serials. Repo-relative paths only. (The pre-contract Windows result
   JSONs violate this with `D:\WORK\...` paths; see §5 migration.)
 
+### Research-only correctness fixtures
+
+An OS-qualified fixture MAY carry a fixture-local controller for a named
+platform-correctness investigation when it does not measure a registered
+metric. Such a controller is not a second benchmark harness: it MUST NOT emit
+the versioned metric result schema, write under `*/bench/results/`, claim a
+score or publication eligibility, or duplicate a metric hook. It emits raw,
+checksummed evidence for the private research artifact store and MUST bind its
+own source, executable, environment, process lifecycle, and falsifying controls.
+If the investigation becomes a scored metric, its controller MUST move behind
+the OS `bench/` interface and the metric registry in the same change.
+
 ## 2. Harness interface
 
 Each `{os}/bench/` harness exposes two verbs. The executable form is

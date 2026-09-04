@@ -38,6 +38,7 @@ Fixtures are organized **by operating system first**, then framework:
 | [`linux/bench/`](./linux/bench/) | **harness** | Linux `PAINT-OPPORTUNITY`, `MEM-IDLE`, and raw-host `DISK`, with negative controls |
 | [`linux/{electron,electrobun,neutralino,nwjs,tauri,wails}/hello/`](./linux/) | stub READMEs | Linux competitor packs (AppImage / deb / etc.) |
 | [`linux/gtk4/hello/`](./linux/gtk4/hello/) | **sources + Release recipe + paint arm** | Linux native floor (GTK4 + WebKitGTK 6.0) |
+| [`linux/webkitgtk/dmabuf-matrix/`](./linux/webkitgtk/dmabuf-matrix/) | **research fixture** | GTK3 + WebKitGTK 4.1 opaque/transparent DMA-BUF correctness matrix (KEL-171) |
 
 Native floors are per-OS: Swift under `macos/` only, Win32/WinUI under
 `windows/` only, GTK4 under `linux/` only.

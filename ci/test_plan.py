@@ -67,6 +67,8 @@ class RouteTests(unittest.TestCase):
             "linux/gtk4/hello/build.sh",
             "linux/gtk4/hello/main.c",
             "linux/gtk4/hello/test_fixture.py",
+            "linux/webkitgtk/dmabuf-matrix/probe.c",
+            "linux/webkitgtk/dmabuf-matrix/run_matrix.py",
         ):
             with self.subTest(path=path):
                 self.assert_routes([path], "linux_gtk")
