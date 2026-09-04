@@ -720,3 +720,34 @@ Feature-branch-only v1 drafts were removed before merge rather than rewritten:
 they extended the already-shipped v1 shape, contrary to the schema-versioning
 contract. The three v2 documents linked above are the sole citable Linux KEL-90
 results; frozen v1 remains byte-identical to `main` for historical documents.
+
+### Keld diagnostic vs GTK4 native floor (2026-09-04)
+
+The landed paired runner produced one immutable
+[`PAINT-OPPORTUNITY` document](./linux/bench/results/paint-opportunity/2026-09-04.kel90-linux-keld-vs-gtk4-v2-30.fresh-process.json)
+on the same Ubuntu 26.04.1 GNOME Wayland machine. Keld source is
+`8863ff4ed22f7c3d5fdf4d39b11f06dcd9b02ccd`; both fixture recipes and the
+runner are `2219102f04c9d5dc6b44a651dce42e04133d39fd`. Both arms use WebKitGTK
+2.52.6 (Keld's 4.1 API and GTK4's 6.0 API), and each ran first in exactly 15
+of 30 balanced randomized rounds.
+
+| Arm | Valid | Median | Min | Max | p90 | Bootstrap median CI95 |
+|---|---:|---:|---:|---:|---:|---:|
+| Keld `keld-host --hello` diagnostic | 30/30 | **818.233 ms** | 305.681 | 851.736 | 837.910 | [812.1415, 824.634] |
+| GTK4 + WebKitGTK native floor | 30/30 | **405.7345 ms** | 375.101 | 471.142 | 439.725 | [401.747, 414.847] |
+
+The complete matched-round candidate/baseline ratio CI95 is
+**[1.936275, 2.040994]** against the registry threshold 1.05, so the document's
+diagnostic verdict is `FAIL`. This is not a product scoreboard verdict: the
+Keld arm deliberately measures the committed loopback-navigation `--hello`
+adapter, and independently nominal thermal state was not available. Those are
+the document's only two publication blockers.
+
+Keld observations are visibly bimodal: five valid samples fall between
+305.681 and 342.994 ms, while the other 25 fall between 803.767 and 851.736 ms.
+The result preserves every observation rather than relabeling or deleting the
+lower mode. `fresh-process` denotes a new owned process coalition, not cold OS
+caches; the paired median/bootstrap result—not the minimum—is the applicable
+diagnostic. This session closes the Linux paired-arm evidence slice of KEL-90,
+but it does not prove Keld on X11, a non-Debian distro, window controls, or the
+no-flag product path.
