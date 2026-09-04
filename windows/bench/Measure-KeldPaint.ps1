@@ -6,9 +6,11 @@
 # Measure-FirstPaint.ps1 -Prepare splices the beacon into
 # crates/keld-wv/src/hello/mod.rs and rebuilds keld-host, so no committed SHA
 # reproduces the measured binary. That contract entry also names the fix:
-# "a committed windows/keld/hello/ fixture with a build recipe". That fixture
-# now exists, and `keld dev` renders the fixture's OWN index.html, so the
+# "a committed windows/keld/hello/ fixture with a build recipe". The fixture
+# sources now exist and `keld dev` renders the fixture's OWN index.html, so the
 # beacon can live in a per-run COPY of the fixture instead of in product code.
+# The committed Release build recipe is still missing; callers supply
+# `-KeldExe`, and that artifact-provenance gap blocks publication.
 #
 # THE ORACLE MUST NOT FAVOUR THE ARM IT MEASURES
 # ----------------------------------------------

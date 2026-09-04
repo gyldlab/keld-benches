@@ -34,5 +34,9 @@ resources/js/neutralino.js
 .build/
 artifacts/
 
+# Python validation tooling
+__pycache__/
+*.py[cod]
+
 # Wails
 build/bin/
