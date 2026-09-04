@@ -592,6 +592,18 @@ class OwnedProcess:
         except ProcessLookupError:
             return
 
+    def members(self) -> tuple[ProcessIdentity, ...]:
+        """Return the current generation-bound process-group membership."""
+
+        if self.identity is None:
+            return ()
+        current = _proc_identity(self.identity.pid)
+        if current is not None and current.start_ticks != self.identity.start_ticks:
+            raise HarnessError("benchmark leader PID was reused during process census")
+        return tuple(
+            sorted(_process_group_members(self.process_group), key=lambda item: item.pid)
+        )
+
     def _terminate_remaining_members(self) -> bool:
         remaining = _process_group_members(self.process_group)
         if not remaining:
@@ -1004,7 +1016,10 @@ def paired_ratio_comparison(
     }
 
 
-def _read_artifacts(artifact_dir: pathlib.Path) -> tuple[dict[str, Any], pathlib.Path, pathlib.Path]:
+def read_keld_artifacts(
+    artifact_dir: pathlib.Path,
+) -> tuple[dict[str, Any], pathlib.Path, pathlib.Path]:
+    """Validate and return the provenance-bound Keld product and adapter binaries."""
     provenance_path = artifact_dir / "provenance.json"
     try:
         provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
@@ -1311,7 +1326,7 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
     if output.exists() or output.is_symlink():
         raise HarnessError(f"refusing to overwrite immutable result: {output.name}")
 
-    provenance, product_artifact, bench_artifact = _read_artifacts(
+    provenance, product_artifact, bench_artifact = read_keld_artifacts(
         artifact_by_fixture[KELD_FIXTURE_PATH]
     )
     bench_sha, tree_state, advertised = _git_state()

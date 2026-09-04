@@ -231,6 +231,20 @@ class ProcessOwnershipTests(unittest.TestCase):
         self.assertIsNotNone(process.returncode)
         self.assertIsNone(_proc_identity(child_pid))
 
+    def test_owned_process_exposes_generation_bound_members(self) -> None:
+        process = subprocess.Popen(
+            [sys.executable, "-c", "import signal; signal.pause()"],
+            start_new_session=True,
+        )
+        owner = OwnedProcess(process)
+        try:
+            members = owner.members()
+            self.assertEqual(len(members), 1)
+            self.assertEqual(members[0].pid, process.pid)
+            self.assertEqual(members[0].process_group, process.pid)
+        finally:
+            owner.cleanup()
+
 
 class StatisticsTests(unittest.TestCase):
     @staticmethod

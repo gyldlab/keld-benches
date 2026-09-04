@@ -196,6 +196,9 @@ def routes_for_path(path: str) -> set[str] | None:
     }:
         routes.add("linux_gtk")
 
+    if path.startswith("linux/webkitgtk/dmabuf-matrix/"):
+        routes.add("linux_gtk")
+
     if (
         (
             path.startswith("windows/bench/")
