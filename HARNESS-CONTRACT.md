@@ -12,24 +12,25 @@ bootstrap statistics, and >5% regression rule of Keld's research note
 them; when that note and this file disagree, fixing the disagreement is the
 task.
 
-## Top-priority gap, stated before any restructure
+## Windows fixture landed; Release-recipe gap remains
 
-**Windows still has no committed `keld/` fixture.** macOS has
-[`macos/keld/hello/`](./macos/keld/hello/), merged in PR #7, and Linux now has
-[`linux/keld/hello/`](./linux/keld/hello/) plus the first contract-shaped Linux
-harness. The remaining Windows gap is:
+The repository now contains [`windows/keld/hello/`](./windows/keld/hello/),
+alongside [`macos/keld/hello/`](./macos/keld/hello/) and
+[`linux/keld/hello/`](./linux/keld/hello/). The Windows fixture preserves the
+committed application bytes used by KEL-100's ordinary `keld dev` product
+evidence and closes the former source-fixture gap. It does **not** contain a
+committed build recipe for a provenance-bound Release Keld executable;
+`Measure-KeldPaint.ps1` still accepts an externally supplied `-KeldExe`. That
+artifact-reproduction gap remains before a new Windows Keld arm can publish.
 
-- The Windows harness measures Keld by splicing a beacon into
-  `keld-wv` sources inside the private Keld repo at `-Prepare` time and
-  building `keld-host.exe` there. No committed SHA in *this* repo reproduces
-  the Keld arm.
-
-First fixture work on Windows MUST be `windows/keld/hello/` (a committed build
-recipe producing a Release artifact with bound provenance, following the KEL-64
-`macos/keld/hello/build.sh` pattern), before any new Windows competitor arm or
-metric lands. Correcting a historical table from an already-committed raw file
-is not new fixture or metric work and does not make that pre-contract result
-publication eligible.
+This does not rewrite the older Windows evidence: the pre-contract
+`Measure-FirstPaint.ps1 -Prepare` sessions patched `keld-wv` sources and built
+`keld-host.exe` outside this repository, so no committed benchmark fixture
+reproduces those historical Keld arms. Correcting a table from an already
+committed raw file likewise does not make a pre-contract result publication
+eligible. New measurements MUST use committed fixtures and bound artifact
+provenance under this contract; unavailable build provenance stays an explicit
+publication blocker.
 
 ## 1. Layout convention
 
@@ -169,7 +170,9 @@ The last command is the publication negative control: it mutates one temporary
 Markdown cell and one temporary raw copy, and must observe the checker rejecting
 both mismatches. The checker binds historical raw paths to their immutable Git
 commit, blob, and SHA-256 before deriving any value. These are the repository's
-documented check targets; this repository has no CI workflow.
+documented local check targets. CI routes static and synthetic validation by
+affected OS and shared surface; hosted CI does not publish benchmark
+measurements.
 
 ## 4. Result naming
 
@@ -255,12 +258,14 @@ no parallel harness, no `Measure-SecondThing.ps1`.
 the two verbs against the same schema, fixture folders per framework, and a
 native floor contract. `schema/` is untouched; existing OSes are untouched.
 
-## 8. Keld-core hook (flagged, not implemented)
+## 8. Keld measurement hook status
 
 `IPC-RTT`, `IPC-BULK`, `BUN-READY`, and `CRASH-RECOVERY` cannot be measured
-from launched fixtures alone: they need a Keld-side measurement surface (a
-bench role or `keld-host` flag exposing spawn/HELLO/call timestamps on the
-parent clock). That is a Keld-repo decision (KEL-86 territory, blocked on
-KEL-30) and is deliberately **not** designed here. The registry entries exist
-so the ids, units, and oracles are already agreed when that surface lands;
-their `status` is `unmeasured`/`future` until then.
+from launched fixtures alone: they need an approved Keld-side measurement
+surface exposing spawn/HELLO/call timestamps on the parent clock. KEL-100's
+Windows record proves the then-current ordinary `keld dev` CLI-owned concurrent
+path without a benchmark flag; it is historical product evidence, not no-flag
+host-ownership proof and not a timing oracle. A bench role or other hook remains
+a Keld-repository decision and is deliberately not designed here. Registry
+entries preserve the agreed ids, units, and oracles; each metric stays
+`unmeasured`/`future` until direct evidence exists.

@@ -13,6 +13,7 @@
 # committed, and a global rule would renormalize vendored files.
 windows/bench/results/** text eol=lf
 schema/**                text eol=lf
+windows/bench/windows-first-paint*.json text eol=lf
 
 # Hello fixtures. Their entire value is being BYTE-IDENTICAL to `keld create
 # hello` output at the pinned Keld SHA, and `keld create` writes LF.

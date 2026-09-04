@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contract and optional real-Wayland tests for the GTK4 native floor."""
+"""Contract and optional real-display tests for the GTK4 native floor."""
 
 from __future__ import annotations
 
@@ -9,7 +9,9 @@ import selectors
 import subprocess
 import sys
 import threading
+import time
 import unittest
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
@@ -67,7 +69,103 @@ def _stop_server(server: _RedirectServer, thread: threading.Thread) -> None:
         raise AssertionError("redirect test server did not stop")
 
 
+def _wait_for_request_or_explain_exit(
+    wait_for_signal: Callable[[float], bool],
+    process: subprocess.Popen[bytes],
+    timeout: float,
+    timeout_message: str,
+) -> None:
+    deadline = time.monotonic() + timeout
+    return_code: int | None = None
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise AssertionError(f"{timeout_message}; fixture remained running")
+        if wait_for_signal(min(remaining, 0.1)):
+            return
+        return_code = process.poll()
+        if return_code is not None:
+            break
+    stderr = b""
+    if process.stderr is not None:
+        stderr = process.stderr.read(4096)
+    detail = stderr.decode("utf-8", errors="replace").strip() or "no stderr"
+    raise AssertionError(f"{timeout_message}; fixture exited {return_code}: {detail}")
+
+
+def _wait_for_exact_stderr_line(
+    process: subprocess.Popen[bytes], expected: bytes, timeout: float
+) -> None:
+    if process.stderr is None:
+        raise AssertionError("fixture stderr pipe is unavailable")
+    deadline = time.monotonic() + timeout
+    pending = bytearray()
+    observed = bytearray()
+    with selectors.DefaultSelector() as selector:
+        selector.register(process.stderr, selectors.EVENT_READ)
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not selector.select(max(remaining, 0)):
+                detail = observed[-4096:].decode("utf-8", errors="replace")
+                raise AssertionError(
+                    f"fixture did not emit {expected!r}; stderr tail: {detail!r}"
+                )
+            chunk = os.read(process.stderr.fileno(), 4096)
+            if not chunk:
+                detail = observed[-4096:].decode("utf-8", errors="replace")
+                raise AssertionError(
+                    f"fixture stderr closed before {expected!r}; stderr tail: {detail!r}"
+                )
+            pending.extend(chunk)
+            observed.extend(chunk)
+            while b"\n" in pending:
+                line, _, remainder = pending.partition(b"\n")
+                pending = bytearray(remainder)
+                if line + b"\n" == expected:
+                    return
+
+
 class Gtk4FixtureTests(unittest.TestCase):
+    def test_early_fixture_exit_preserves_stderr_diagnostic(self) -> None:
+        process = subprocess.Popen(
+            ["/bin/sh", "-c", "echo synthetic-display-failure >&2; exit 7"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        try:
+            with self.assertRaisesRegex(
+                AssertionError, "fixture exited 7: synthetic-display-failure"
+            ):
+                _wait_for_request_or_explain_exit(
+                    threading.Event().wait,
+                    process,
+                    1,
+                    "fixture did not request",
+                )
+        finally:
+            process.wait(timeout=2)
+            if process.stderr is not None:
+                process.stderr.close()
+
+    def test_stderr_marker_allows_prior_diagnostic_lines(self) -> None:
+        process = subprocess.Popen(
+            [
+                "/bin/sh",
+                "-c",
+                "printf '\\nwarning\\nKELD-BENCH-URL-BLOCKED\\n' >&2",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        try:
+            _wait_for_exact_stderr_line(
+                process, b"KELD-BENCH-URL-BLOCKED\n", timeout=1
+            )
+        finally:
+            process.wait(timeout=2)
+            if process.stderr is not None:
+                process.stderr.close()
+
     def test_committed_source_declares_one_gtk4_webkitgtk_window(self) -> None:
         source = SOURCE.read_text(encoding="utf-8")
         for required in (
@@ -138,12 +236,15 @@ class Gtk4FixtureTests(unittest.TestCase):
         )
         owner = OwnedProcess(process)
         try:
-            self.assertTrue(origin.observed.wait(5), "fixture did not request the approved URL")
-            self.assertIsNotNone(process.stderr)
-            with selectors.DefaultSelector() as selector:
-                selector.register(process.stderr, selectors.EVENT_READ)
-                self.assertTrue(selector.select(5), "fixture did not report the blocked redirect")
-            self.assertEqual(process.stderr.readline(), b"KELD-BENCH-URL-BLOCKED\n")
+            _wait_for_request_or_explain_exit(
+                origin.observed.wait,
+                process,
+                5,
+                "fixture did not request the approved URL",
+            )
+            _wait_for_exact_stderr_line(
+                process, b"KELD-BENCH-URL-BLOCKED\n", timeout=5
+            )
             self.assertFalse(target.observed.is_set(), "fixture followed the rejected redirect")
             self.assertIsNone(process.poll(), "fixture exited after rejecting the redirect")
         finally:
@@ -154,7 +255,7 @@ class Gtk4FixtureTests(unittest.TestCase):
             _stop_server(target, target_thread)
         self.assertFalse(target.observed.is_set(), "redirect target was requested during cleanup")
 
-    def test_real_wayland_window_emits_exact_double_raf_beacon_and_reaps(self) -> None:
+    def test_real_display_window_emits_exact_double_raf_beacon_and_reaps(self) -> None:
         artifact = os.environ.get("GTK4_FIXTURE_ARTIFACT")
         if not artifact or os.environ.get("GTK4_FIXTURE_REAL") != "1":
             self.skipTest("set GTK4_FIXTURE_ARTIFACT and GTK4_FIXTURE_REAL=1")
@@ -165,12 +266,17 @@ class Gtk4FixtureTests(unittest.TestCase):
             env={**os.environ, "KELD_BENCH_URL": server.page_url},
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
             start_new_session=True,
         )
         owner = OwnedProcess(process)
         try:
-            self.assertTrue(server.wait_for_beacon(15), "native GTK4 beacon timed out")
+            _wait_for_request_or_explain_exit(
+                server.wait_for_beacon,
+                process,
+                15,
+                "native GTK4 beacon timed out",
+            )
             snapshot = server.snapshot()
             self.assertEqual(snapshot.page_requests, 1)
             self.assertEqual(snapshot.beacon_requests, 1)
@@ -180,6 +286,8 @@ class Gtk4FixtureTests(unittest.TestCase):
         finally:
             owner.cleanup()
             server.close()
+            if process.stderr is not None:
+                process.stderr.close()
         self.assertIsNotNone(process.returncode)
 
 

@@ -11,10 +11,11 @@ nonce-bound double-`requestAnimationFrame` image beacon emitted by
 `index.html`. The normal binary behavior is unchanged when
 `KELD_BENCH_URL` is absent.
 
-This fixture measures the Linux `keld-host --hello` diagnostic window. It is
-not the full no-flag app session: Linux `keld dev` still fails closed pending
-KEL-96/T4. Results must keep that limitation in their session notes and must
-not claim Bun readiness, app-link lifecycle, or application first paint.
+This fixture measures the Linux `keld-host --hello` diagnostic window, not the
+full no-flag app session. The adapter and its committed results predate the
+later no-flag product path; those historical documents retain their host-only
+scope. They must keep that limitation in their session notes and must not claim
+Bun readiness, app-link lifecycle, or application first paint.
 
 ## Build
 

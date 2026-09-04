@@ -12,7 +12,6 @@ output_dir=$3
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 clean_git() {
   /usr/bin/env -i \
-    HOME=/var/empty \
     PATH=/usr/bin:/bin \
     LC_ALL=C \
     GIT_CONFIG_NOSYSTEM=1 \

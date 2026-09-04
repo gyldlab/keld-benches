@@ -1,0 +1,2 @@
+# path	class	max_bytes	observed_bytes	encoding	implementation	max_tokens	observed_tokens	owner	trigger
+AGENTS.md	always	4096	3240	o200k_base	tiktoken@0.14.0	1024	681	benchmark-evidence-floor	always
