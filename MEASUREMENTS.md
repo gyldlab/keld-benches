@@ -700,9 +700,11 @@ the DISK value.
 ### Honest reading
 
 All three documents are intentionally `publication.eligible: false`. Thermal
-state was not independently verified and there is no paired Linux arm. Paint
-and memory measure the committed `keld-host --hello` loopback-navigation
-adapter because Linux KEL-96/T4 no-flag application boot is unavailable;
+state was not independently verified and that historical session had no paired
+Linux arm. Paint and memory measure the committed `keld-host --hello`
+loopback-navigation adapter because Linux KEL-96/T4 no-flag application boot
+was unavailable at the recorded Keld commit; the product path has since landed,
+but that does not retroactively change what these immutable documents measured;
 memory therefore also records `BENCHMARK_ADAPTER_ARTIFACT`. DISK is a single
 raw-host lane, where repeating a deterministic file-size read thirty times
 would manufacture sample count rather than evidence.
@@ -711,8 +713,8 @@ The 813.777 ms and 163,686 KiB medians sit above architecture targets, but they
 are diagnostics, not pass/fail verdicts or a cross-OS comparison. The paint
 minimum is a real fresh-process observation under uncontrolled OS caches, not a
 separate warm-cache class and not a value to publish alone. This section does
-not close KEL-28: real X11, a non-Debian distro, window controls, and the full
-no-flag product path remain unverified.
+not close KEL-28: real X11, a non-Debian distro, and window controls remain
+unverified. The later no-flag product path is separate KEL-100/KEL-96 evidence.
 
 Feature-branch-only v1 drafts were removed before merge rather than rewritten:
 they extended the already-shipped v1 shape, contrary to the schema-versioning

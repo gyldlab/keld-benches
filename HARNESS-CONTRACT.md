@@ -131,8 +131,9 @@ documents continue to validate against frozen `schema/result.v1.schema.json`:
   `statistics` carries median / p90 / p99 (where sample count supports them)
   and a bootstrap 95% CI of the median — no normal-distribution assumption.
 - `comparison` (optional) carries the paired candidate/baseline ratio CI and
-  the `PASS | FAIL | INCONCLUSIVE` verdict against threshold 1.05 — the
-  falsifiable form of Keld's >5% regression rule.
+  the `PASS | FAIL | INCONCLUSIVE` verdict against the registry's
+  `regression_rule.threshold_ratio`. A harness MUST omit comparison when any
+  requested arm/round is invalid; complete-case deletion can bias the verdict.
 - `publication` is mandatory. `eligible: false` documents are valid
   diagnostics; they MUST NOT feed scoreboard `vs` cells. Publication requires,
   at minimum: registry sample policy met, balanced randomized interleaving by
@@ -224,7 +225,7 @@ implementation mandate — the apps land in their own PRs.
 |---|---|---|---|
 | macOS | `macos/swift/appkit-wk/`, `macos/swift/swiftui-wk/` | AppKit / SwiftUI + WKWebView | sources committed, measured |
 | Windows | `windows/winui/hello/` | Win32 (or WinUI 3) + WebView2 | contract committed, app absent |
-| Linux | `linux/gtk4/hello/` | GTK4 + WebKitGTK | sources + Release recipe; runner integration pending |
+| Linux | `linux/gtk4/hello/` | GTK4 + WebKitGTK | sources + Release recipe + Linux paired paint arm |
 
 Each native fixture MUST: create one window, load the canonical hello payload
 in the OS system webview, emit the standard double-rAF beacon with no

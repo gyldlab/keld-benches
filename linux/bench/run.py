@@ -17,7 +17,7 @@ def parser() -> argparse.ArgumentParser:
     run = commands.add_parser("run", help="run one Linux metric")
     run.add_argument("--metric", required=True, choices=IMPLEMENTED_METRICS)
     run.add_argument("--fixture", required=True, action="append")
-    run.add_argument("--artifact-dir", required=True)
+    run.add_argument("--artifact-dir", required=True, action="append")
     run.add_argument("--samples", type=int, required=True)
     run.add_argument(
         "--cache-state",
@@ -49,10 +49,11 @@ def main() -> int:
         if not 0 < args.timeout_seconds <= 120:
             raise HarnessError("--timeout-seconds must be in (0, 120]")
         document, failed = run_metric(args)
-        print(
-            f"wrote {args.out}: {document['metric']['id']} "
-            f"valid={document['arms'][0]['statistics']['valid_samples']}/{args.samples}"
+        valid = ",".join(
+            f"{arm['arm_id']}={arm['statistics']['valid_samples']}/{args.samples}"
+            for arm in document["arms"]
         )
+        print(f"wrote {args.out}: {document['metric']['id']} valid={valid}")
         if failed:
             return 2
         if args.publish and not document["publication"]["eligible"]:
