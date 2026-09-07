@@ -338,7 +338,7 @@ index f5a144d..df9075a 100644
      #[cfg(target_os = "macos")]
      {
 diff --git a/crates/keld-wv/src/lib.rs b/crates/keld-wv/src/lib.rs
-index ab7e0d2..8a18a29 100644
+index 90e23eb..0de6bf7 100644
 --- a/crates/keld-wv/src/lib.rs
 +++ b/crates/keld-wv/src/lib.rs
 @@ -9,6 +9,8 @@
@@ -351,29 +351,27 @@ index ab7e0d2..8a18a29 100644
  mod error;
  mod hello;
 diff --git a/crates/keld-wv/src/wkwebview/mod.rs b/crates/keld-wv/src/wkwebview/mod.rs
-index d268b7b..075e472 100644
+index d53891a..7625a50 100644
 --- a/crates/keld-wv/src/wkwebview/mod.rs
 +++ b/crates/keld-wv/src/wkwebview/mod.rs
-@@ -142,7 +142,7 @@ impl WebEngine for WkWebViewEngine {
+@@ -259,6 +259,7 @@ impl WkWebViewEngine {
              .with_closable(true)
              .build(event_loop)
-             .map_err(|e| WvError::Window(e.to_string()))?;
--
+             .map_err(|error| WvError::Window(error.to_string()))?;
 +        crate::bench_trace::record(crate::bench_trace::Stage::WindowBuilt)?;
-         // Developer extras are debug-only until keld-guard owns `web.devtools`.
-         let builder = wry::WebViewBuilder::new();
-         #[cfg(debug_assertions)]
-@@ -157,7 +157,8 @@ impl WebEngine for WkWebViewEngine {
-         let webview = builder
-             .build(&window)
-             .map_err(|e| WvError::Webview(e.to_string()))?;
--
+         mark_startup(&self.startup, StartupPhase::WindowCreated);
+         let id = self.next_id;
+         let builder = guarded_default_media_builder(
+@@ -266,6 +267,8 @@ impl WkWebViewEngine {
+             page_load_trace_handler(Arc::clone(&self.startup), app_events),
+         );
+         let webview = builder.build_initial_window(&spec.initial, &window)?;
 +        crate::bench_trace::record(crate::bench_trace::Stage::WebviewBuilt)?;
 +        crate::bench_trace::flush()?;
-         let id = self.next_id;
+         mark_startup(&self.startup, StartupPhase::WebviewAttached);
          self.next_id += 1;
-         self.views.insert(id, View { window, webview });
-@@ -220,6 +221,7 @@ impl WkWebViewEngineExt for WkWebViewEngine {}
+         self.views.insert(id, View { webview, window });
+@@ -566,6 +569,7 @@ mod startup_tests {
  /// Returns [`WvError`] if window or webview creation fails.
  pub fn run_hello(spec: &WebviewSpec) -> Result<(), WvError> {
      let mut engine = WkWebViewEngine::new();
