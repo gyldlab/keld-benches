@@ -1,0 +1,25 @@
+[package]
+name = "kel129-kipc-rust-echo"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Pinned to the exact Keld commit this fixture was built and measured against.
+# Never `path = "..."` to a local checkout: that would not be reproducible by
+# a second operator. Re-pin by editing this one line plus the frontmatter of
+# the research note that cites this fixture.
+[dependencies]
+keld-ipc = { git = "https://github.com/gyldlab/keld.git", rev = "4fbf94bbb755854058067b986877177f00b25a39" }
+serde_json = "1"
+
+[[bin]]
+name = "kel129-echo-server"
+path = "src/server.rs"
+
+[[bin]]
+name = "kel129-echo-client"
+path = "src/client.rs"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
