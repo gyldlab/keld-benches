@@ -30,3 +30,7 @@ windows/bench/windows-first-paint*.json text eol=lf
 # cited the broken macOS one as evidence -- the exact drift a second copy
 # produces.
 */keld/hello/** text eol=lf
+
+# Raw IPC timing corpora are evidence payloads, not reviewable line-oriented source.
+# Keep exact bytes in Git but suppress text diffs; producers emit compact JSON.
+*/bench/results/ipc-rtt/*.raw.json -diff text eol=lf
