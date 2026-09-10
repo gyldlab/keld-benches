@@ -147,11 +147,21 @@ fn main() -> std::process::ExitCode {
     let handshake_ns = handshake_start.elapsed().as_nanos() as u64;
 
     if bad_token {
+        // handshake_server (crates/keld-ipc/src/link.rs) returns Err and
+        // closes without writing a reply on a token mismatch, by design
+        // (admission.rs: a peer must not be able to distinguish "wrong
+        // token" from any other pre-auth failure over the wire). So the
+        // client can only ever observe a plain I/O EOF here, never
+        // IpcError::HelloAuth directly; that is why this check is
+        // necessary-but-not-sufficient and the README's negative-control
+        // procedure additionally greps the server's own stderr log for
+        // KELD-IPC-007 as the authoritative confirmation.
         return match first {
-            Err(_) => {
-                // Correct: the negative control must fail and must not
-                // produce any output file.
-                println!("bad-token negative control: rejected as expected");
+            Err(error) => {
+                println!(
+                    "bad-token negative control: client saw {error} \
+                     (consistent with rejection; confirm KELD-IPC-007 in the server log)"
+                );
                 std::process::ExitCode::SUCCESS
             }
             Ok(_) => {

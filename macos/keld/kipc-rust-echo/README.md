@@ -26,8 +26,12 @@ change there will fail this fixture's build, not silently drift its meaning.
 
 ```bash
 cd macos/keld/kipc-rust-echo
-cargo build --release
+cargo build --release --locked
 ```
+
+`--locked` uses the committed `Cargo.lock` as-is instead of re-resolving, so a
+second operator builds the exact dependency graph this fixture was measured
+against.
 
 ## Negative control
 
@@ -35,16 +39,33 @@ The server must reject a forged token before any call is dispatched, and the
 client must produce no output file when that happens:
 
 ```bash
-SOCK=/tmp/kel129-neg.sock; LINK=/tmp/kel129-neg-link.txt
-rm -f "$SOCK" "$LINK"
-./target/release/kel129-echo-server "$SOCK" "$LINK" &
+SOCK=/tmp/kel129-neg.sock; LINK=/tmp/kel129-neg-link.txt; SERVER_ERR=/tmp/kel129-neg-server.err
+rm -f "$SOCK" "$LINK" "$SERVER_ERR" /tmp/should-not-exist.json
+./target/release/kel129-echo-server "$SOCK" "$LINK" 2>"$SERVER_ERR" &
+SERVER_PID=$!
 sleep 0.3
 ./target/release/kel129-echo-client "$LINK" small 100 /tmp/should-not-exist.json --bad-token
-test ! -e /tmp/should-not-exist.json && echo "negative control passed"
+CLIENT_STATUS=$?
+wait "$SERVER_PID"
+SERVER_STATUS=$?
+test "$CLIENT_STATUS" -eq 0 \
+  && test "$SERVER_STATUS" -ne 0 \
+  && grep -q KELD-IPC-007 "$SERVER_ERR" \
+  && test ! -e /tmp/should-not-exist.json \
+  && echo "negative control passed"
 ```
 
-Verified 2026-09-10 on this device: server logged `KELD-IPC-007` and exited
-non-zero; client reported the rejection and wrote no file.
+The client alone cannot distinguish a token rejection from any other
+connection failure: on a mismatch, `handshake_server` closes the stream
+without writing a reply (`crates/keld-ipc/src/link.rs`, by design — a peer
+must not be able to tell "wrong token" from any other pre-auth failure over
+the wire), so the client only ever observes a plain I/O EOF. The client's
+exit code therefore just confirms it did *not* see a successful echo
+(`Ok(_)` is always `FAILURE`); the server's own stderr log is the
+authoritative signal, which is why the compound check above greps it for
+`KELD-IPC-007` rather than trusting the client's exit code alone. Verified
+2026-09-10 on this device: server logged `KELD-IPC-007` and exited
+non-zero; client exited zero and wrote no file.
 
 ## Run one session
 
