@@ -7,16 +7,21 @@ or operation.
 
 The probe requires a real SQL create/insert/select operation, a registered synchronous
 SQL callback, deterministic teardown, and a failing unknown-column query. It emits the
-loaded package version, runtime revision, Node-API value when exposed, native binary
-digest, and each observable. A failed install/import must be retained as a failure rather
-than replaced with the other package.
+loaded package version, runtime revision, Node-API value when exposed, selected native
+binary digest, successfully loaded binary digest, and each observable. A failed native
+load during `Database` construction retains its selected binary and failure details; it
+is not reported as a successfully loaded binary.
 
 Run from this directory after installing the locked aliases. `run.cjs` retains each command, stdout, stderr and exit in a checksummed raw receipt; the older summary is superseded and is not reconstructed as raw evidence:
 
 ```powershell
 bun install
+node --test run.test.cjs
 node run.cjs
 ```
 
-Generated `node_modules`, lockfiles, and raw command output are local evidence until a
-reviewed immutable artifact record names their digests.
+Each invocation uses a fresh run id and refuses to reuse any output in that set before
+launching a subprocess. An invalid matrix writes only its fresh raw diagnostic receipt;
+it cannot mix new raw output with an older summary or evidence row. Generated
+`node_modules` and uncommitted command output remain local evidence until a reviewed
+immutable artifact record names their digests.
