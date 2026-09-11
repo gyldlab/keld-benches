@@ -1,6 +1,6 @@
 {
   "schema": "kel215.native-addon-receipt/v1",
-  "fixture_sha256": "3b92a32524773044b40ae1bd7038acdab4a54ce1898fca97c1f20cbcdfaedc79",
+  "fixture_sha256": "84343a0dcba9fec84ae4c8bd0f4dff2134fd7641b95baf11a010b95ecdccc5a8",
   "lock_sha256": "3a679b849e438e549b384d612844d11ce2bc12ff6ea53a372c31b5ffcffafa03",
   "package_sha256": "43be0b352777a6165b946ec624a929fe753b684eabd24ccf207b01e3b4a29c0d",
   "runtimes": {
@@ -17,8 +17,8 @@
     {
       "command": "bun probe.cjs better-sqlite3-12",
       "exit_code": 1,
-      "stdout": "",
-      "stderr": "107 |         return opts[p] || p;\n108 |       })\n109 |     );\n110 |     tries.push(n);\n111 |     try {\n112 |       b = opts.path ? requireFunc.resolve(n) : requireFunc(n);\n                                                     ^\nerror: 'better-sqlite3' is not yet supported in Bun.\nTrack the status in https://github.com/oven-sh/bun/issues/4290\nIn the meantime, you could try bun:sqlite which has a similar API.\n code: \"ERR_DLOPEN_FAILED\"\n\n      at bindings (D:\\WORK\\keld-benches-kel215\\windows\\bun\\better-sqlite3-differential\\node_modules\\bindings\\bindings.js:112:48)\n      at new Database (D:\\WORK\\keld-benches-kel215\\windows\\bun\\better-sqlite3-differential\\node_modules\\better-sqlite3-12\\lib\\database.js:48:29)\n      at <anonymous> (D:\\WORK\\keld-benches-kel215\\windows\\bun\\better-sqlite3-differential\\probe.cjs:27:12)\n\nBun v1.4.2 (Windows x64)\n"
+      "stdout": "{\"package\":\"better-sqlite3\",\"version\":\"12.11.1\",\"runtime\":\"bun\",\"runtime_revision\":\"744846f844374847c902b5e7fd59b4342a51ef99\",\"runtime_node_api\":\"10\",\"selected_artifact\":{\"path\":\"node_modules/better-sqlite3-12/build/Release/better_sqlite3.node\",\"sha256\":\"707a4b480026ccd1fb8e308d43c7248e779d35eeefa09559ec9bb521bb97bb3b\"},\"attempted_load\":\"failed\",\"error_code\":\"ERR_DLOPEN_FAILED\",\"error\":\"'better-sqlite3' is not yet supported in Bun.\\nTrack the status in https://github.com/oven-sh/bun/issues/4290\\nIn the meantime, you could try bun:sqlite which has a similar API.\"}\n",
+      "stderr": ""
     },
     {
       "command": "node probe.cjs better-sqlite3-13",

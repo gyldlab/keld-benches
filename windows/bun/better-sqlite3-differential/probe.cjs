@@ -24,7 +24,12 @@ const packageJson = require(`${packageName}/package.json`);
 const packageRoot = path.dirname(require.resolve(`${packageName}/package.json`));
 const selectedArtifact = selectedNativeArtifact(packageRoot);
 const Database = require(packageName);
-const db = new Database(":memory:");
+let db;
+try { db = new Database(":memory:"); } catch (error) {
+  console.log(JSON.stringify({ package: packageJson.name, version: packageJson.version, runtime: process.versions.bun ? "bun" : "node", runtime_revision: process.versions.bun ? Bun.revision : process.version, runtime_node_api: process.versions.napi || null, selected_artifact: selectedArtifact, attempted_load: "failed", error_code: error.code || error.name, error: error.message }));
+  process.exitCode = 1;
+  return;
+}
 let result;
 let negative;
 try {
