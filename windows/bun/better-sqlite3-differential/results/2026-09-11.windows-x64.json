@@ -1,0 +1,13 @@
+{
+  "fixture": "kel215-better-sqlite3-differential",
+  "platform": "windows",
+  "arch": "x86_64",
+  "bun": "1.4.2+744846f844374847c902b5e7fd59b4342a51ef99",
+  "node": "v25.2.1",
+  "runs": [
+    {"runtime":"bun","package":"better-sqlite3","version":"13.0.3","node_api":"10","artifact_sha256":"e21e5efd71fba66578e95b62554d9028064a80dafd7221bf8a8ef155de8d240a","result":"pass","query_callback_result":42,"negative_control":"SQLITE_ERROR","teardown":"closed"},
+    {"runtime":"bun","package":"better-sqlite3","version":"12.11.1","result":"fail","error_code":"ERR_DLOPEN_FAILED","error":"better-sqlite3 is not yet supported in Bun"},
+    {"runtime":"node","package":"better-sqlite3","version":"13.0.3","node_api":"10","artifact_sha256":"e21e5efd71fba66578e95b62554d9028064a80dafd7221bf8a8ef155de8d240a","result":"pass","query_callback_result":42,"negative_control":"SQLITE_ERROR","teardown":"closed"},
+    {"runtime":"node","package":"better-sqlite3","version":"12.11.1","node_api":"10","artifact_sha256":"707a4b480026ccd1fb8e308d43c7248e779d35eeefa09559ec9bb521bb97bb3b","result":"pass","query_callback_result":42,"negative_control":"SQLITE_ERROR","teardown":"closed"}
+  ]
+}
