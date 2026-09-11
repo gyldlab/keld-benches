@@ -2,12 +2,78 @@
   "fixture": "kel215-better-sqlite3-differential",
   "platform": "windows",
   "arch": "x86_64",
-  "bun": "1.4.2+744846f844374847c902b5e7fd59b4342a51ef99",
-  "node": "v25.2.1",
+  "receipt_sha256": "58a9dba42dc28d1ae740362e0d2906b50f7a69a3e4f7e879bb76090e8faf0752",
   "runs": [
-    {"runtime":"bun","package":"better-sqlite3","version":"13.0.3","node_api":"10","artifact_sha256":"e21e5efd71fba66578e95b62554d9028064a80dafd7221bf8a8ef155de8d240a","result":"pass","query_callback_result":42,"negative_control":"SQLITE_ERROR","teardown":"closed"},
-    {"runtime":"bun","package":"better-sqlite3","version":"12.11.1","result":"fail","error_code":"ERR_DLOPEN_FAILED","error":"better-sqlite3 is not yet supported in Bun"},
-    {"runtime":"node","package":"better-sqlite3","version":"13.0.3","node_api":"10","artifact_sha256":"e21e5efd71fba66578e95b62554d9028064a80dafd7221bf8a8ef155de8d240a","result":"pass","query_callback_result":42,"negative_control":"SQLITE_ERROR","teardown":"closed"},
-    {"runtime":"node","package":"better-sqlite3","version":"12.11.1","node_api":"10","artifact_sha256":"707a4b480026ccd1fb8e308d43c7248e779d35eeefa09559ec9bb521bb97bb3b","result":"pass","query_callback_result":42,"negative_control":"SQLITE_ERROR","teardown":"closed"}
+    {
+      "package": "better-sqlite3",
+      "version": "13.0.3",
+      "runtime": "bun",
+      "runtime_revision": "744846f844374847c902b5e7fd59b4342a51ef99",
+      "runtime_node_api": "10",
+      "addon_abi": "node-api-10 (binding.gyp)",
+      "selected_artifact": {
+        "path": "node_modules/better-sqlite3-13/prebuilds/win32-x64.node",
+        "sha256": "e21e5efd71fba66578e95b62554d9028064a80dafd7221bf8a8ef155de8d240a"
+      },
+      "artifact": {
+        "path": "node_modules/better-sqlite3-13/prebuilds/win32-x64.node",
+        "sha256": "e21e5efd71fba66578e95b62554d9028064a80dafd7221bf8a8ef155de8d240a"
+      },
+      "query_callback_result": 42,
+      "negative_control": "SQLITE_ERROR",
+      "teardown": "closed"
+    },
+    {
+      "package": "better-sqlite3",
+      "version": "12.11.1",
+      "runtime": "bun",
+      "runtime_revision": "744846f844374847c902b5e7fd59b4342a51ef99",
+      "runtime_node_api": "10",
+      "selected_artifact": {
+        "path": "node_modules/better-sqlite3-12/build/Release/better_sqlite3.node",
+        "sha256": "707a4b480026ccd1fb8e308d43c7248e779d35eeefa09559ec9bb521bb97bb3b"
+      },
+      "attempted_load": "failed",
+      "error_code": "ERR_DLOPEN_FAILED",
+      "error": "'better-sqlite3' is not yet supported in Bun.\nTrack the status in https://github.com/oven-sh/bun/issues/4290\nIn the meantime, you could try bun:sqlite which has a similar API."
+    },
+    {
+      "package": "better-sqlite3",
+      "version": "13.0.3",
+      "runtime": "node",
+      "runtime_revision": "v25.2.1",
+      "runtime_node_api": "10",
+      "addon_abi": "node-api-10 (binding.gyp)",
+      "selected_artifact": {
+        "path": "node_modules/better-sqlite3-13/prebuilds/win32-x64.node",
+        "sha256": "e21e5efd71fba66578e95b62554d9028064a80dafd7221bf8a8ef155de8d240a"
+      },
+      "artifact": {
+        "path": "node_modules/better-sqlite3-13/prebuilds/win32-x64.node",
+        "sha256": "e21e5efd71fba66578e95b62554d9028064a80dafd7221bf8a8ef155de8d240a"
+      },
+      "query_callback_result": 42,
+      "negative_control": "SQLITE_ERROR",
+      "teardown": "closed"
+    },
+    {
+      "package": "better-sqlite3",
+      "version": "12.11.1",
+      "runtime": "node",
+      "runtime_revision": "v25.2.1",
+      "runtime_node_api": "10",
+      "addon_abi": "v8-node-abi (source audit)",
+      "selected_artifact": {
+        "path": "node_modules/better-sqlite3-12/build/Release/better_sqlite3.node",
+        "sha256": "707a4b480026ccd1fb8e308d43c7248e779d35eeefa09559ec9bb521bb97bb3b"
+      },
+      "artifact": {
+        "path": "node_modules/better-sqlite3-12/build/Release/better_sqlite3.node",
+        "sha256": "707a4b480026ccd1fb8e308d43c7248e779d35eeefa09559ec9bb521bb97bb3b"
+      },
+      "query_callback_result": 42,
+      "negative_control": "SQLITE_ERROR",
+      "teardown": "closed"
+    }
   ]
 }
