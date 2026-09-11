@@ -11,14 +11,11 @@ loaded package version, runtime revision, Node-API value when exposed, native bi
 digest, and each observable. A failed install/import must be retained as a failure rather
 than replaced with the other package.
 
-Run from this directory after installing the locked aliases:
+Run from this directory after installing the locked aliases. `run.cjs` retains each command, stdout, stderr and exit in a checksummed raw receipt; the older summary is superseded and is not reconstructed as raw evidence:
 
 ```powershell
 bun install
-bun probe.cjs better-sqlite3-13
-bun probe.cjs better-sqlite3-12
-node probe.cjs better-sqlite3-13
-node probe.cjs better-sqlite3-12
+node run.cjs
 ```
 
 Generated `node_modules`, lockfiles, and raw command output are local evidence until a
