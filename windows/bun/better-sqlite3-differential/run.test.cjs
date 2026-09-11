@@ -1,8 +1,10 @@
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
+const path = require("node:path");
 const test = require("node:test");
 const { execute, outputPaths, validatePositive } = require("./run.cjs");
+const { selectedNativeArtifact } = require("./probe.cjs");
 
 const root = __dirname;
 const artifact = {
@@ -16,7 +18,10 @@ function positive(overrides = {}) {
     version: "13.0.3",
     runtime: "bun",
     runtime_revision: "744846f844374847c902b5e7fd59b4342a51ef99",
+    runtime_node_api: "10",
+    addon_abi: "node-api-10 (binding.gyp)",
     selected_artifact: artifact,
+    native_candidates: [artifact],
     artifact,
     query_callback_result: 42,
     negative_control: "SQLITE_ERROR",
@@ -32,9 +37,9 @@ function successfulRows() {
   };
   return [
     { status: 0, stdout: `${JSON.stringify(positive())}\n`, stderr: "" },
-    { status: 1, stdout: `${JSON.stringify({ package: "better-sqlite3", version: "12.11.1", runtime: "bun", runtime_revision: "744846f844374847c902b5e7fd59b4342a51ef99", selected_artifact: bun12Artifact, attempted_load: "failed", error_code: "ERR_DLOPEN_FAILED", error: "unsupported" })}\n`, stderr: "" },
+    { status: 1, stdout: `${JSON.stringify({ package: "better-sqlite3", version: "12.11.1", runtime: "bun", runtime_revision: "744846f844374847c902b5e7fd59b4342a51ef99", runtime_node_api: "10", selected_artifact: bun12Artifact, native_candidates: [bun12Artifact], attempted_load: "failed", error_code: "ERR_DLOPEN_FAILED", error: "unsupported" })}\n`, stderr: "" },
     { status: 0, stdout: `${JSON.stringify(positive({ runtime: "node", runtime_revision: "v25.2.1" }))}\n`, stderr: "" },
-    { status: 0, stdout: `${JSON.stringify(positive({ version: "12.11.1", runtime: "node", runtime_revision: "v25.2.1", selected_artifact: bun12Artifact, artifact: bun12Artifact }))}\n`, stderr: "" },
+    { status: 0, stdout: `${JSON.stringify(positive({ version: "12.11.1", runtime: "node", runtime_revision: "v25.2.1", addon_abi: undefined, selected_artifact: bun12Artifact, native_candidates: [bun12Artifact], artifact: bun12Artifact }))}\n`, stderr: "" },
   ];
 }
 
@@ -54,8 +59,8 @@ function fakeIo(existing = new Set()) {
 
 function spawnSequence(probes = successfulRows()) {
   const results = [
-    { status: 0, stdout: '{"version":"1.4.2","revision":"744846f844374847c902b5e7fd59b4342a51ef99"}\n', stderr: "" },
-    { status: 0, stdout: "v25.2.1\n", stderr: "" },
+    { status: 0, stdout: '{"version":"1.4.2","revision":"744846f844374847c902b5e7fd59b4342a51ef99","napi":"10"}\n', stderr: "" },
+    { status: 0, stdout: '{"version":"v25.2.1","napi":"10"}\n', stderr: "" },
     ...probes,
   ];
   let calls = 0;
@@ -67,19 +72,44 @@ function spawnSequence(probes = successfulRows()) {
 
 test("positive rows reject wrong identity and missing operation fields", () => {
   const expected = { runtime: "bun", version: "13.0.3" };
-  const revision = "744846f844374847c902b5e7fd59b4342a51ef99";
+  expected.addonAbi = "node-api-10 (binding.gyp)";
+  const runtime = { probe: "744846f844374847c902b5e7fd59b4342a51ef99", napi: "10" };
   for (const mutation of [
     { package: "other" },
     { version: "12.11.1" },
     { runtime: "node" },
     { runtime_revision: "WRONG" },
+    { runtime_node_api: "WRONG" },
+    { addon_abi: "WRONG" },
     { query_callback_result: undefined },
     { negative_control: undefined },
     { teardown: undefined },
     { artifact: undefined },
     { artifact: { ...artifact, sha256: "a".repeat(64) } },
   ]) {
-    assert.equal(validatePositive(positive(mutation), expected, revision), false, JSON.stringify(mutation));
+    assert.equal(validatePositive(positive(mutation), expected, runtime), false, JSON.stringify(mutation));
+  }
+});
+
+test("12.11.1 uses its bindings loader result when both candidate files exist", () => {
+  const packageRoot = path.join(root, "node_modules", "better-sqlite3-12");
+  const build = path.join(packageRoot, "build", "Release", "better_sqlite3.node");
+  const selected = selectedNativeArtifact(packageRoot, "12.11.1", {
+    existsSync: () => true,
+    readFileSync: (file) => Buffer.from(file),
+    resolveBindings: () => build,
+  });
+  assert.equal(selected.selected.path, "node_modules/better-sqlite3-12/build/Release/better_sqlite3.node");
+  assert.equal(selected.candidates.length, 2);
+});
+
+test("hostile run ids fail before any process launch or write", () => {
+  for (const runId of ["../../escape", "..\\..\\escape", "nested/name", "nested\\name", "", "x".repeat(129)]) {
+    const io = fakeIo();
+    const sequence = spawnSequence();
+    assert.throws(() => execute({ root, runId, io, spawn: sequence.spawn }), /run id must be/);
+    assert.equal(sequence.calls(), 0, runId);
+    assert.equal(io.writes.size, 0, runId);
   }
 });
 

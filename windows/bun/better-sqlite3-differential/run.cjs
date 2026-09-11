@@ -5,9 +5,9 @@ const path = require("node:path");
 
 const here = __dirname;
 const MATRIX = [
-  { runtime: "bun", alias: "better-sqlite3-13", version: "13.0.3", expectedExit: 0 },
+  { runtime: "bun", alias: "better-sqlite3-13", version: "13.0.3", expectedExit: 0, addonAbi: "node-api-10 (binding.gyp)" },
   { runtime: "bun", alias: "better-sqlite3-12", version: "12.11.1", expectedExit: 1 },
-  { runtime: "node", alias: "better-sqlite3-13", version: "13.0.3", expectedExit: 0 },
+  { runtime: "node", alias: "better-sqlite3-13", version: "13.0.3", expectedExit: 0, addonAbi: "node-api-10 (binding.gyp)" },
   { runtime: "node", alias: "better-sqlite3-12", version: "12.11.1", expectedExit: 0 },
 ];
 
@@ -24,6 +24,9 @@ function freshRunId(now = new Date(), pid = process.pid) {
 }
 
 function outputPaths(root, runId) {
+  if (typeof runId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(runId)) {
+    throw new Error("run id must be a 1-128 character filename token");
+  }
   return {
     raw: path.join(root, "results", `${runId}.windows-x64.raw.json`),
     summary: path.join(root, "results", `${runId}.windows-x64.json`),
@@ -84,25 +87,40 @@ function sameArtifact(selected, loaded) {
     selected.path === loaded.path && selected.sha256 === loaded.sha256;
 }
 
-function validatePositive(value, expected, revision) {
+function validateCandidates(value) {
+  return Array.isArray(value.native_candidates) && value.native_candidates.length >= 1 &&
+    value.native_candidates.every(validArtifact) &&
+    value.native_candidates.some((candidate) =>
+      candidate.path === value.selected_artifact.path &&
+      candidate.sha256 === value.selected_artifact.sha256
+    );
+}
+
+function validatePositive(value, expected, runtime) {
   return Boolean(value &&
     value.package === "better-sqlite3" &&
     value.version === expected.version &&
     value.runtime === expected.runtime &&
-    value.runtime_revision === revision &&
+    value.runtime_revision === runtime.probe &&
+    value.runtime_node_api === runtime.napi &&
+    value.addon_abi === expected.addonAbi &&
     value.query_callback_result === 42 &&
     value.negative_control === "SQLITE_ERROR" &&
     value.teardown === "closed" &&
-    sameArtifact(value.selected_artifact, value.artifact));
+    sameArtifact(value.selected_artifact, value.artifact) &&
+    validateCandidates(value));
 }
 
-function validateExpectedFailure(value, expected, revision) {
+function validateExpectedFailure(value, expected, runtime) {
   return Boolean(value &&
     value.package === "better-sqlite3" &&
     value.version === expected.version &&
     value.runtime === expected.runtime &&
-    value.runtime_revision === revision &&
+    value.runtime_revision === runtime.probe &&
+    value.runtime_node_api === runtime.napi &&
+    value.addon_abi === expected.addonAbi &&
     validArtifact(value.selected_artifact) &&
+    validateCandidates(value) &&
     value.artifact === undefined &&
     value.attempted_load === "failed" &&
     value.error_code === "ERR_DLOPEN_FAILED" &&
@@ -111,14 +129,16 @@ function validateExpectedFailure(value, expected, revision) {
 
 function runtimeRevision(query, runtime) {
   if (!query || query.exit_code !== 0 || query.signal || query.spawn_error || query.stderr !== "") return null;
-  if (runtime === "node") {
-    const revision = query.stdout.trim();
-    return /^v\d+\.\d+\.\d+$/.test(revision) ? revision : null;
-  }
   try {
     const value = JSON.parse(query.stdout);
-    return value && /^\d+\.\d+\.\d+$/.test(value.version) && /^[0-9a-f]{40}$/.test(value.revision)
-      ? { display: `${value.version}+${value.revision}`, probe: value.revision }
+    if (!value || typeof value.napi !== "string" || !/^\d+$/.test(value.napi)) return null;
+    if (runtime === "node") {
+      return /^v\d+\.\d+\.\d+$/.test(value.version)
+        ? { display: value.version, probe: value.version, napi: value.napi }
+        : null;
+    }
+    return /^\d+\.\d+\.\d+$/.test(value.version) && /^[0-9a-f]{40}$/.test(value.revision)
+      ? { display: `${value.version}+${value.revision}`, probe: value.revision, napi: value.napi }
       : null;
   } catch {
     return null;
@@ -161,8 +181,8 @@ function execute(options = {}) {
   assertFresh(paths, io);
 
   const runtimeQueries = {
-    bun: normalizeSpawn("bun", ["-e", "console.log(JSON.stringify({version:Bun.version,revision:Bun.revision}))"], {}, spawn),
-    node: normalizeSpawn("node", ["--version"], {}, spawn),
+    bun: normalizeSpawn("bun", ["-e", "console.log(JSON.stringify({version:Bun.version,revision:Bun.revision,napi:process.versions.napi||null}))"], {}, spawn),
+    node: normalizeSpawn("node", ["-e", "console.log(JSON.stringify({version:process.version,napi:process.versions.napi||null}))"], {}, spawn),
   };
   const runs = MATRIX.map((entry) => normalizeSpawn(entry.runtime, ["probe.cjs", entry.alias], { cwd: root }, spawn));
   const receipt = {
@@ -181,11 +201,11 @@ function execute(options = {}) {
   const records = runs.map(parseJsonOutput);
   const valid = Boolean(bunRevision && nodeRevision && MATRIX.every((expected, index) => {
     const run = runs[index];
-    const revision = expected.runtime === "bun" ? bunRevision.probe : nodeRevision;
+    const runtime = expected.runtime === "bun" ? bunRevision : nodeRevision;
     if (run.exit_code !== expected.expectedExit || run.signal || run.spawn_error || run.stderr !== "") return false;
     return expected.expectedExit === 0
-      ? validatePositive(records[index], expected, revision)
-      : validateExpectedFailure(records[index], expected, revision);
+      ? validatePositive(records[index], expected, runtime)
+      : validateExpectedFailure(records[index], expected, runtime);
   }));
 
   let summaryJson;
