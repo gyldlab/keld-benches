@@ -1,0 +1,9 @@
+{
+  "name": "keld-kel215-better-sqlite3-differential",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "better-sqlite3-12": "npm:better-sqlite3@12.11.1",
+    "better-sqlite3-13": "npm:better-sqlite3@13.0.3"
+  }
+}

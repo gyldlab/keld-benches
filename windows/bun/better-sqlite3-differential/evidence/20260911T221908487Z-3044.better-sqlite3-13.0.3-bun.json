@@ -1,0 +1,24 @@
+{
+  "schema": "keld.compat.evidence/v1",
+  "artifact": {
+    "sha256": "sha256:e21e5efd71fba66578e95b62554d9028064a80dafd7221bf8a8ef155de8d240a",
+    "platform": "windows",
+    "arch": "x86_64"
+  },
+  "revisions": {
+    "keld": "de40149247fe9b410ba4954da167a445393f812c",
+    "bun": "1.4.2+744846f844374847c902b5e7fd59b4342a51ef99",
+    "engine": "better-sqlite3-13.0.3"
+  },
+  "authority_profile": "legacy_sandbox_off",
+  "operation": {
+    "id": "native-addon.better-sqlite3.sql-callback-teardown",
+    "kind": "primary_workflow",
+    "oracle": {
+      "id": "sql-callback-result-negative-query-and-close",
+      "revision": "kel215-windows-v1"
+    }
+  },
+  "result": "pass",
+  "evidence_uri": "sha256:054ed687e3bea349b5b6450c6b7d3963fc4ed2fb4df921e0a3f2013bba133c11"
+}
