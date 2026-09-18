@@ -840,3 +840,63 @@ window, or renderer; it must not be reported as Bun-to-Rust product IPC
 performance. The separate `handshake_ns` interval covers HELLO plus the first
 CALL/REPLY and is retained as a separate observation; it is not folded into
 the scored RTT deltas or claim.
+
+
+### X11 backend via GNOME Xwayland (2026-09-18)
+
+KEL-28's X11 lane was exercised on the same Ubuntu 26.04.1 laptop while the
+desktop session remained GNOME Wayland. The benchmark process environment
+forced GDK_BACKEND=x11, set DISPLAY=:0 with the live Mutter Xwayland authority,
+and deliberately removed WAYLAND_DISPLAY. The result documents record
+session=wayland;...;display=:0;wayland=unset;gdk_backend=x11.
+
+This proves the GTK/WebKit **X11 backend through Xwayland**. It is not evidence
+for a native Xorg login session. Before measurement, the native GTK4 fixture's
+real-display suite passed 7/7 under the forced X11 environment, including the
+focused/visible double-rAF beacon and generation-bound cleanup.
+
+The benchmark fixture commit is c98c8efcfe2c27aba8f67a2d7e85f77aa00def1d;
+Keld remains pinned to 0ea0780bb574ad242e9f1105fa4af5842872bad3. The Keld
+product/adapter and GTK4 native artifacts are byte-identical to the current-main
+Wayland refresh.
+Product host SHA-256 is
+08b5b75d4bad8f2a20124ca2f99c2576e2fc69b7b58834c53c9ed933be7b2538
+(1,688,160 bytes), benchmark adapter is
+16c90299b30480259f67d931ed2f65e320ed2674f2e06a976b8bbf44f69f8cbc,
+and GTK4 native floor is
+0ac343715de021af1af162564f31ac040b4f2937294e08acd9bd21e5d4e57970.
+
+The paired
+[PAINT-OPPORTUNITY session](./linux/bench/results/paint-opportunity/2026-09-18.kel28-linux-x11-xwayland-keld-vs-gtk4-30.fresh-process.json)
+completed 30/30 valid samples per arm with balanced randomized order:
+
+| Arm | Valid | Median | p90 | Bootstrap median CI95 |
+|---|---:|---:|---:|---:|
+| Keld keld-host --hello diagnostic | 30/30 | **900.0135 ms** | 978.703 | [884.8095, 916.529] |
+| GTK4 + WebKitGTK native floor | 30/30 | **399.8605 ms** | 467.449 | [389.5035, 422.2935] |
+
+The complete matched-round Keld/native ratio CI95 is **[2.142053, 2.316694]**,
+so this X11-on-Xwayland diagnostic is FAIL against the registry's 1.05
+regression threshold.
+This is a same-session comparison, not a product scoreboard verdict: Keld still
+uses the --hello benchmark adapter and Linux thermal state remains independently
+unverified.
+
+The corresponding
+[MEM-IDLE session](./linux/bench/results/mem-idle/2026-09-18.kel28-linux-x11-xwayland-keld-memory-30.fresh-process.json)
+also completed 30/30 valid samples. Keld main RSS median is **173,458 KiB**
+(CI95 [173,394, 173,554]); helper RSS median is **234,214 KiB** and total
+owned-tree RSS median is **407,682 KiB**. Main/helper private-dirty medians are
+28,044 KiB and 31,500 KiB. These remain adapter diagnostics.
+
+No second DISK document is emitted: the X11 run uses the exact same unmodified
+Release host bytes as the existing current-main DISK result, so repeating a
+deterministic file-size observation would create duplicate evidence.
+
+Do not compute an X11-versus-Wayland speedup/regression by subtracting the two
+sessions: they were measured at different times and the native arm is also
+session-sensitive. What this session establishes is narrower and actionable:
+under the forced X11 backend on Xwayland, Keld's diagnostic paint path is more
+than 2.14x the matched native GTK4 arm at the lower bound of the paired CI.
+A native Xorg login and the required non-Debian distro spot-check remain
+unverified KEL-28 acceptance limbs.
