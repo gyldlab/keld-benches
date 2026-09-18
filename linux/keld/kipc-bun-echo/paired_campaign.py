@@ -8,10 +8,11 @@ import bisect
 import hashlib
 import json
 import math
-import os
 import random
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -129,18 +130,21 @@ def wait_for_file(path: Path, timeout: float = 5.0) -> None:
     raise RuntimeError(f"timed out waiting for {path}")
 
 
-def rust_paths(tag: str) -> tuple[Path, Path, Path]:
+def rust_paths(tag: str) -> tuple[Path, Path, Path, Path]:
     safe = "".join(ch for ch in tag if ch.isalnum() or ch in "-_")[:48]
-    base = Path("/tmp") / f"k90p-{os.getpid()}-{safe}"
-    return base.with_suffix(".sock"), base.with_suffix(".link"), base.with_suffix(".err")
+    temp_dir = Path(tempfile.mkdtemp(prefix=f"k90p-{safe}-"))
+    return (
+        temp_dir,
+        temp_dir / "session.sock",
+        temp_dir / "app-link.txt",
+        temp_dir / "server.err",
+    )
 
 
 def run_rust_case(out_path: Path, tier: str, tag: str) -> subprocess.CompletedProcess[str]:
     if out_path.exists():
         raise RuntimeError(f"refusing to overwrite {out_path}")
-    socket_path, link_path, err_path = rust_paths(tag)
-    for path in (socket_path, link_path, err_path):
-        path.unlink(missing_ok=True)
+    temp_dir, socket_path, link_path, err_path = rust_paths(tag)
     with err_path.open("w", encoding="utf-8") as error_file:
         server = subprocess.Popen(
             [str(RUST_SERVER), str(socket_path), str(link_path)],
@@ -182,16 +186,13 @@ def run_rust_case(out_path: Path, tier: str, tag: str) -> subprocess.CompletedPr
         if server.poll() is None:
             server.kill()
             server.wait(timeout=5)
-        socket_path.unlink(missing_ok=True)
-        link_path.unlink(missing_ok=True)
-        err_path.unlink(missing_ok=True)
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def rust_negative_control(out_dir: Path) -> dict:
     out_path = out_dir / "rust-bad-token.must-not-exist.json"
-    socket_path, link_path, err_path = rust_paths("negative")
-    for path in (socket_path, link_path, err_path, out_path):
-        path.unlink(missing_ok=True)
+    out_path.unlink(missing_ok=True)
+    temp_dir, socket_path, link_path, err_path = rust_paths("negative")
     with err_path.open("w", encoding="utf-8") as error_file:
         server = subprocess.Popen(
             [str(RUST_SERVER), str(socket_path), str(link_path)],
@@ -240,8 +241,8 @@ def rust_negative_control(out_dir: Path) -> dict:
         if server.poll() is None:
             server.kill()
             server.wait(timeout=5)
-        for path in (socket_path, link_path, err_path, out_path):
-            path.unlink(missing_ok=True)
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        out_path.unlink(missing_ok=True)
 
 
 def load_rust(path: Path, tier: str) -> dict:
