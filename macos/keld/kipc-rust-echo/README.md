@@ -95,3 +95,12 @@ registry oracle's "handshake excluded and reported separately."
 
 Each session is a fresh server + client process pair (`fresh-process` cache
 state); no OS-level cache warming is attempted or claimed.
+
+## Raw evidence storage
+
+New raw session documents are emitted as compact JSON (one logical JSON
+document, no pretty-printed sample-per-line expansion). The already-published
+2026-09-10 corpus remains byte-immutable; it is not rewritten for formatting.
+IPC raw-result paths are marked non-diff/generated in the repository attributes
+so future reviews parse and statistically verify evidence instead of rendering
+individual sample lines.

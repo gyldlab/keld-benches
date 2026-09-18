@@ -30,3 +30,8 @@ windows/bench/windows-first-paint*.json text eol=lf
 # cited the broken macOS one as evidence -- the exact drift a second copy
 # produces.
 */keld/hello/** text eol=lf
+
+# Raw benchmark corpora are evidence payloads, not reviewable source diffs.
+macos/bench/results/ipc-rtt/*.raw.json -diff linguist-generated=true
+linux/bench/results/ipc-rtt/*.raw.json -diff linguist-generated=true
+windows/bench/results/ipc-rtt/*.raw.json -diff linguist-generated=true
