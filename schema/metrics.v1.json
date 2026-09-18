@@ -117,7 +117,7 @@
       "cache_states": ["fresh-process", "warm-cache"],
       "sample_class": "ipc",
       "status": "diagnostic",
-      "note": "One Windows Bun-only session recorded 2026-08-23 (KEL-99, keld 1609dbd) under windows/bench/results/ipc-rtt/: fresh-process p50 47.6 us / p90 66.3 / p99 101.6; warm-cache p50 45.9 / p90 59.3 / p99 100.5; 10,000 calls per session, handshake excluded. publication.eligible is false (1 session vs >=20 required, 10k calls vs 100k, no paired Rust arm, no block-bootstrap CIs, thermal state unverified) — diagnostics only, NOT a verdict against the <=100 us budget. macOS and Linux remain unmeasured."
+      "note": "Windows has one Bun-only 10k-call diagnostic session (KEL-99, keld 1609dbd): fresh-process p99 101.6 us and warm-cache p99 100.5 us; it remains publication-ineligible because it does not meet the 20-session x 100k policy or block-bootstrap requirement. macOS has a 20-session x 100k Rust-to-Rust cross-process library-arm diagnostic from 2026-09-10 (small p99 9.375 us, CI95 [9.250, 9.625]; representative p99 10.250 us, CI95 [10.083, 10.459]). Linux has a 20-session x 100k Rust-to-Rust cross-process library-arm diagnostic from 2026-09-18 (small p99 11.809 us, CI95 [11.391, 12.241]; representative p99 13.197 us, CI95 [12.970, 13.456]). These library arms measure authenticated keld-ipc wire-path RTT only; macOS/Linux Bun-to-Rust product-client RTT remains unmeasured, and none of these diagnostics is by itself a product budget verdict."
     },
     {
       "id": "IPC-BULK",

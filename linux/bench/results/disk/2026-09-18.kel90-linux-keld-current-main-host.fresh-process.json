@@ -1,0 +1,137 @@
+{
+  "arms": [
+    {
+      "arm_id": "keld-linux-host",
+      "artifact": {
+        "basename": "keld-host-product",
+        "sha256": "08b5b75d4bad8f2a20124ca2f99c2576e2fc69b7b58834c53c9ed933be7b2538",
+        "version": "0ea0780bb574"
+      },
+      "fixture_path": "linux/keld/hello",
+      "framework": {
+        "name": "Keld",
+        "version": "0ea0780bb574"
+      },
+      "lane": "raw-host-binary",
+      "role": "diagnostic",
+      "samples": [
+        {
+          "diagnostics": {
+            "artifact_lane": "raw-host-binary"
+          },
+          "reject_reason": null,
+          "run": 1,
+          "valid": true,
+          "value": 1688160
+        }
+      ],
+      "statistics": {
+        "max": 1688160,
+        "median": 1688160,
+        "min": 1688160,
+        "valid_samples": 1
+      }
+    }
+  ],
+  "cache_state": "fresh-process",
+  "environment": {
+    "display": "session=wayland;desktop=ubuntu:GNOME;display=:0;wayland=wayland-0",
+    "engine": {
+      "name": "WebKitGTK",
+      "version": "2.52.6"
+    },
+    "hardware": {
+      "arch": "x86_64",
+      "cpu": "Intel(R) Core(TM) i5-10500H CPU @ 2.50GHz",
+      "ram_bytes": 24558964736
+    },
+    "os": {
+      "build": "7.0.0-31-generic",
+      "name": "linux",
+      "version": "Ubuntu 26.04.1 LTS"
+    },
+    "power": {
+      "ac_power": true,
+      "low_power_mode": false,
+      "thermal_state": "unverified"
+    },
+    "toolchains": [
+      {
+        "name": "rustc",
+        "version": "rustc 1.97.1 (8bab26f4f 2026-07-14);binary: rustc;commit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452;commit-date: 2026-07-14;host: x86_64-unknown-linux-gnu;release: 1.97.1;LLVM version: 22.1.6"
+      },
+      {
+        "name": "cargo",
+        "version": "cargo 1.97.1 (c980f4866 2026-06-30)"
+      },
+      {
+        "name": "webkit2gtk-4.1",
+        "version": "2.52.6"
+      }
+    ]
+  },
+  "metric": {
+    "id": "DISK",
+    "registry_version": 1,
+    "unit": "bytes"
+  },
+  "provenance": {
+    "bench_sha": "b31a0d7dfbc89e38aa4a1d999f6162fe610753fc",
+    "bench_tree_state": "clean",
+    "fixtures": [
+      {
+        "path": "linux/keld/hello",
+        "sha": "b31a0d7dfbc89e38aa4a1d999f6162fe610753fc"
+      }
+    ],
+    "harness": {
+      "modules": [
+        {
+          "path": "linux/bench/run.py",
+          "sha256": "b02933a7dca4c5a8d921b98d6a246f82232841db43d4f81e24527fc8d8e1afde"
+        },
+        {
+          "path": "linux/bench/harness.py",
+          "sha256": "40ec16556b4e00f33568904837b7b6efa0e21a1d2224e49f9edea86de1e643ab"
+        }
+      ],
+      "path": "linux/bench/run.py",
+      "sha256": "b02933a7dca4c5a8d921b98d6a246f82232841db43d4f81e24527fc8d8e1afde",
+      "version": "1.0.0"
+    },
+    "keld_sha": "0ea0780bb574ad242e9f1105fa4af5842872bad3",
+    "payload_sha256": "77e0e3edccf3d4a8dd2ff5a1c3bce03282716b936684fecae500a41018c56f01"
+  },
+  "publication": {
+    "eligible": false,
+    "policy_version": 2,
+    "reasons": [
+      {
+        "code": "SAMPLES_BELOW_POLICY",
+        "label": "1 samples; policy requires 30"
+      },
+      {
+        "code": "THERMAL_STATE_UNVERIFIED",
+        "label": "Linux thermal state was not independently verified"
+      },
+      {
+        "code": "SINGLE_LANE_DIAGNOSTIC",
+        "label": "DISK records one raw host lane with no paired arm"
+      },
+      {
+        "code": "DETERMINISTIC_SINGLE_SAMPLE",
+        "label": "file size is deterministic and is recorded once rather than padded statistically"
+      }
+    ],
+    "requested": false
+  },
+  "schema_version": 2,
+  "session": {
+    "finished_utc": "2026-09-18T16:12:50.607660Z",
+    "interleaving": "none",
+    "label": "kel90-linux-keld-current-main-host",
+    "notes": "Byte count of the unpatched Release keld-host binary. This is a raw host lane, not an installer or package. Power evidence: sysfs-power-supply;power-profile=performance.",
+    "requested_samples": 1,
+    "started_utc": "2026-09-18T16:12:50.607571Z"
+  }
+}

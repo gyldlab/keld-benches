@@ -1,0 +1,955 @@
+{
+  "arms": [
+    {
+      "arm_id": "keld-linux-host",
+      "artifact": {
+        "basename": "keld-host-bench",
+        "sha256": "16c90299b30480259f67d931ed2f65e320ed2674f2e06a976b8bbf44f69f8cbc",
+        "version": "0ea0780bb574"
+      },
+      "fixture_path": "linux/keld/hello",
+      "framework": {
+        "name": "Keld",
+        "version": "0ea0780bb574"
+      },
+      "lane": "webkitgtk",
+      "role": "diagnostic",
+      "samples": [
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 1,
+          "valid": true,
+          "value": 464.426
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 2,
+          "valid": true,
+          "value": 435.516
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 3,
+          "valid": true,
+          "value": 445.719
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 4,
+          "valid": true,
+          "value": 455.942
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 5,
+          "valid": true,
+          "value": 462.795
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 6,
+          "valid": true,
+          "value": 438.96
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 7,
+          "valid": true,
+          "value": 479.634
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 8,
+          "valid": true,
+          "value": 440.178
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 9,
+          "valid": true,
+          "value": 471.831
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 10,
+          "valid": true,
+          "value": 434.955
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 11,
+          "valid": true,
+          "value": 446.535
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 12,
+          "valid": true,
+          "value": 438.157
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 13,
+          "valid": true,
+          "value": 432.259
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 14,
+          "valid": true,
+          "value": 499.365
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 15,
+          "valid": true,
+          "value": 463.25
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 16,
+          "valid": true,
+          "value": 474.987
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 17,
+          "valid": true,
+          "value": 476.677
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 18,
+          "valid": true,
+          "value": 449.938
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 19,
+          "valid": true,
+          "value": 436.805
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": "document_not_focused",
+          "run": 20,
+          "valid": false,
+          "value": null
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 21,
+          "valid": true,
+          "value": 487.068
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 22,
+          "valid": true,
+          "value": 422.805
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 23,
+          "valid": true,
+          "value": 446.111
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 24,
+          "valid": true,
+          "value": 428.992
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 25,
+          "valid": true,
+          "value": 457.959
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 26,
+          "valid": true,
+          "value": 425.814
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 27,
+          "valid": true,
+          "value": 444.581
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 28,
+          "valid": true,
+          "value": 481.133
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 29,
+          "valid": true,
+          "value": 434.475
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 30,
+          "valid": true,
+          "value": 487.621
+        }
+      ],
+      "statistics": {
+        "bootstrap_ci95": {
+          "lower": 438.96,
+          "resamples": 10000,
+          "upper": 463.25
+        },
+        "max": 499.365,
+        "median": 446.535,
+        "min": 422.805,
+        "p90": 487.068,
+        "valid_samples": 29
+      }
+    },
+    {
+      "arm_id": "gtk4-native",
+      "artifact": {
+        "basename": "gtk4-webkit-hello",
+        "sha256": "0ac343715de021af1af162564f31ac040b4f2937294e08acd9bd21e5d4e57970",
+        "version": "b31a0d7dfbc8"
+      },
+      "fixture_path": "linux/gtk4/hello",
+      "framework": {
+        "name": "GTK4 + WebKitGTK native",
+        "version": "4.22.4"
+      },
+      "lane": "webkitgtk",
+      "role": "score",
+      "samples": [
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 1,
+          "valid": true,
+          "value": 558.601
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 2,
+          "valid": true,
+          "value": 535.776
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 3,
+          "valid": true,
+          "value": 574.405
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 4,
+          "valid": true,
+          "value": 528.864
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 5,
+          "valid": true,
+          "value": 547.653
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 6,
+          "valid": true,
+          "value": 520.142
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 7,
+          "valid": true,
+          "value": 589.075
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 8,
+          "valid": true,
+          "value": 551.023
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 9,
+          "valid": true,
+          "value": 553.876
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 10,
+          "valid": true,
+          "value": 546.053
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 11,
+          "valid": true,
+          "value": 539.588
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 12,
+          "valid": true,
+          "value": 534.92
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 13,
+          "valid": true,
+          "value": 524.784
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 14,
+          "valid": true,
+          "value": 552.219
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 15,
+          "valid": true,
+          "value": 542.445
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 16,
+          "valid": true,
+          "value": 531.752
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 17,
+          "valid": true,
+          "value": 575.572
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 18,
+          "valid": true,
+          "value": 541.109
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 19,
+          "valid": true,
+          "value": 557.975
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 20,
+          "valid": true,
+          "value": 554.158
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 21,
+          "valid": true,
+          "value": 523.164
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 22,
+          "valid": true,
+          "value": 524.766
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 23,
+          "valid": true,
+          "value": 538.076
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 24,
+          "valid": true,
+          "value": 521.444
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 25,
+          "valid": true,
+          "value": 534.307
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 26,
+          "valid": true,
+          "value": 517.173
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 27,
+          "valid": true,
+          "value": 517.008
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 28,
+          "valid": true,
+          "value": 530.058
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 29,
+          "valid": true,
+          "value": 551.689
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 30,
+          "valid": true,
+          "value": 554.879
+        }
+      ],
+      "statistics": {
+        "bootstrap_ci95": {
+          "lower": 533.0295,
+          "resamples": 10000,
+          "upper": 551.356
+        },
+        "max": 589.075,
+        "median": 540.3485000000001,
+        "min": 517.008,
+        "p90": 558.601,
+        "valid_samples": 30
+      }
+    }
+  ],
+  "cache_state": "fresh-process",
+  "environment": {
+    "display": "session=wayland;desktop=ubuntu:GNOME;display=:0;wayland=wayland-0",
+    "engine": {
+      "name": "WebKitGTK (4.1 Keld / 6.0 GTK4)",
+      "version": "2.52.6"
+    },
+    "hardware": {
+      "arch": "x86_64",
+      "cpu": "Intel(R) Core(TM) i5-10500H CPU @ 2.50GHz",
+      "ram_bytes": 24558964736
+    },
+    "os": {
+      "build": "7.0.0-31-generic",
+      "name": "linux",
+      "version": "Ubuntu 26.04.1 LTS"
+    },
+    "power": {
+      "ac_power": true,
+      "low_power_mode": false,
+      "thermal_state": "unverified"
+    },
+    "toolchains": [
+      {
+        "name": "rustc",
+        "version": "rustc 1.97.1 (8bab26f4f 2026-07-14);binary: rustc;commit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452;commit-date: 2026-07-14;host: x86_64-unknown-linux-gnu;release: 1.97.1;LLVM version: 22.1.6"
+      },
+      {
+        "name": "cargo",
+        "version": "cargo 1.97.1 (c980f4866 2026-06-30)"
+      },
+      {
+        "name": "webkit2gtk-4.1",
+        "version": "2.52.6"
+      },
+      {
+        "name": "cc",
+        "version": "cc (Ubuntu 15.2.0-16ubuntu1) 15.2.0"
+      },
+      {
+        "name": "gtk4",
+        "version": "4.22.4"
+      },
+      {
+        "name": "webkitgtk-6.0",
+        "version": "2.52.6"
+      }
+    ]
+  },
+  "metric": {
+    "id": "PAINT-OPPORTUNITY",
+    "registry_version": 1,
+    "unit": "ms"
+  },
+  "provenance": {
+    "bench_sha": "b31a0d7dfbc89e38aa4a1d999f6162fe610753fc",
+    "bench_tree_state": "clean",
+    "fixtures": [
+      {
+        "path": "linux/keld/hello",
+        "sha": "b31a0d7dfbc89e38aa4a1d999f6162fe610753fc"
+      },
+      {
+        "path": "linux/gtk4/hello",
+        "sha": "b31a0d7dfbc89e38aa4a1d999f6162fe610753fc"
+      }
+    ],
+    "harness": {
+      "modules": [
+        {
+          "path": "linux/bench/run.py",
+          "sha256": "b02933a7dca4c5a8d921b98d6a246f82232841db43d4f81e24527fc8d8e1afde"
+        },
+        {
+          "path": "linux/bench/harness.py",
+          "sha256": "40ec16556b4e00f33568904837b7b6efa0e21a1d2224e49f9edea86de1e643ab"
+        }
+      ],
+      "path": "linux/bench/run.py",
+      "sha256": "b02933a7dca4c5a8d921b98d6a246f82232841db43d4f81e24527fc8d8e1afde",
+      "version": "1.0.0"
+    },
+    "keld_sha": "0ea0780bb574ad242e9f1105fa4af5842872bad3",
+    "payload_sha256": "77e0e3edccf3d4a8dd2ff5a1c3bce03282716b936684fecae500a41018c56f01"
+  },
+  "publication": {
+    "eligible": false,
+    "policy_version": 2,
+    "reasons": [
+      {
+        "code": "INVALID_SAMPLES",
+        "label": "one or more requested measurements were rejected"
+      },
+      {
+        "code": "THERMAL_STATE_UNVERIFIED",
+        "label": "Linux thermal state was not independently verified"
+      },
+      {
+        "code": "DIAGNOSTIC_HELLO_ONLY",
+        "label": "the Keld arm measures keld-host --hello rather than no-flag product boot"
+      }
+    ],
+    "requested": false
+  },
+  "schema_version": 2,
+  "session": {
+    "finished_utc": "2026-09-18T16:09:09.480391Z",
+    "interleaving": "round-robin-randomized",
+    "label": "kel90-linux-keld-vs-gtk4-current-main-30",
+    "notes": "External monotonic spawn-to-double-rAF image-beacon proxy. The Keld arm uses the declared keld-host --hello benchmark adapter rather than no-flag product boot. Every round runs Keld and GTK4 once with balanced randomized within-round order. Power evidence: sysfs-power-supply;power-profile=performance.",
+    "requested_samples": 30,
+    "started_utc": "2026-09-18T16:07:54.979393Z"
+  }
+}
