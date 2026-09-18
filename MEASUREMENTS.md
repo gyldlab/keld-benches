@@ -1083,6 +1083,44 @@ Thermal state remains independently unverified and result-v2 still lacks the
 session-block corpus shape, so the diagnostic remains publication-ineligible.
 
 
+### Tauri 2.11.5 / WebKitGTK comparator admission status (2026-09-19)
+
+KEL-90 includes a locked Tauri 2.11.5 Rust-only fixture with Wry 0.55.1 and
+system WebKitGTK 2.52.6. The fixture has no Node/Bun sidecar and does not time
+Tauri CLI or package startup. Any future comparison must use the same
+runner-owned visible/focused double-rAF beacon as the other Linux paint arms.
+
+No Tauri performance row is currently admitted.
+
+An earlier feature-branch campaign reported 30/30 samples, but review found that
+the caller-supplied Tauri executable was only checked against the
+`provenance.json` beside that same executable. A caller could therefore provide
+different executable bytes plus matching self-reported provenance. That
+campaign was removed before merge and is not benchmark evidence.
+
+The runner now independently rebuilds the exact committed Tauri fixture before
+accepting a supplied artifact. Raw ELF files are not byte-reproducible because
+GNU build-id bytes and the six-character `mktemp` build-directory suffix vary.
+The trust check canonicalizes only those two observed build-metadata fields,
+then requires the SHA-256 of every remaining executable byte to match the
+independent rebuild. Ordinary artifact SHA/size and committed recipe-file
+digests remain separate checks.
+
+After adding that gate, clean trusted builds were exercised on the physical
+Ubuntu 26.04.1 GNOME machine. Under both forced native Wayland and forced
+X11-through-Xwayland the fixture requested the approved loopback page and
+emitted the double-rAF beacon, but the runner rejected the beacon as
+`document_not_focused`. Explicit Tauri window and webview focus experiments
+did not make that condition reproducible, so those experimental fixture changes
+were discarded rather than weakening the oracle.
+
+The comparator therefore remains **measurement-blocked on focused-paint
+admission** on this physical desktop. Future Tauri timing requires a committed,
+trusted-build-reproducible fixture that satisfies the unchanged focus/visibility
+oracle. Do not cite the withdrawn feature-branch PASS, rank Keld against Tauri
+from it, or substitute an unfocused page-load timing.
+
+
 ### Shipping Linux `keld dev` product developer flow (2026-09-18)
 
 A new Linux product arm measures the ordinary Release `keld dev` path rather

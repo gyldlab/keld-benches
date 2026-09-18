@@ -20,6 +20,8 @@ from unittest import mock
 from harness import (
     BeaconServer,
     HarnessError,
+    _canonical_tauri_artifact_sha256,
+    _verify_tauri_trusted_build,
     KELD_DEV_BEACON_PATH,
     KELD_DEV_PROJECT_PATH,
     MemorySnapshot,
@@ -356,6 +358,10 @@ class PairingTests(unittest.TestCase):
             fixture_artifact_pairs(
                 ["linux/keld/hello", "linux/keld/hello"], ["a", "b"]
             )
+        mapping = fixture_artifact_pairs(
+            ["linux/keld/hello", "linux/tauri/hello"], ["a", "b"]
+        )
+        self.assertEqual(set(mapping), {"linux/keld/hello", "linux/tauri/hello"})
         self.assertEqual(
             fixture_artifact_pairs(["linux/keld/dev-hello"], ["product"]),
             {"linux/keld/dev-hello": (ROOT / "product").resolve()},
@@ -377,6 +383,37 @@ class PairingTests(unittest.TestCase):
             paired_round_orders(("keld-linux-host",), 2, random.Random(1))
         with self.assertRaisesRegex(HarnessError, "positive sample count"):
             paired_round_orders(("keld-linux-host", "gtk4-native"), 0, random.Random(1))
+
+
+class TauriArtifactTrustTests(unittest.TestCase):
+    def test_trusted_tauri_build_accepts_only_matching_canonical_digest(self) -> None:
+        artifact = pathlib.Path("/tmp/fake-tauri-artifact")
+        with mock.patch(
+            "harness._canonical_tauri_artifact_sha256", return_value="a" * 64
+        ), mock.patch(
+            "harness._trusted_tauri_rebuild_sha256", return_value="a" * 64
+        ):
+            self.assertEqual(
+                _verify_tauri_trusted_build("1" * 40, artifact),
+                "a" * 64,
+            )
+
+        with mock.patch(
+            "harness._canonical_tauri_artifact_sha256", return_value="a" * 64
+        ), mock.patch(
+            "harness._trusted_tauri_rebuild_sha256", return_value="b" * 64
+        ):
+            with self.assertRaisesRegex(
+                HarnessError, "does not match an independent rebuild"
+            ):
+                _verify_tauri_trusted_build("1" * 40, artifact)
+
+    def test_tauri_canonical_digest_rejects_non_elf_input(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            artifact = pathlib.Path(temporary) / "tauri-linux-hello"
+            artifact.write_bytes(b"not an ELF")
+            with self.assertRaisesRegex(HarnessError, "could not inspect Tauri ELF"):
+                _canonical_tauri_artifact_sha256(artifact)
 
 
 class ProductRunnerTests(unittest.TestCase):
