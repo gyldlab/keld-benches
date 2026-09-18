@@ -1,0 +1,25 @@
+[package]
+name = "kel90-linux-kipc-rust-echo"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Pinned to the exact Keld commit this fixture was built and measured against.
+# Never `path = "..."` to a local checkout: that would not be reproducible by
+# a second operator. Re-pin this line only when a new campaign intentionally
+# targets a different immutable Keld commit, and record that pin in README.
+[dependencies]
+keld-ipc = { git = "https://github.com/gyldlab/keld.git", rev = "0ea0780bb574ad242e9f1105fa4af5842872bad3" }
+serde_json = "1"
+
+[[bin]]
+name = "kel90-linux-echo-server"
+path = "src/server.rs"
+
+[[bin]]
+name = "kel90-linux-echo-client"
+path = "src/client.rs"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
