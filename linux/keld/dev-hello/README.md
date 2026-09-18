@@ -1,0 +1,59 @@
+# Keld shipping dev hello — Linux product-flow fixture
+
+This fixture is the exact seven-file output of `keld create product-bench` at
+Keld `0ea0780bb574ad242e9f1105fa4af5842872bad3`. It exists beside the
+historical `linux/keld/hello` fixture because the two measure different
+things:
+
+- `linux/keld/hello` launches `keld-host --hello` through a benchmark-only
+  navigation adapter.
+- this fixture launches the shipping Release `keld dev` flow: doctor checks,
+  owner-private boot staging, the no-flag host, Linux strict-profile Bun,
+  authenticated KIPC echo, the real WebKitGTK window, and normal native-close
+  lifecycle.
+
+The benchmark runner never patches Keld source. For each measured launch it
+copies this committed project into a fresh owner-private temporary root and
+replaces only that temporary copy's `index.html` with the runner's standard
+nonce-bound double-rAF beacon payload. The committed project remains byte
+identical to `keld create`.
+
+## Build
+
+```bash
+linux/keld/dev-hello/build.sh \
+  /path/to/keld \
+  0ea0780bb574ad242e9f1105fa4af5842872bad3 \
+  /absolute/output/directory
+```
+
+The recipe fetches the exact Keld commit from the canonical origin, builds with
+`cargo build --release --locked -p keld-cli -p keld-host`, verifies that the
+built CLI reproduces all seven committed project files exactly, and emits the
+shipping sibling executable set:
+
+- `keld`
+- `keld-host`
+- `keld-role-launcher`
+- `provenance.json`
+
+Linux `keld dev` requires all three executables. Omitting the role launcher
+must fail boot staging rather than falling back to an uncontained child.
+
+## Measurement boundary
+
+This is a **developer-flow product path**, not a packaged installer/application
+startup claim. Spawn-to-paint therefore includes CLI doctor/staging work, Bun
+strict-profile admission and the stock authenticated echo before the native
+window paints.
+
+The first admitted measurement lane is X11 through the machine's real X server
+(or Xwayland): the runner requires `GDK_BACKEND=x11`, a usable `DISPLAY`,
+`xdotool`, and `wmctrl`. After measurement it closes the actual native
+window and accepts the sample only if the shipping lifecycle exits cleanly and
+the captured CLI/host/Bun/WebKit descendants are gone. This does not prove a
+native Xorg login when the host desktop is Wayland/Xwayland.
+
+For memory, the scored `MEM-IDLE` value stays the **Keld host RSS**, preserving
+the existing metric denominator. CLI RSS, Bun RSS, WebKit helper RSS, Keld-owned
+CLI+host RSS, and total owned-tree RSS are separate diagnostics.
