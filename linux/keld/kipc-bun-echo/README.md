@@ -84,3 +84,36 @@ timed calls, matching the KEL-99 warm mode.
 The campaign writes raw documents and a manifest outside the repository first.
 Only a fully validated campaign is copied under `linux/bench/results/ipc-rtt/`
 as immutable evidence.
+
+
+## Paired Rust-floor comparison
+
+paired_campaign.py runs a balanced same-machine fresh-process comparison between
+this shipping Bun client/HostOwnedHelloSession slice and the landed
+linux/keld/kipc-rust-echo library floor.
+
+Both arms score exactly 100,000 post-handshake CALL/REPLY operations per round.
+The Rust client is invoked with 100,001 requested calls because its first call
+contains HELLO plus the first CALL and is intentionally excluded from deltas;
+the remaining 100,000 echo_invoke calls are scored. The Bun arm scores 100,000
+AppLinkSession.echo calls after its separately measured HELLO.
+
+The campaign uses 20 paired rounds per payload tier. Tier order alternates by
+round, and arm order alternates per tier so Rust and Bun each run first exactly
+10 times. The paired bootstrap resamples identical round indices for both arms
+before recomputing percentile ratios and deltas.
+
+This comparison is a product-client-versus-library-floor diagnostic. The Bun
+arm includes shipping TypeScript codec/client and host supervision while the
+Rust arm is a direct keld-ipc client/server floor. Therefore the ratio must not
+be described as pure Bun language/runtime overhead or as full application,
+window, renderer, or keld-dev startup latency.
+
+Run only from a clean committed and pushed fixture:
+
+    python3 paired_campaign.py --out-dir /absolute/path/outside-the-repository
+
+The campaign executes both arms' fail-closed controls and pilots before the
+20-round campaign, then writes compact raw documents plus one manifest outside
+the repository. Only a fully validated corpus is eligible to be copied into
+linux/bench/results/ipc-rtt/ as immutable diagnostic evidence.
