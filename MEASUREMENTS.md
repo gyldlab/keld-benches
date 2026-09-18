@@ -884,6 +884,34 @@ window or renderer is in the timed path. Linux thermal state remains
 independently unverified, and result-v2 still lacks the independent-session
 block-bootstrap corpus shape, so the result remains publication-ineligible.
 
+#### Warm-cache state
+
+The same shipping-client fixture was then extended with the registry's existing
+`warm-cache` semantics, matching KEL-99 rather than defining a new cache
+class. For each payload tier the controller first ran one unscored priming
+process pair. Every scored sample was still a fresh process using the same
+fixture/project, and each scored Bun process completed 1,000 untimed
+authenticated echoes before its 100,000 timed calls.
+
+The warm-cache campaign again completed 20 independent sessions per tier. Its
+40 raw documents are bound by the
+[warm-cache manifest](./linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-bun-product-client.warm-cache.manifest.raw.json).
+
+| Tier | Payload | Pooled p50 | Pooled p90 | Pooled p99 | 95% session-block bootstrap CI p99 |
+|---|---:|---:|---:|---:|---:|
+| small | 6 B | **14.705 µs** | 21.694 µs | **27.367 µs** | **[26.573, 28.120] µs** |
+| representative | 1,024 B | **18.185 µs** | 26.102 µs | **34.036 µs** | **[33.377, 34.664] µs** |
+
+At the p99 CI upper bounds, warm-cache retains about **3.56×** headroom for
+the 6-byte tier and **2.88×** for the 1 KiB tier against 100 µs.
+
+Fresh-process and warm-cache were separate campaigns rather than paired
+round-by-round. Their CIs overlap and the medians move in different directions,
+so these data do **not** support a causal claim that warming made KIPC faster
+or slower. What they do establish is that the shipping Bun client remains well
+inside the 100 µs p99 target under both registered Linux cache states on this
+machine. The same thermal and result-v2 session-block limitations remain.
+
 
 ### X11 backend via GNOME Xwayland (2026-09-18)
 
