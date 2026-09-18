@@ -1928,6 +1928,124 @@ def _read_gtk4_artifact(artifact_dir: pathlib.Path) -> tuple[dict[str, Any], pat
     return provenance, artifact
 
 
+def _canonical_tauri_artifact_sha256(artifact: pathlib.Path) -> str:
+    """Hash a Tauri ELF while ignoring only verified build metadata nondeterminism."""
+    try:
+        section_table = subprocess.run(
+            ["/usr/bin/readelf", "-SW", str(artifact)],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=30,
+        ).stdout
+    except (OSError, subprocess.SubprocessError) as error:
+        raise HarnessError(f"could not inspect Tauri ELF build metadata: {error}") from error
+
+    build_id = re.search(
+        r"\[\s*\d+\]\s+\.note\.gnu\.build-id\s+NOTE\s+\S+\s+"
+        r"([0-9a-fA-F]+)\s+([0-9a-fA-F]+)",
+        section_table,
+    )
+    if build_id is None:
+        raise HarnessError("Tauri artifact is missing the GNU build-id section")
+
+    data = bytearray(artifact.read_bytes())
+    offset = int(build_id.group(1), 16)
+    size = int(build_id.group(2), 16)
+    if size <= 0 or offset < 0 or offset + size > len(data):
+        raise HarnessError("Tauri artifact has an invalid GNU build-id section range")
+    data[offset : offset + size] = b"\0" * size
+
+    build_path = re.compile(
+        rb"/tmp/keld-tauri-linux-build\.([A-Za-z0-9]{6})/fixture"
+    )
+    matches = list(build_path.finditer(data))
+    if len(matches) != 1:
+        raise HarnessError(
+            "Tauri artifact must contain exactly one canonical temporary build path"
+        )
+    suffix = matches[0].span(1)
+    data[suffix[0] : suffix[1]] = b"XXXXXX"
+    return hashlib.sha256(data).hexdigest()
+
+
+def _trusted_tauri_rebuild_sha256(fixture_commit: str) -> str:
+    """Independently rebuild the exact committed Tauri fixture and canonical-hash it."""
+    git_environment = {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "LC_ALL": "C",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_NO_REPLACE_OBJECTS": "1",
+        "GIT_OPTIONAL_LOCKS": "0",
+    }
+    with tempfile.TemporaryDirectory(prefix="keld-tauri-trusted-rebuild.") as temporary:
+        root = pathlib.Path(temporary)
+        worktree = root / "repo"
+        output = root / "artifact"
+        added = False
+        try:
+            subprocess.run(
+                [
+                    "/usr/bin/git",
+                    "worktree",
+                    "add",
+                    "--detach",
+                    str(worktree),
+                    fixture_commit,
+                ],
+                cwd=ROOT,
+                env=git_environment,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=60,
+            )
+            added = True
+            build = worktree / TAURI_FIXTURE_PATH / "build.sh"
+            build_environment = os.environ.copy()
+            build_environment["TMPDIR"] = "/tmp"
+            subprocess.run(
+                [str(build), str(output)],
+                cwd=worktree / TAURI_FIXTURE_PATH,
+                env=build_environment,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=600,
+            )
+            trusted = output / "tauri-linux-hello"
+            if trusted.is_symlink() or not trusted.is_file() or not os.access(trusted, os.X_OK):
+                raise HarnessError("trusted Tauri rebuild did not produce its executable")
+            return _canonical_tauri_artifact_sha256(trusted)
+        except subprocess.TimeoutExpired as error:
+            raise HarnessError("trusted Tauri rebuild timed out") from error
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise HarnessError(f"trusted Tauri rebuild failed: {error}") from error
+        finally:
+            if added:
+                subprocess.run(
+                    ["/usr/bin/git", "worktree", "remove", "--force", str(worktree)],
+                    cwd=ROOT,
+                    env=git_environment,
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=60,
+                )
+
+
+def _verify_tauri_trusted_build(fixture_commit: str, artifact: pathlib.Path) -> str:
+    supplied = _canonical_tauri_artifact_sha256(artifact)
+    trusted = _trusted_tauri_rebuild_sha256(fixture_commit)
+    if supplied != trusted:
+        raise HarnessError(
+            "Tauri artifact does not match an independent rebuild of the committed fixture"
+        )
+    return supplied
+
+
 def _read_tauri_artifact(artifact_dir: pathlib.Path) -> tuple[dict[str, Any], pathlib.Path]:
     provenance_path = artifact_dir / "provenance.json"
     try:
@@ -1967,6 +2085,7 @@ def _read_tauri_artifact(artifact_dir: pathlib.Path) -> tuple[dict[str, Any], pa
         raise HarnessError("Tauri artifact provenance mismatch")
     if record.get("bytes") != artifact.stat().st_size:
         raise HarnessError("Tauri artifact size provenance mismatch")
+    _verify_tauri_trusted_build(fixture_commit, artifact)
     framework = provenance.get("framework")
     if framework != {"name": "Tauri", "version": "2.11.5"}:
         raise HarnessError("Tauri artifact does not pin framework version 2.11.5")
