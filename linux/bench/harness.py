@@ -23,6 +23,7 @@ import threading
 import time
 import urllib.parse
 from collections import Counter
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -812,6 +813,60 @@ def _product_memory_observation(root: ProcessIdentity) -> ProductMemoryObservati
         bun_rss_kib=bun_rss,
         keld_owned_rss_kib=cli_rss + host_rss,
     )
+
+
+@contextmanager
+def _product_backend_scope(
+    backend: str,
+    *,
+    wayland_display: str,
+    x11_display: str,
+):
+    """Temporarily select one explicit Linux GDK backend and restore the caller environment."""
+    if backend not in {"wayland", "x11"}:
+        raise HarnessError(f"unsupported paired product backend: {backend}")
+    keys = ("GDK_BACKEND", "WAYLAND_DISPLAY", "DISPLAY")
+    original = {key: os.environ.get(key) for key in keys}
+    try:
+        os.environ["GDK_BACKEND"] = backend
+        if backend == "wayland":
+            if not wayland_display:
+                raise HarnessError("paired product Wayland arm requires WAYLAND_DISPLAY")
+            os.environ["WAYLAND_DISPLAY"] = wayland_display
+            os.environ.pop("DISPLAY", None)
+        else:
+            if not x11_display:
+                raise HarnessError("paired product X11 arm requires DISPLAY")
+            os.environ["DISPLAY"] = x11_display
+            os.environ.pop("WAYLAND_DISPLAY", None)
+        yield
+    finally:
+        for key, value in original.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def _product_backend_pair_preflight() -> tuple[str, str, str]:
+    """Validate both desktop backends and return Bun revision plus display endpoints."""
+    wayland_display = os.environ.get("WAYLAND_DISPLAY", "")
+    x11_display = os.environ.get("DISPLAY", "")
+    if not wayland_display or not x11_display:
+        raise HarnessError(
+            "paired product backend evidence requires both WAYLAND_DISPLAY and DISPLAY"
+        )
+    revisions: list[str] = []
+    for backend in ("wayland", "x11"):
+        with _product_backend_scope(
+            backend,
+            wayland_display=wayland_display,
+            x11_display=x11_display,
+        ):
+            revisions.append(_product_runtime_preflight())
+    if revisions[0] != revisions[1]:
+        raise HarnessError("paired product backend preflight observed inconsistent Bun revisions")
+    return revisions[0], wayland_display, x11_display
 
 
 def _product_runtime_preflight() -> str:
@@ -2459,6 +2514,182 @@ def _publication_reasons(
     return reasons
 
 
+def _run_product_backend_pair_metric(
+    args: Any,
+    registry: dict[str, Any],
+    contract: dict[str, Any],
+    artifact_dir: pathlib.Path,
+    output: pathlib.Path,
+) -> tuple[dict[str, Any], bool]:
+    """Run matched shipping-product rounds under Wayland and X11 on one desktop session."""
+    provenance, cli, host, _launcher = read_keld_dev_artifacts(artifact_dir)
+    bun_revision, wayland_display, x11_display = _product_backend_pair_preflight()
+    bench_sha, tree_state, advertised = _git_state()
+    environment, power_evidence = _environment(provenance, args.metric)
+    environment["toolchains"].append({"name": "bun", "version": bun_revision})
+    environment["display"] = ";".join(
+        (
+            f"session={os.environ.get('XDG_SESSION_TYPE', 'unknown')}",
+            f"desktop={os.environ.get('XDG_CURRENT_DESKTOP', 'unknown')}",
+            f"wayland={wayland_display}",
+            f"display={x11_display}",
+            "gdk_backend_pair=wayland,x11",
+        )
+    )
+    started_utc = utc_now()
+    stock_renderer = (KELD_DEV_PROJECT_PATH / "index.html").read_bytes()
+    beacon_script = KELD_DEV_BEACON_PATH.read_bytes()
+    payload_sha = hashlib.sha256(stock_renderer + b"\0" + beacon_script).hexdigest()
+    attempt = (
+        _product_paint_attempt if args.metric == "PAINT-OPPORTUNITY" else _product_memory_attempt
+    )
+    if args.metric not in {"PAINT-OPPORTUNITY", "MEM-IDLE"}:
+        raise HarnessError(
+            "paired product backend mode implements only PAINT-OPPORTUNITY and MEM-IDLE"
+        )
+
+    if args.cache_state == "warm-cache":
+        for backend in ("wayland", "x11"):
+            with _product_backend_scope(
+                backend,
+                wayland_display=wayland_display,
+                x11_display=x11_display,
+            ):
+                priming = attempt(artifact_dir, 0, args.timeout_seconds)
+            if not priming["valid"]:
+                raise HarnessError(
+                    f"warm-cache paired product priming failed for {backend}: "
+                    f"{priming['reject_reason']}"
+                )
+
+    samples_by_backend: dict[str, list[dict[str, Any]]] = {
+        "wayland": [],
+        "x11": [],
+    }
+    orders = paired_round_orders(("wayland", "x11"), args.samples, random.SystemRandom())
+    for run, order in enumerate(orders, start=1):
+        for position, backend in enumerate(order, start=1):
+            with _product_backend_scope(
+                backend,
+                wayland_display=wayland_display,
+                x11_display=x11_display,
+            ):
+                sample = attempt(artifact_dir, run, args.timeout_seconds)
+            sample["diagnostics"]["gdk_backend"] = backend
+            sample["diagnostics"]["round_position"] = position
+            samples_by_backend[backend].append(sample)
+
+    artifact = cli if args.metric == "PAINT-OPPORTUNITY" else host
+    artifact_key = "cli" if args.metric == "PAINT-OPPORTUNITY" else "host"
+    artifact_record = provenance["artifacts"][artifact_key]
+    arms: list[dict[str, Any]] = []
+    for backend in ("wayland", "x11"):
+        samples = samples_by_backend[backend]
+        arms.append(
+            {
+                "arm_id": f"keld-linux-dev-{backend}",
+                "framework": {
+                    "name": "Keld",
+                    "version": provenance["source_git_sha"][:12],
+                },
+                "fixture_path": KELD_DEV_FIXTURE_PATH,
+                "artifact": {
+                    "sha256": artifact_record["sha256"],
+                    "basename": artifact.name,
+                    "version": provenance["source_git_sha"][:12],
+                },
+                "lane": f"webkitgtk-{backend}",
+                "role": "diagnostic",
+                "samples": samples,
+                "statistics": summarize(samples),
+            }
+        )
+
+    comparison: dict[str, Any] | None = None
+    if all(arm["statistics"]["valid_samples"] == args.samples for arm in arms):
+        comparison = paired_ratio_comparison(
+            samples_by_backend["wayland"],
+            samples_by_backend["x11"],
+            threshold=registry["regression_rule"]["threshold_ratio"],
+            baseline_arm="keld-linux-dev-wayland",
+            candidate_arm="keld-linux-dev-x11",
+        )
+
+    valid_samples = min(arm["statistics"]["valid_samples"] for arm in arms)
+    reasons = _publication_reasons(
+        metric_id=args.metric,
+        requested_samples=args.samples,
+        valid_samples=valid_samples,
+        tree_state=tree_state,
+        advertised=advertised,
+        environment=environment,
+        recipe_commits=(provenance["recipe_commit"],),
+        bench_sha=bench_sha,
+        paired=True,
+        keld_mode="dev-product",
+    )
+    notes = (
+        "Same-session shipping Linux keld dev backend pair. Every matched round runs the "
+        "same provenance-bound product artifact once with GDK_BACKEND=wayland and once "
+        "with GDK_BACKEND=x11 in balanced randomized order. Both arms require the stock "
+        "authenticated Bun echo, nonce-bound double-rAF, complete product process census, "
+        "backend-native close, exit 0 and generation-bound cleanup. Ratio = X11/Wayland. "
+        f"Power evidence: {power_evidence}."
+    )
+    document: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "metric": {
+            "id": args.metric,
+            "unit": contract["unit"],
+            "registry_version": registry["registry_version"],
+        },
+        "cache_state": args.cache_state,
+        "session": {
+            "started_utc": started_utc,
+            "finished_utc": utc_now(),
+            "requested_samples": args.samples,
+            "interleaving": "round-robin-randomized",
+            "label": args.label,
+            "notes": notes,
+        },
+        "environment": environment,
+        "provenance": {
+            "bench_sha": bench_sha,
+            "bench_tree_state": tree_state,
+            "keld_sha": provenance["source_git_sha"],
+            "harness": {
+                "path": "linux/bench/run.py",
+                "sha256": sha256_file(HARNESS_PATH),
+                "version": "1.0.0",
+                "modules": [
+                    {"path": "linux/bench/run.py", "sha256": sha256_file(HARNESS_PATH)},
+                    {"path": "linux/bench/harness.py", "sha256": sha256_file(MODULE_PATH)},
+                ],
+            },
+            "fixtures": [
+                {"path": KELD_DEV_FIXTURE_PATH, "sha": provenance["recipe_commit"]}
+            ],
+            "payload_sha256": payload_sha,
+        },
+        "arms": arms,
+        "publication": {
+            "policy_version": 2,
+            "requested": args.publish,
+            "eligible": not reasons,
+            "reasons": reasons,
+        },
+    }
+    if comparison is not None:
+        document["comparison"] = comparison
+    validate_result(document)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("x", encoding="utf-8", newline="\n") as destination:
+        json.dump(document, destination, indent=2, sort_keys=True)
+        destination.write("\n")
+    failed = any(arm["statistics"]["valid_samples"] != args.samples for arm in arms)
+    return document, failed
+
+
 def _run_product_metric(
     args: Any,
     registry: dict[str, Any],
@@ -2668,7 +2899,21 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
     if output.exists() or output.is_symlink():
         raise HarnessError(f"refusing to overwrite immutable result: {output.name}")
 
+    product_backend_pair = bool(getattr(args, "product_backend_pair", False))
+    if product_backend_pair and not product_mode:
+        raise HarnessError("--product-backend-pair requires exactly linux/keld/dev-hello")
+    if product_backend_pair and args.samples < 2:
+        raise HarnessError("--product-backend-pair requires at least two matched rounds")
+
     if product_mode:
+        if product_backend_pair:
+            return _run_product_backend_pair_metric(
+                args,
+                registry,
+                contract,
+                artifact_by_fixture[KELD_DEV_FIXTURE_PATH],
+                output,
+            )
         return _run_product_metric(
             args,
             registry,

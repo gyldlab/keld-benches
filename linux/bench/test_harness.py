@@ -33,6 +33,8 @@ from harness import (
     _prepare_product_workspace,
     _proc_identity,
     _product_atspi_bus_address,
+    _product_backend_pair_preflight,
+    _product_backend_scope,
     _product_memory_observation,
     _product_native_close,
     _product_process_class,
@@ -546,6 +548,70 @@ class ProductRunnerTests(unittest.TestCase):
             finally:
                 shutil.rmtree(workspace.root, ignore_errors=True)
         self.assertEqual(stock_path.read_bytes(), stock_before)
+
+    def test_product_backend_scope_isolates_and_restores_display_environment(self) -> None:
+        original = {
+            "GDK_BACKEND": "auto",
+            "WAYLAND_DISPLAY": "wayland-9",
+            "DISPLAY": ":77",
+        }
+        with mock.patch.dict(os.environ, original, clear=True):
+            with _product_backend_scope(
+                "wayland",
+                wayland_display="wayland-9",
+                x11_display=":77",
+            ):
+                self.assertEqual(os.environ["GDK_BACKEND"], "wayland")
+                self.assertEqual(os.environ["WAYLAND_DISPLAY"], "wayland-9")
+                self.assertNotIn("DISPLAY", os.environ)
+            self.assertEqual({key: os.environ.get(key) for key in original}, original)
+
+            with _product_backend_scope(
+                "x11",
+                wayland_display="wayland-9",
+                x11_display=":77",
+            ):
+                self.assertEqual(os.environ["GDK_BACKEND"], "x11")
+                self.assertEqual(os.environ["DISPLAY"], ":77")
+                self.assertNotIn("WAYLAND_DISPLAY", os.environ)
+            self.assertEqual({key: os.environ.get(key) for key in original}, original)
+
+    def test_product_backend_pair_preflight_checks_both_isolated_arms(self) -> None:
+        seen: list[tuple[str | None, str | None, str | None]] = []
+
+        def preflight() -> str:
+            seen.append(
+                (
+                    os.environ.get("GDK_BACKEND"),
+                    os.environ.get("WAYLAND_DISPLAY"),
+                    os.environ.get("DISPLAY"),
+                )
+            )
+            return "1.4.2+paired"
+
+        with mock.patch.dict(
+            os.environ,
+            {"WAYLAND_DISPLAY": "wayland-0", "DISPLAY": ":99"},
+            clear=True,
+        ), mock.patch("harness._product_runtime_preflight", side_effect=preflight):
+            self.assertEqual(
+                _product_backend_pair_preflight(),
+                ("1.4.2+paired", "wayland-0", ":99"),
+            )
+            self.assertEqual(
+                seen,
+                [
+                    ("wayland", "wayland-0", None),
+                    ("x11", None, ":99"),
+                ],
+            )
+            self.assertEqual(os.environ["WAYLAND_DISPLAY"], "wayland-0")
+            self.assertEqual(os.environ["DISPLAY"], ":99")
+            self.assertNotIn("GDK_BACKEND", os.environ)
+
+        with mock.patch.dict(os.environ, {"DISPLAY": ":99"}, clear=True):
+            with self.assertRaisesRegex(HarnessError, "requires both WAYLAND_DISPLAY and DISPLAY"):
+                _product_backend_pair_preflight()
 
     def test_product_preflight_requires_explicit_backend_and_matching_display(self) -> None:
         with mock.patch.dict(

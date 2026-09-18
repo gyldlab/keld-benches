@@ -28,6 +28,11 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--label", default="linux-keld")
     run.add_argument("--timeout-seconds", type=float, default=15.0)
     run.add_argument("--publish", action="store_true")
+    run.add_argument(
+        "--product-backend-pair",
+        action="store_true",
+        help="pair the shipping Linux keld dev fixture under Wayland and X11 on one session",
+    )
     return root
 
 
