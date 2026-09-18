@@ -88,15 +88,21 @@ as immutable evidence.
 
 ## Paired Rust-floor comparison
 
-paired_campaign.py runs a balanced same-machine fresh-process comparison between
-this shipping Bun client/HostOwnedHelloSession slice and the landed
-linux/keld/kipc-rust-echo library floor.
+paired_campaign.py runs a balanced same-machine comparison between this shipping
+Bun client/HostOwnedHelloSession slice and the landed
+linux/keld/kipc-rust-echo library floor. It accepts the registry-owned
+fresh-process and warm-cache states; it does not define a third cache class.
 
 Both arms score exactly 100,000 post-handshake CALL/REPLY operations per round.
-The Rust client is invoked with 100,001 requested calls because its first call
-contains HELLO plus the first CALL and is intentionally excluded from deltas;
-the remaining 100,000 echo_invoke calls are scored. The Bun arm scores 100,000
-AppLinkSession.echo calls after its separately measured HELLO.
+For fresh-process the Rust client requests 100,001 calls because its first call
+contains HELLO plus the first CALL and is excluded from deltas. For warm-cache
+both arms validate 1,000 untimed post-handshake echoes before the same 100,000
+scored calls; Rust therefore requests 101,001 total calls. Bun uses its existing
+1,000-call warmup path.
+
+Warm-cache also performs one unscored priming process for each arm and payload
+tier before pilots/scored rounds, matching the existing registry semantics while
+keeping the two arms symmetric.
 
 The campaign uses 20 paired rounds per payload tier. Tier order alternates by
 round, and arm order alternates per tier so Rust and Bun each run first exactly
@@ -111,7 +117,11 @@ window, renderer, or keld-dev startup latency.
 
 Run only from a clean committed and pushed fixture:
 
-    python3 paired_campaign.py --out-dir /absolute/path/outside-the-repository
+    python3 paired_campaign.py       --cache-state fresh-process       --out-dir /absolute/path/outside-the-repository
+
+or, for the registered warm-cache treatment:
+
+    python3 paired_campaign.py       --cache-state warm-cache       --out-dir /absolute/path/outside-the-repository
 
 The campaign executes both arms' fail-closed controls and pilots before the
 20-round campaign, then writes compact raw documents plus one manifest outside
