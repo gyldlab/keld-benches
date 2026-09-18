@@ -837,6 +837,6 @@ and **7.43×** for the 1 KiB tier against the 100 µs architecture target.
 This result proves only the authenticated cross-process keld-ipc library/wire
 path on this Linux machine. It contains no Bun product client, host lifecycle,
 window, or renderer; it must not be reported as Bun-to-Rust product IPC
-performance. Handshake time is separate from the scored deltas and was about
-8 ms median in this Linux campaign; that is retained as a separate observation,
-not folded into the RTT claim.
+performance. The separate `handshake_ns` interval covers HELLO plus the first
+CALL/REPLY and was about 8 ms median in this Linux campaign; it is retained as
+a separate observation and is not folded into the scored RTT deltas or claim.

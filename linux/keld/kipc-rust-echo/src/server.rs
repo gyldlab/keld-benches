@@ -12,11 +12,12 @@
 //! `keld_ipc::serve_echo_session` until the peer disconnects.
 
 use std::fs::OpenOptions;
-use std::io::Write as _;
+use std::io::{ErrorKind, Write as _};
 use std::os::unix::fs::OpenOptionsExt as _;
 use std::os::unix::net::UnixListener;
+use std::time::{Duration, Instant};
 
-use keld_ipc::{format_app_link, serve_echo_session, SessionToken};
+use keld_ipc::{format_app_link, serve_echo_session, SessionToken, APP_LINK_IO_DEADLINE};
 
 fn main() -> std::process::ExitCode {
     let mut args = std::env::args().skip(1);
@@ -65,15 +66,41 @@ fn main() -> std::process::ExitCode {
         }
     }
 
-    let (mut stream, _peer) = match listener.accept() {
-        Ok(pair) => pair,
-        Err(error) => {
-            eprintln!("accept: {error}");
-            let _ = std::fs::remove_file(&socket_path);
-            let _ = std::fs::remove_file(&app_link_out);
-            return std::process::ExitCode::FAILURE;
+    if let Err(error) = listener.set_nonblocking(true) {
+        eprintln!("set listener nonblocking: {error}");
+        let _ = std::fs::remove_file(&socket_path);
+        let _ = std::fs::remove_file(&app_link_out);
+        return std::process::ExitCode::FAILURE;
+    }
+    let accept_deadline = Instant::now() + APP_LINK_IO_DEADLINE;
+    let (mut stream, _peer) = loop {
+        match listener.accept() {
+            Ok(pair) => break pair,
+            Err(error)
+                if error.kind() == ErrorKind::WouldBlock && Instant::now() < accept_deadline =>
+            {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                eprintln!("accept timed out after {APP_LINK_IO_DEADLINE:?}");
+                let _ = std::fs::remove_file(&socket_path);
+                let _ = std::fs::remove_file(&app_link_out);
+                return std::process::ExitCode::FAILURE;
+            }
+            Err(error) => {
+                eprintln!("accept: {error}");
+                let _ = std::fs::remove_file(&socket_path);
+                let _ = std::fs::remove_file(&app_link_out);
+                return std::process::ExitCode::FAILURE;
+            }
         }
     };
+    if let Err(error) = stream.set_nonblocking(false) {
+        eprintln!("set accepted stream blocking: {error}");
+        let _ = std::fs::remove_file(&socket_path);
+        let _ = std::fs::remove_file(&app_link_out);
+        return std::process::ExitCode::FAILURE;
+    }
 
     // The client has already read the token out of app_link_out by the time
     // a connection lands; remove it so the file (and the token) does not
