@@ -288,9 +288,13 @@ beacon and process-memory census do not require a product timing API. The Linux
 provided that the result binds the exact generated project and sibling
 executables, records the Bun/runtime/display state, proves the expected
 CLI/host/Bun/WebKit process census, and requires normal native-window close plus
-generation-bound descendant cleanup for every valid sample. The scored
-`MEM-IDLE` denominator remains `keld-host` RSS; CLI, Bun and total-tree RSS are
-diagnostics rather than silently changing that metric.
+generation-bound descendant cleanup for every valid sample. X11 closure must
+bind the exact visible window to the captured host PID. Wayland closure must
+bind the AT-SPI application to the captured host PID, require the exact fixture
+frame/title and a unique accessible `Close` action, and invoke that action;
+signal-based termination is cleanup only and never satisfies the lifecycle
+oracle. The scored `MEM-IDLE` denominator remains `keld-host` RSS; CLI, Bun and
+total-tree RSS are diagnostics rather than silently changing that metric.
 
 `IPC-RTT`, `IPC-BULK`, `BUN-READY`, and `CRASH-RECOVERY` cannot be measured
 from launched fixtures alone: they need an approved Keld-side measurement
