@@ -8,9 +8,11 @@ import { AppLinkSession, encodeEchoRequest, type EchoRequest } from "./kipc.ts";
 
 const RESULT_MARKER = "KELD-90-BUN-IPC-RESULT";
 const EXPECTED_FAILURE_MARKER = "KELD-90-BUN-IPC-EXPECTED-FAIL";
+const WARMUP_CALLS = 1_000;
 
 type Tier = "small" | "representative";
 type Fault = "none" | "bad-token" | "wrong-response";
+type Mode = "fresh-process" | "warm-cache";
 
 function requiredEnvironment(name: string): string {
   const value = process.env[name];
@@ -38,6 +40,12 @@ function readFault(): Fault {
   const value = process.env.KELD_BENCH_FAULT ?? "none";
   if (value === "none" || value === "bad-token" || value === "wrong-response") return value;
   throw new Error(`unsupported KELD_BENCH_FAULT ${JSON.stringify(value)}`);
+}
+
+function readMode(): Mode {
+  const value = requiredEnvironment("KELD_BENCH_MODE");
+  if (value === "fresh-process" || value === "warm-cache") return value;
+  throw new Error(`KELD_BENCH_MODE must be fresh-process or warm-cache, got ${JSON.stringify(value)}`);
 }
 
 function makeInvalidTokenLink(link: string): string {
@@ -87,6 +95,7 @@ function checkedDurationNs(start: number, end: number, label: string): number {
 const tier = readTier();
 const calls = readPositiveInteger("KELD_BENCH_CALLS", 1_000_000);
 const fault = readFault();
+const mode = readMode();
 const outPath = requiredEnvironment("KELD_BENCH_OUT");
 const keldSha = requiredEnvironment("KELD_BENCH_KELD_SHA");
 if (!/^[0-9a-f]{40}$/.test(keldSha)) {
@@ -111,6 +120,12 @@ try {
     fault === "wrong-response"
       ? { message: request.message, count: request.count + 1 }
       : request;
+
+  const warmupCalls = mode === "warm-cache" ? WARMUP_CALLS : 0;
+  for (let call = 1; call <= warmupCalls; call += 1) {
+    assertEcho(await session.echo(request), expected, call);
+  }
+
   const deltasNs: number[] = [];
   for (let call = 1; call <= calls; call += 1) {
     const start = Bun.nanoseconds();
@@ -126,10 +141,12 @@ try {
     keld_sha: keldSha,
     clock: "Bun.nanoseconds around shipping AppLinkSession.echo",
     timed_interval: "before session.echo through decoded EchoResponse return",
+    cache_state: mode,
     tier,
     payload_bytes: payloadBytes,
     handshake_ns: handshakeNs,
     handshake_included_in_deltas: false,
+    warmup_calls: warmupCalls,
     calls_requested: calls,
     calls_timed: deltasNs.length,
     bun_version: Bun.version,

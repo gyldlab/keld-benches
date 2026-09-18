@@ -84,7 +84,9 @@ def block_bootstrap_ci(sessions: list[list[int]], q: float) -> list[int]:
         samples.append(weighted_kth(sessions, weights, rank))
     samples.sort()
     return [percentile(samples, 0.025), percentile(samples, 0.975)]
-def benchmark_environment(out_path: Path, tier: str, calls: int, fault: str) -> dict[str, str]:
+def benchmark_environment(
+    out_path: Path, tier: str, calls: int, fault: str, cache_state: str
+) -> dict[str, str]:
     env = os.environ.copy()
     env.update(
         {
@@ -94,18 +96,21 @@ def benchmark_environment(out_path: Path, tier: str, calls: int, fault: str) -> 
             "KELD_BENCH_OUT": str(out_path),
             "KELD_BENCH_KELD_SHA": KELD_SHA,
             "KELD_BENCH_FAULT": fault,
+            "KELD_BENCH_MODE": cache_state,
         }
     )
     return env
 
 
-def run_case(out_path: Path, tier: str, calls: int, fault: str) -> subprocess.CompletedProcess[str]:
+def run_case(
+    out_path: Path, tier: str, calls: int, fault: str, cache_state: str
+) -> subprocess.CompletedProcess[str]:
     if out_path.exists():
         raise RuntimeError(f"refusing to overwrite {out_path}")
     completed = subprocess.run(
         [str(RUNNER)],
         cwd=ROOT,
-        env=benchmark_environment(out_path, tier, calls, fault),
+        env=benchmark_environment(out_path, tier, calls, fault, cache_state),
         text=True,
         capture_output=True,
         timeout=120,
@@ -125,7 +130,7 @@ def run_case(out_path: Path, tier: str, calls: int, fault: str) -> subprocess.Co
                 f"stdout={completed.stdout}\nstderr={completed.stderr}"
             )
     return completed
-def load_raw(path: Path, tier: str, calls: int) -> dict:
+def load_raw(path: Path, tier: str, calls: int, cache_state: str) -> dict:
     raw = path.read_bytes()
     if raw.count(b"\n") != 0:
         raise RuntimeError(f"{path} is not compact one-line JSON")
@@ -134,11 +139,13 @@ def load_raw(path: Path, tier: str, calls: int) -> dict:
     checks = {
         "fixture": document.get("fixture") == FIXTURE,
         "keld_sha": document.get("keld_sha") == KELD_SHA,
+        "cache_state": document.get("cache_state") == cache_state,
         "tier": document.get("tier") == tier,
         "payload": document.get("payload_bytes") == expected_bytes,
         "calls_requested": document.get("calls_requested") == calls,
         "calls_timed": document.get("calls_timed") == calls,
         "deltas": len(document.get("deltas_ns", [])) == calls,
+        "warmup_calls": document.get("warmup_calls") == (1_000 if cache_state == "warm-cache" else 0),
         "handshake_excluded": document.get("handshake_included_in_deltas") is False,
     }
     failed = [name for name, passed in checks.items() if not passed]
@@ -220,6 +227,11 @@ def environment_metadata() -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out-dir", required=True, type=Path)
+    parser.add_argument(
+        "--cache-state",
+        required=True,
+        choices=("fresh-process", "warm-cache"),
+    )
     args = parser.parse_args()
     out_dir = args.out_dir.resolve()
     if out_dir.exists():
@@ -241,15 +253,35 @@ def main() -> int:
     controls = out_dir / "controls"
     controls.mkdir()
     for fault in ("bad-token", "wrong-response"):
-        run_case(controls / f"{fault}.must-not-exist.json", "small", 100, fault)
+        run_case(
+            controls / f"{fault}.must-not-exist.json",
+            "small",
+            100,
+            fault,
+            args.cache_state,
+        )
+
+    priming = {}
+    if args.cache_state == "warm-cache":
+        prime_dir = out_dir / "priming"
+        prime_dir.mkdir()
+        for tier in ("small", "representative"):
+            path = prime_dir / f"prime-{tier}.raw.json"
+            run_case(path, tier, CALLS, "none", args.cache_state)
+            document = load_raw(path, tier, CALLS, args.cache_state)
+            priming[tier] = {
+                "calls": CALLS,
+                "warmup_calls": document["warmup_calls"],
+                "sha256": sha256(path),
+            }
 
     pilots = out_dir / "pilots"
     pilots.mkdir()
     pilot_stats = {}
     for tier in ("small", "representative"):
         path = pilots / f"pilot-{tier}.raw.json"
-        run_case(path, tier, CALLS, "none")
-        document = load_raw(path, tier, CALLS)
+        run_case(path, tier, CALLS, "none", args.cache_state)
+        document = load_raw(path, tier, CALLS, args.cache_state)
         values = sorted(document["deltas_ns"])
         p99 = percentile(values, 0.99)
         pilot_stats[tier] = {"p99_ns": p99, "sha256": sha256(path)}
@@ -266,11 +298,11 @@ def main() -> int:
         for tier in ("small", "representative"):
             name = (
                 f"{date}.kel90-linux-bun-100k-{tier}."
-                f"fresh-process.s{session:02d}.raw.json"
+                f"{args.cache_state}.s{session:02d}.raw.json"
             )
             path = campaign / name
-            run_case(path, tier, CALLS, "none")
-            document = load_raw(path, tier, CALLS)
+            run_case(path, tier, CALLS, "none", args.cache_state)
+            document = load_raw(path, tier, CALLS, args.cache_state)
             documents[tier].append(document)
             raw_files.append(
                 {
@@ -296,9 +328,11 @@ def main() -> int:
         "format": "kel90-linux-bun-ipc-rtt-campaign/v1",
         "classification": "diagnostic-product-client-arm",
         "campaign": {
-            "cache_state": "fresh-process",
+            "cache_state": args.cache_state,
             "sessions": SESSIONS,
             "calls_per_session": CALLS,
+            "priming_process_pair_per_tier": args.cache_state == "warm-cache",
+            "priming": priming,
             "started_utc": started.isoformat().replace("+00:00", "Z"),
             "finished_utc": finished.isoformat().replace("+00:00", "Z"),
             "pilot_stop_p99_ns": PILOT_P99_STOP_NS,
@@ -334,11 +368,19 @@ def main() -> int:
             ],
         },
         "claim_boundary": {
-            "proves": "shipping Bun AppLinkSession plus HostOwnedHelloSession persistent echo RTT on this Linux machine",
-            "does_not_prove": "window/renderer latency, full keld-dev startup, or direct cross-session Rust-vs-Bun overhead ratio",
+            "proves": (
+                "shipping Bun AppLinkSession plus HostOwnedHelloSession persistent echo RTT "
+                f"for cache_state={args.cache_state} on this Linux machine"
+            ),
+            "does_not_prove": (
+                "window/renderer latency, full keld-dev startup, or direct cross-session "
+                "fresh-vs-warm / Rust-vs-Bun causal ratios"
+            ),
         },
     }
-    manifest_path = out_dir / f"{date}.kel90-linux-bun-product-client.manifest.raw.json"
+    manifest_path = out_dir / (
+        f"{date}.kel90-linux-bun-product-client.{args.cache_state}.manifest.raw.json"
+    )
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     print(json.dumps({"manifest": str(manifest_path), "tiers": tiers}, indent=2))
     return 0

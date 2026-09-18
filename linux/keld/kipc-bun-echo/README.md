@@ -59,11 +59,27 @@ Result-v2 does not currently model that block-sampled corpus, so this evidence
 remains diagnostic raw sidecars + manifest. No publication eligibility is
 inferred from collecting more samples.
 
-Run the complete fresh-process campaign only from a clean committed fixture:
+Run a complete campaign only from a clean committed fixture:
 
 ```bash
-python3 campaign.py --out-dir /absolute/path/outside-the-repository
+python3 campaign.py \
+  --cache-state fresh-process \
+  --out-dir /absolute/path/outside-the-repository
 ```
+
+For `warm-cache`, the controller follows the existing registry/KEL-99
+semantics rather than inventing a new state:
+
+```bash
+python3 campaign.py \
+  --cache-state warm-cache \
+  --out-dir /absolute/path/outside-the-repository
+```
+
+It runs one unscored priming process pair per payload tier first. Every scored
+sample is still a fresh process using the same fixture/project, and each warm
+Bun process performs 1,000 untimed authenticated echoes before the 100,000
+timed calls, matching the KEL-99 warm mode.
 
 The campaign writes raw documents and a manifest outside the repository first.
 Only a fully validated campaign is copied under `linux/bench/results/ipc-rtt/`
