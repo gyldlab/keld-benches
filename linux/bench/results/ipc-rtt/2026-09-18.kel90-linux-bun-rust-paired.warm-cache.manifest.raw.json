@@ -1,0 +1,1258 @@
+{
+  "campaign": {
+    "cache_state": "warm-cache",
+    "finished_utc": "2026-09-18T19:48:25.610275Z",
+    "negative_controls": {
+      "bun": {
+        "bad-token": {
+          "failure_marker_seen": true,
+          "no_result_file": true,
+          "passed": true,
+          "runner_returncode": 1
+        },
+        "wrong-response": {
+          "failure_marker_seen": true,
+          "no_result_file": true,
+          "passed": true,
+          "runner_returncode": 1
+        }
+      },
+      "rust_bad_token": {
+        "client_returncode": 0,
+        "no_result_file": true,
+        "passed": true,
+        "server_marker": "KELD-IPC-007",
+        "server_returncode": 1
+      }
+    },
+    "order_policy": "tier order alternates by round; arm order alternates within tier/round so each arm runs first equally often",
+    "paired_rounds": 20,
+    "pilot": {
+      "representative": {
+        "bun": {
+          "p99_ns": 38783,
+          "sha256": "ccd193bfc66fcc0275380a31f757664844b803562b10f688299a745a9ceb8655"
+        },
+        "rust": {
+          "p99_ns": 12360,
+          "sha256": "829169787d7893a5040a5a1e58379fd5d585e7bad2309829b388c33a742d09cc"
+        }
+      },
+      "small": {
+        "bun": {
+          "p99_ns": 29175,
+          "sha256": "99ba8aceacbd58700fc6430867252791031ed8584c1e26cf9cbbdefd5f877220"
+        },
+        "rust": {
+          "p99_ns": 11933,
+          "sha256": "32e93a06eb9319da53cd8f6ee9e21bc0d65049c0f61aaa3e9a05a87bdb3936c8"
+        }
+      }
+    },
+    "pilot_stop_p99_ns": 300000,
+    "priming": {
+      "representative": {
+        "bun": {
+          "calls_timed": 100000,
+          "sha256": "f58bb16782ac01d1bc70fd9e10dc1c4acfa01655e26a1158020b1951bf5ad1a0",
+          "warmup_calls": 1000
+        },
+        "rust": {
+          "calls_timed": 100000,
+          "sha256": "3cfc0e08a6dc266d5abe5a79f408a2cf9226c757318b8e3d204f6556e00368f5",
+          "warmup_calls": 1000
+        }
+      },
+      "small": {
+        "bun": {
+          "calls_timed": 100000,
+          "sha256": "ee9316fd5ddac6eafc1c040a0a41f7c86a9423603dc402faf7bb5d3ae32d5b35",
+          "warmup_calls": 1000
+        },
+        "rust": {
+          "calls_timed": 100000,
+          "sha256": "321672e9891a50332e360611613d2f636bb192a6171bae67e9ea4e1ef87881bc",
+          "warmup_calls": 1000
+        }
+      }
+    },
+    "priming_process_per_arm_per_tier": true,
+    "rust_request_note": "Rust call 1 contains HELLO plus first CALL and is excluded; 1000 validated warmup calls are also excluded; requesting 101001 yields exactly 100000 scored post-handshake echo_invoke calls",
+    "rust_requested_calls_per_round": 101001,
+    "schedule": [
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 1,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 1,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 2,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 2,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 3,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 3,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 4,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 4,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 5,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 5,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 6,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 6,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 7,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 7,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 8,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 8,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 9,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 9,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 10,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 10,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 11,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 11,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 12,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 12,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 13,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 13,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 14,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 14,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 15,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 15,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 16,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 16,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 17,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 17,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 18,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 18,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 19,
+        "tier": "small"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 19,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "rust",
+          "bun"
+        ],
+        "round": 20,
+        "tier": "representative"
+      },
+      {
+        "arm_order": [
+          "bun",
+          "rust"
+        ],
+        "round": 20,
+        "tier": "small"
+      }
+    ],
+    "scored_calls_per_arm_per_round": 100000,
+    "started_utc": "2026-09-18T19:46:20.770900Z",
+    "warmup_calls_per_scored_process": 1000
+  },
+  "claim_boundary": {
+    "does_not_prove": "pure language/runtime tax, identical host orchestration cost, renderer/window latency, full keld-dev startup, or causal attribution of the entire ratio to Bun",
+    "proves": "same-machine balanced paired warm-cache RTT comparison between the shipping Bun AppLinkSession/HostOwnedHelloSession slice and the direct Rust keld-ipc library floor at one Keld SHA and matched payload/sample counts"
+  },
+  "classification": "diagnostic-paired-product-vs-library-arm",
+  "environment": {
+    "ac_power": true,
+    "arch": "x86_64",
+    "bun_revision": "1.4.2+744846f84",
+    "bun_version": "1.4.2",
+    "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+    "cpu": "Intel(R) Core(TM) i5-10500H CPU @ 2.50GHz",
+    "cpu_logical": 12,
+    "kernel": "7.0.0-31-generic",
+    "os": "Ubuntu 26.04.1 LTS",
+    "power_profile": "performance",
+    "ram_kib": 23983364,
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "thermal_state": "unverified"
+  },
+  "format": "kel90-linux-bun-rust-paired-ipc-rtt/v1",
+  "provenance": {
+    "bench_sha": "7edcf60d8a0dc3120b9ca49e80b789676a403eb6",
+    "bun_runner_artifact_sha256": "7fe5ec545498d465cdbec30400593d263806619c70953579fee6c48f197cc8dd",
+    "keld_sha": "0ea0780bb574ad242e9f1105fa4af5842872bad3",
+    "raw_corpus_digest_chain_sha256": "ba03df0860b98cd920f5debcd83076c74ac29bb000ec2913777bd8558019915b",
+    "rust_client_artifact_sha256": "f709d99c9a148c447ab2b9fae651679f86612b7313572f56c0f856602ce66f57",
+    "rust_server_artifact_sha256": "f51f4c8293093a2b34eb6f55731f37a665b1442cff9c76521fcf3666aa075a18",
+    "source_sha256": {
+      "linux/keld/kipc-bun-echo/campaign.py": "346f9ba8c5dfd35feed88b295a567bedc3d012a04f9503d63938565d86753677",
+      "linux/keld/kipc-bun-echo/paired_campaign.py": "2d57687993d730412d135941b61ae23ebf2d1bae4f3d684e44e456df4bf15477",
+      "linux/keld/kipc-bun-echo/src/kipc-transport.ts": "037b7fb3b2f277c28e7ccaf594200ecfba9bca9b19bc04b2234a15590f7b2901",
+      "linux/keld/kipc-bun-echo/src/kipc.ts": "fb979d377fadfd2a9058dadf087f837444f17adc59c09acbe2daf24db0596e32",
+      "linux/keld/kipc-bun-echo/src/main.ts": "04f2d0b623c61f27b2165feefc0f0d936ef6ae28e4e0113d0a8b859df7440ee5",
+      "linux/keld/kipc-bun-echo/src/runner.rs": "2297473a93cf486625d7105af9867fd2736f7fa55492361ddcf35182f90eec4a",
+      "linux/keld/kipc-rust-echo/Cargo.toml": "2c1979b53238ef2d17e1422c808dfff44b832a6385e12bda4bf725f05bb2201d",
+      "linux/keld/kipc-rust-echo/src/client.rs": "90b46cb20b51859e9fe2113edea11f25f7a56951ab0ad71cd3f466b1e4b73a0e",
+      "linux/keld/kipc-rust-echo/src/server.rs": "4eca730934c08f494f4be423993d55f6e97aa98bd68abcea8368d8d7fe84c026"
+    }
+  },
+  "publication": {
+    "eligible": false,
+    "reasons": [
+      "THERMAL_STATE_UNVERIFIED",
+      "RESULT_V2_SESSION_BLOCK_SCHEMA_GAP",
+      "PRODUCT_CLIENT_VS_LIBRARY_FLOOR_DIAGNOSTIC"
+    ]
+  },
+  "raw_files": [
+    {
+      "arm": "bun",
+      "bytes": 600816,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r01.raw.json",
+      "round": 1,
+      "sha256": "e3c43bdc15d1dc02854993e263c811626927d641ee470cd026f8b5a6ef3158cf",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600808,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r02.raw.json",
+      "round": 2,
+      "sha256": "c8460bf464ef1a10911cedffd8e8b4539a6686f798e5220fbffc496631516794",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600825,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r03.raw.json",
+      "round": 3,
+      "sha256": "351ac272e15c7eea63b4157c6e813b61421d05e80fa58eb0070c0aa55bad06c5",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600803,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r04.raw.json",
+      "round": 4,
+      "sha256": "2d327683e6458059e98efdce86935500b1271ba90f58b5d72f808acefd182a90",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600800,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r05.raw.json",
+      "round": 5,
+      "sha256": "710ad17238dd537aac53d4c715bcb528f367e6796e097fb4d1fcab2d57e5406a",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600812,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r06.raw.json",
+      "round": 6,
+      "sha256": "a0a759ca7c36c901001585967c9f2ba96f4292aa590704db09054651a04a76f8",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600868,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r07.raw.json",
+      "round": 7,
+      "sha256": "6707de18d5b3b584dceecb15066e42444f1206782dea452fa6387e6dfe90e693",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600814,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r08.raw.json",
+      "round": 8,
+      "sha256": "0a4e6207dc0ef0e8d274aaee617a087e3e0bceb8386f907ca7740ab589242fbd",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600809,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r09.raw.json",
+      "round": 9,
+      "sha256": "35a7347225ffd63f581264a3f29d7081b233a0a7adb107d9e362a619d86c1219",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600805,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r10.raw.json",
+      "round": 10,
+      "sha256": "2bd36b96a0f7c446bf313b612b1dcebff34882498ba636307916577988003f18",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600800,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r11.raw.json",
+      "round": 11,
+      "sha256": "7d23cbca335e266fbd4db6f682fb7596ae07ff6ccf5b9c495d4b4c15782cf4f7",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600813,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r12.raw.json",
+      "round": 12,
+      "sha256": "957231e543b622cb66c77e17a820cd44de57d8e30edb256eaf370247ef5ac98d",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600806,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r13.raw.json",
+      "round": 13,
+      "sha256": "537485e7fd0c5d03a3165f4c6f89ec8a1e112e96b75a2fc72f05c1ac7946eb8f",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600807,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r14.raw.json",
+      "round": 14,
+      "sha256": "c340b16b744d17bfe9ff4d7ec3bc5ced0334c7d1e2ee03de58cfca23ad0f816e",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600835,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r15.raw.json",
+      "round": 15,
+      "sha256": "81783e7002fa8d0d5bae2053a93c86121874bcc0d8a29600b11385c4a9e86aa9",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600804,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r16.raw.json",
+      "round": 16,
+      "sha256": "247e2d399f969bcee79454f67e373a2ae57c2d2a52b94fb12bb56820dc1922db",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600812,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r17.raw.json",
+      "round": 17,
+      "sha256": "db43eb7d80a270307303c7d02ab1aa25c44b168bbc25d8cc94ea21868de06928",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600814,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r18.raw.json",
+      "round": 18,
+      "sha256": "e995facbc075193932396c820e3cea01d15eb502355a339243f19ff07c164df7",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600800,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r19.raw.json",
+      "round": 19,
+      "sha256": "38b61a5732dbfca0e76872b73fc98b18413cada7e53fd7a348fd5d6ed2f33b22",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600822,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-representative.warm-cache.r20.raw.json",
+      "round": 20,
+      "sha256": "bb8586db45fa52274894c7ee8da180451a2da37892a025ad63b752861a20d7b5",
+      "tier": "representative"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600679,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r01.raw.json",
+      "round": 1,
+      "sha256": "7e0067a292a4dde9de3bd7301bfc302f5acd9bb18247aef07b6eca3cc7b9450d",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600635,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r02.raw.json",
+      "round": 2,
+      "sha256": "5486c84f30a2dde5b33a267c2cabd0cc50c05bd3534ad22f26905b306aca8774",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600637,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r03.raw.json",
+      "round": 3,
+      "sha256": "2db4de9aa429bdc4d52de1f7bdc6b2c02d73e2c97abdb35346790ce64262369f",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600633,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r04.raw.json",
+      "round": 4,
+      "sha256": "a30aaeb0e2c1af551c9d03e8a4164145f8154e3121fb1da815616dc75ba2ecf8",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600641,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r05.raw.json",
+      "round": 5,
+      "sha256": "eb1f410e445836f1a206b52a3d19c0b3f4ee57b8325683430708fd9bb8bce4fc",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600635,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r06.raw.json",
+      "round": 6,
+      "sha256": "f526951ec73b43cabdfda9f63a644bfee2a1ff1755a37ac269b3338758ff1d81",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600643,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r07.raw.json",
+      "round": 7,
+      "sha256": "0e8faec1fe3c6c62d51662ca0d0a11018601f3e01a234ccb1389038cbe4acb95",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600639,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r08.raw.json",
+      "round": 8,
+      "sha256": "b825fda3dc05d5665b429582e5687b70d0744266391559b8cc29d40bd78e3b83",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600627,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r09.raw.json",
+      "round": 9,
+      "sha256": "2a524ad800c6c52aeaba87bba99f3f49ffd57111bc0de3c8a300ff28b10f6bbc",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600628,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r10.raw.json",
+      "round": 10,
+      "sha256": "fba457e5c357127f04a7755d3e11abb2e5db3b5b7ca27f7364816cdb1547f201",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600620,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r11.raw.json",
+      "round": 11,
+      "sha256": "201d342e179601fd7183cfe3db8742803dce361bfa363226cb6d689ab54aa152",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600636,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r12.raw.json",
+      "round": 12,
+      "sha256": "b0369c9001f74ba4b5e8cb4dad168a8bb8f79cf79ca9af8143c161a6e6c9b18f",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600651,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r13.raw.json",
+      "round": 13,
+      "sha256": "e251d7734892e77b550a210057ab5e424579e67f04158ad2e226f60f2fd87d13",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600644,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r14.raw.json",
+      "round": 14,
+      "sha256": "3b534757dfdf0bff7e8265714716f96296faba61321af8a62f926dc73e2c8ff5",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600647,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r15.raw.json",
+      "round": 15,
+      "sha256": "6ed1a85c4c1d75443d494018449d5b4fce9428cf92fcf88bfe0f7bf0fa028058",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600641,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r16.raw.json",
+      "round": 16,
+      "sha256": "9bc89879d005e46377f9db827780a5d6525cdc007f199066068f76c6e36c02cc",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600635,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r17.raw.json",
+      "round": 17,
+      "sha256": "7a9a9809cbeb28970dee9855c697b7e95bd3defd1014346bb79b896419c1f080",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600633,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r18.raw.json",
+      "round": 18,
+      "sha256": "020cebd3d49494d84ba8a66c7763177572b5015753b5cb7dbd68b9d907f03dd7",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600632,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r19.raw.json",
+      "round": 19,
+      "sha256": "98ca2412177d6e3b9aa72f70e02c348953a18ae92f33b64cbb4c5cf1aa086b0b",
+      "tier": "small"
+    },
+    {
+      "arm": "bun",
+      "bytes": 600625,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-bun-100k-small.warm-cache.r20.raw.json",
+      "round": 20,
+      "sha256": "b850173a790287c5d1216f0b3fbd4af10e81db593c2d62fc6d13690fc5b4b14d",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 505556,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r01.raw.json",
+      "round": 1,
+      "sha256": "38f6d2849d21877e43d00141f4f1088a47b478a2a859c33474f8208280e3ed39",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 506091,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r02.raw.json",
+      "round": 2,
+      "sha256": "8f04de31a8206094e0c3b0de331624ca24fa390adbc6fea590b5a8bf2fbdd9b3",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 508340,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r03.raw.json",
+      "round": 3,
+      "sha256": "9089cc86eba7b394e21981a5c63acfb8d56ffb6f418efbf6c040990f8e6cdba9",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 508594,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r04.raw.json",
+      "round": 4,
+      "sha256": "6d00d566b4fff7e36e5a68221a16143cf393fd4a506e97dc4bc377c4ebf251df",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 509537,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r05.raw.json",
+      "round": 5,
+      "sha256": "46ecb49ed5dfda9d779d2606ce60cfb8646915add6f75a7095e306a10b56f361",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 510018,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r06.raw.json",
+      "round": 6,
+      "sha256": "24c9af4a1330bf55a1fa7f04a5ae9f70d9c57797a745f487d57fe37f5186de71",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 507172,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r07.raw.json",
+      "round": 7,
+      "sha256": "66df24387bc6d134ca5c1472c3e9c7ff6a7b2b3fcbcc2bed0b2e6d883a750ffd",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 505268,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r08.raw.json",
+      "round": 8,
+      "sha256": "c892ce2675e0547e8b8a294322a82aa3d47d65075eb3f770807e24fece6ae824",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 506512,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r09.raw.json",
+      "round": 9,
+      "sha256": "39ee2e22b5b9fcb5c1bcdb2187eca7308871d4ecc14731f8e4c1f229a84fbb51",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 505230,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r10.raw.json",
+      "round": 10,
+      "sha256": "b258d46b2a2fb8f9c0d2997ca474c53853555a63c011e2055bd0f4d9c4c5d516",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 506322,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r11.raw.json",
+      "round": 11,
+      "sha256": "dc05f97fb65a45a58a2896fb037b3c4739f22efb8fafb3242de2f0e8c41de4c2",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 506659,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r12.raw.json",
+      "round": 12,
+      "sha256": "d1d4ce4445c2b9ae365cd1003a2deb9a2e7bde5d873d970a37b3263a4ffd1e2e",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 505755,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r13.raw.json",
+      "round": 13,
+      "sha256": "653f7f2e561ee5899f6a07dfca178e50aa1664b54034606004728f369cd947b0",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 504843,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r14.raw.json",
+      "round": 14,
+      "sha256": "efb733a176566364555fbe9538b0dc0ba1c545d7d80d1a20683d2f19cc2699e9",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 510918,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r15.raw.json",
+      "round": 15,
+      "sha256": "800514aaf3821dbea7aa9f633b442f600410a632d2f9461c60cdf35c846b6bd7",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 505732,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r16.raw.json",
+      "round": 16,
+      "sha256": "4589d53899c9aca4af4fb895454c4ff1e85d2aa078bd92ff91d76814bc5cb729",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 507271,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r17.raw.json",
+      "round": 17,
+      "sha256": "921adcdb62d19ef4d95ff1bc7117674d8714fff833535de90f27caa1de67f1f5",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 505706,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r18.raw.json",
+      "round": 18,
+      "sha256": "542a0930e31985a9371171ccf562a13a0a4e5cf266eb1c632e419ccef8ad78b2",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 506851,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r19.raw.json",
+      "round": 19,
+      "sha256": "f5bb2eba61fd0babe468b2b046119d6f45666266018691934229802c2539e483",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 507365,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-representative.warm-cache.r20.raw.json",
+      "round": 20,
+      "sha256": "588b353188166dcfaa3fe44d42c8730020ea878dea82d638a9831c00238e67b8",
+      "tier": "representative"
+    },
+    {
+      "arm": "rust",
+      "bytes": 503566,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r01.raw.json",
+      "round": 1,
+      "sha256": "2f5519f2d88149f41b4f51a5d761bef8a6efb66d528c2a6988465f64840beef9",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 503025,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r02.raw.json",
+      "round": 2,
+      "sha256": "35c2128a27c6c6b6e362737b14dbf20de123dfbc60af8edf18a6ca613ac83fcc",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 502154,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r03.raw.json",
+      "round": 3,
+      "sha256": "681958b0e5cd81f967df3215962a2d18439b11a56866ab7dc62ff9a0f5fcb6bb",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 503112,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r04.raw.json",
+      "round": 4,
+      "sha256": "a94c61be9b04dceeef7266d2fb7d879883b69b81f5f29319b5f1fe176a385d12",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 502371,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r05.raw.json",
+      "round": 5,
+      "sha256": "1becc291fa8cb4114821fcac099974bc99ae73aa771b9ed5ad15863b12c1b444",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 502570,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r06.raw.json",
+      "round": 6,
+      "sha256": "53b3777b98a15755635e52c6f6fa91a709fa0134965654f2b37281eff13fa5fd",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 502518,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r07.raw.json",
+      "round": 7,
+      "sha256": "493523009ee5bcef09fc96d8a968577473c6ac0c61c33f2d5831e08310bd113a",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 502449,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r08.raw.json",
+      "round": 8,
+      "sha256": "6bb6e296750fff5b0ad14cb7f576f638a4f128df1914826c631cd01dea9d84f6",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 502633,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r09.raw.json",
+      "round": 9,
+      "sha256": "a9ecbbe3114614580b90d857c08f08feec81872f406e55681992f8071fdb2aeb",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 502531,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r10.raw.json",
+      "round": 10,
+      "sha256": "681acdc3d0501ef4460f8903709245c5fe0d781ed6ac2d04e4338c3de574dfbd",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 502630,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r11.raw.json",
+      "round": 11,
+      "sha256": "85b279967be5515b189ce5ec884c75f7430fc9760d1939ea06aa2092369c5dc7",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 503041,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r12.raw.json",
+      "round": 12,
+      "sha256": "dbeff63cfae39ad0f2020d3a8583dd99eae6b5d643a6f48ae98b1a868191ade6",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 502978,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r13.raw.json",
+      "round": 13,
+      "sha256": "c593ea0e8dcbd07b859cc50aa5a245ec225e6073a85ce9e40dd92d4aec79b093",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 502844,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r14.raw.json",
+      "round": 14,
+      "sha256": "0c11e22d73807a44bb964410e250a5f8e00a9c7f323803c55b4ec1cd781b744b",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 502444,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r15.raw.json",
+      "round": 15,
+      "sha256": "3ba0f5f5ec44ab5dea5a6a2644ead765e71e951fa9c8ec30078615be3a6bb127",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 503340,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r16.raw.json",
+      "round": 16,
+      "sha256": "ed4671a7be91fc761bcbb84c68e0fa2ca8fb74837129ad536066e370bb86427d",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 502663,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r17.raw.json",
+      "round": 17,
+      "sha256": "8eabf91d7c8022c7326cb5249da1272e30fe47edff068159f48b18f75f8c4f92",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 504101,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r18.raw.json",
+      "round": 18,
+      "sha256": "2b43ae4eb187708fac216dca9c042fa7d74290e04867d2e29d4985a5dff3c807",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 502211,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r19.raw.json",
+      "round": 19,
+      "sha256": "f78cebbcfa81907dbba7c77f5a1116b970dc308d67517cb4f9c49fc213f1f312",
+      "tier": "small"
+    },
+    {
+      "arm": "rust",
+      "bytes": 504078,
+      "path": "linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-paired-rust-100k-small.warm-cache.r20.raw.json",
+      "round": 20,
+      "sha256": "3c602c98e4eebb60e571891a633feb3227fe32dc00574af6bab01b594d17ae81",
+      "tier": "small"
+    }
+  ],
+  "statistics_method": {
+    "paired_bootstrap": "sample 20 round indices with replacement and apply identical weights to Rust and Bun arms before recomputing percentile ratio/delta",
+    "per_arm_bootstrap": "sample 20 whole session blocks with replacement; pool selected blocks; recompute nearest-rank percentile",
+    "percentile": "nearest-rank ceil(p*n), one-indexed",
+    "resamples": 2000,
+    "rng": "Python random.Random (MT19937)",
+    "seed": 20260919
+  },
+  "tiers": {
+    "representative": {
+      "bun_product_client": {
+        "bootstrap_ci95_p50_ns": [
+          19298,
+          19638
+        ],
+        "bootstrap_ci95_p99_ns": [
+          37565,
+          39253
+        ],
+        "calls_timed_per_session": 100000,
+        "handshake_ns": {
+          "max": 5669363,
+          "median": 5362923.5,
+          "min": 4852116
+        },
+        "max_ns": 8754642,
+        "p50_ns": 19469,
+        "p90_ns": 26728,
+        "p99_ns": 38305,
+        "pooled_timed_calls": 2000000,
+        "sessions": 20
+      },
+      "paired_comparison": {
+        "bootstrap_unit": "paired round; resample identical round indices for both arms",
+        "central_p50_delta_ns": 11417,
+        "central_p50_ratio": 2.417909,
+        "central_p99_delta_ns": 24965,
+        "central_p99_ratio": 2.871439,
+        "p50": {
+          "delta_ns_ci95": [
+            11250,
+            11590
+          ],
+          "ratio_ci95": [
+            2.39639,
+            2.442049
+          ]
+        },
+        "p99": {
+          "delta_ns_ci95": [
+            24083,
+            26008
+          ],
+          "ratio_ci95": [
+            2.755833,
+            2.985968
+          ]
+        },
+        "ratio_definition": "Bun product-client percentile / Rust library-floor percentile"
+      },
+      "payload_bytes": 1024,
+      "rust_library_floor": {
+        "bootstrap_ci95_p50_ns": [
+          8019,
+          8089
+        ],
+        "bootstrap_ci95_p99_ns": [
+          12952,
+          13837
+        ],
+        "calls_timed_per_session": 100000,
+        "handshake_ns": {
+          "max": 1202118,
+          "median": 1053932.5,
+          "min": 120123
+        },
+        "max_ns": 1494113,
+        "p50_ns": 8052,
+        "p90_ns": 9663,
+        "p99_ns": 13340,
+        "pooled_timed_calls": 2000000,
+        "sessions": 20
+      }
+    },
+    "small": {
+      "bun_product_client": {
+        "bootstrap_ci95_p50_ns": [
+          15042,
+          15281
+        ],
+        "bootstrap_ci95_p99_ns": [
+          28648,
+          29788
+        ],
+        "calls_timed_per_session": 100000,
+        "handshake_ns": {
+          "max": 6107709,
+          "median": 5824870.5,
+          "min": 5151989
+        },
+        "max_ns": 4509129,
+        "p50_ns": 15161,
+        "p90_ns": 20461,
+        "p99_ns": 29177,
+        "pooled_timed_calls": 2000000,
+        "sessions": 20
+      },
+      "paired_comparison": {
+        "bootstrap_unit": "paired round; resample identical round indices for both arms",
+        "central_p50_delta_ns": 7459,
+        "central_p50_ratio": 1.96845,
+        "central_p99_delta_ns": 17594,
+        "central_p99_ratio": 2.51895,
+        "p50": {
+          "delta_ns_ci95": [
+            7316,
+            7622
+          ],
+          "ratio_ci95": [
+            1.944057,
+            2.001051
+          ]
+        },
+        "p99": {
+          "delta_ns_ci95": [
+            16916,
+            18314
+          ],
+          "ratio_ci95": [
+            2.430677,
+            2.607427
+          ]
+        },
+        "ratio_definition": "Bun product-client percentile / Rust library-floor percentile"
+      },
+      "payload_bytes": 6,
+      "rust_library_floor": {
+        "bootstrap_ci95_p50_ns": [
+          7590,
+          7773
+        ],
+        "bootstrap_ci95_p99_ns": [
+          11319,
+          11881
+        ],
+        "calls_timed_per_session": 100000,
+        "handshake_ns": {
+          "max": 1179144,
+          "median": 1021271.5,
+          "min": 46317
+        },
+        "max_ns": 1468498,
+        "p50_ns": 7702,
+        "p90_ns": 9135,
+        "p99_ns": 11583,
+        "pooled_timed_calls": 2000000,
+        "sessions": 20
+      }
+    }
+  }
+}

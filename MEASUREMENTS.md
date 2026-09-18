@@ -1027,3 +1027,57 @@ still independently unverified, result-v2 still lacks the session-block corpus
 shape, and the comparison remains product-client versus library floor rather
 than identical host orchestration. The warm-cache Bun campaign remains
 unpaired with a Rust warm-cache arm.
+
+
+### Paired warm-cache shipping Bun client vs Rust library floor (2026-09-18)
+
+The registered warm-cache treatment was then applied symmetrically to both arms
+from keld-benches 7edcf60d8a0dc3120b9ca49e80b789676a403eb6 at the same
+Keld 0ea0780bb574ad242e9f1105fa4af5842872bad3 pin.
+
+Before scored rounds, each payload tier ran one unscored priming process for
+each arm. Every scored Rust and Bun process then validated 1,000 untimed
+post-handshake echoes before exactly 100,000 scored RTTs. The Rust client
+requests 101,001 total calls in this state: call 1 carries HELLO + first CALL,
+the next 1,000 are validated warmup calls, and the final 100,000 are timed.
+The Bun arm uses its existing warm-cache path with 1,000 untimed
+AppLinkSession.echo calls before timing.
+
+The 20 paired rounds per tier retain the same balanced schedule as the fresh
+campaign: each arm runs first exactly 10/20 rounds per tier, and the paired
+bootstrap resamples identical round indices. The 80 scored raw documents are
+bound by the
+[paired warm manifest](./linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-bun-rust-paired.warm-cache.manifest.raw.json).
+
+| Tier | Rust floor p50 | Bun client p50 | Paired p50 ratio CI95 | Rust floor p99 | Bun client p99 | Paired p99 ratio CI95 |
+|---|---:|---:|---:|---:|---:|---:|
+| small, 6 B | 7.702 µs | 15.161 µs | 1.968× [1.944, 2.001] | 11.583 µs | 29.177 µs | **2.519× [2.431, 2.607]** |
+| representative, 1,024 B | 8.052 µs | 19.469 µs | 2.418× [2.396, 2.442] | 13.340 µs | 38.305 µs | **2.871× [2.756, 2.986]** |
+
+At p99, the paired Bun-minus-Rust delta is **17.594 µs** with paired CI95
+[16.916, 18.314] for 6 B and **24.965 µs** with CI95 [24.083, 26.008] for
+1 KiB. The Bun arm's own p99 session-block CI is [28.648, 29.788] µs for
+6 B and [37.565, 39.253] µs for 1 KiB. At those conservative upper bounds,
+the shipping Bun slice retains about **3.36×** and **2.55×** headroom
+respectively against the 100 µs architecture target.
+
+This remains a shipping product-client-versus-library-floor diagnostic, not a
+pure Bun language/runtime tax. The Bun arm includes the shipping TypeScript
+codec/client, async scheduling and HostOwnedHelloSession orchestration; the Rust
+arm is the direct keld-ipc floor. The two handshake_ns fields remain
+non-comparable because their timed intervals differ.
+
+All fail-closed controls, four 100,000-call pilots, and all four priming
+receipts passed before the scored campaign. The priming receipts are hash-bound
+in the manifest following the existing warm-cache evidence convention; they are
+not part of the 80 scored raw files.
+
+Do not subtract this warm session from the fresh paired session to claim a
+cache-state percentage improvement: they were separate campaigns at different
+times. What is established is that, under the registered warm-cache treatment,
+both paired arms remain reproducible and the shipping Bun slice remains
+comfortably below the 100 µs p99 target.
+
+This closes the remaining Linux warm-cache Rust/Bun same-round pairing gap.
+Thermal state remains independently unverified and result-v2 still lacks the
+session-block corpus shape, so the diagnostic remains publication-ineligible.
