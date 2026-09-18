@@ -48,12 +48,20 @@ startup claim. Spawn-to-paint therefore includes CLI doctor/staging work, Bun
 strict-profile admission and the stock authenticated echo before the native
 window paints.
 
-The first admitted measurement lane is X11 through the machine's real X server
-(or Xwayland): the runner requires `GDK_BACKEND=x11`, a usable `DISPLAY`,
-`xdotool`, and `wmctrl`. After measurement it closes the actual native
-window and accepts the sample only if the shipping lifecycle exits cleanly and
-the captured CLI/host/Bun/WebKit descendants are gone. This does not prove a
-native Xorg login when the host desktop is Wayland/Xwayland.
+Two backend-qualified measurement lanes are supported:
+
+- X11 requires `GDK_BACKEND=x11`, a usable `DISPLAY`, no `WAYLAND_DISPLAY`,
+  `xdotool`, and `wmctrl`. Window discovery is bound to the captured
+  `keld-host` PID before the exact native window is closed.
+- Wayland requires `GDK_BACKEND=wayland`, a usable `WAYLAND_DISPLAY`, no
+  `DISPLAY`, the desktop session D-Bus, and a live AT-SPI bus. The runner
+  resolves the accessibility application by the captured `keld-host` PID,
+  requires exactly one frame with the fixture title and exactly one accessible
+  `Close` button, then invokes that button's `click` action.
+
+Both lanes accept a sample only if the shipping lifecycle exits cleanly, the
+per-launch stage is removed, and the captured CLI/host/Bun/WebKit descendants
+are gone. X11 through Xwayland does not prove a native Xorg login.
 
 For memory, the scored `MEM-IDLE` value stays the **Keld host RSS**, preserving
 the existing metric denominator. CLI RSS, Bun RSS, WebKit helper RSS, Keld-owned

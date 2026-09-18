@@ -815,17 +815,38 @@ def _product_memory_observation(root: ProcessIdentity) -> ProductMemoryObservati
 
 
 def _product_runtime_preflight() -> str:
-    if os.environ.get("GDK_BACKEND") != "x11":
-        raise HarnessError("linux/keld/dev-hello currently requires GDK_BACKEND=x11")
-    if not os.environ.get("DISPLAY"):
-        raise HarnessError("linux/keld/dev-hello requires a reachable X11 DISPLAY")
-    if os.environ.get("WAYLAND_DISPLAY"):
+    backend = os.environ.get("GDK_BACKEND")
+    if backend == "x11":
+        if not os.environ.get("DISPLAY"):
+            raise HarnessError("linux/keld/dev-hello X11 evidence requires a reachable DISPLAY")
+        if os.environ.get("WAYLAND_DISPLAY"):
+            raise HarnessError(
+                "linux/keld/dev-hello X11 evidence requires WAYLAND_DISPLAY to be unset"
+            )
+        required = ("bun", "xdotool", "wmctrl")
+    elif backend == "wayland":
+        if not os.environ.get("WAYLAND_DISPLAY"):
+            raise HarnessError(
+                "linux/keld/dev-hello Wayland evidence requires a reachable WAYLAND_DISPLAY"
+            )
+        if os.environ.get("DISPLAY"):
+            raise HarnessError(
+                "linux/keld/dev-hello Wayland evidence requires DISPLAY to be unset"
+            )
+        if not os.environ.get("DBUS_SESSION_BUS_ADDRESS"):
+            raise HarnessError(
+                "linux/keld/dev-hello Wayland evidence requires the desktop session D-Bus"
+            )
+        required = ("bun", "gdbus")
+    else:
         raise HarnessError(
-            "linux/keld/dev-hello X11 evidence requires WAYLAND_DISPLAY to be unset"
+            "linux/keld/dev-hello requires GDK_BACKEND=x11 or GDK_BACKEND=wayland"
         )
-    for executable in ("bun", "xdotool", "wmctrl"):
+    for executable in required:
         if shutil.which(executable) is None:
             raise HarnessError(f"linux/keld/dev-hello requires {executable} on PATH")
+    if backend == "wayland":
+        _product_wayland_atspi_preflight()
     return run_text(["bun", "--revision"])
 
 
@@ -868,21 +889,10 @@ def _product_generation_alive(identity: ProcessIdentity) -> bool:
     return current is not None and current.start_ticks == identity.start_ticks
 
 
-def _product_native_close(
-    root: ProcessIdentity,
+def _product_x11_close(
+    host_pid: int,
     title: str,
 ) -> tuple[bool, int | None, str | None]:
-    records = _product_process_records(root)
-    if records is None:
-        return False, None, "product_tree_unavailable"
-    hosts = [
-        record
-        for record in records
-        if _product_process_class(record, root.pid) == "keld-host"
-    ]
-    if len(hosts) != 1:
-        return False, None, "product_host_count_invalid"
-    host_pid = hosts[0].identity.pid
     xdotool = shutil.which("xdotool")
     wmctrl = shutil.which("wmctrl")
     if xdotool is None or wmctrl is None:
@@ -927,6 +937,184 @@ def _product_native_close(
     if close.returncode != 0:
         return False, window_id, "native_window_close_failed"
     return True, window_id, None
+
+
+def _product_atspi_bus_address() -> str | None:
+    try:
+        completed = subprocess.run(
+            [
+                "gdbus",
+                "call",
+                "--session",
+                "--dest",
+                "org.a11y.Bus",
+                "--object-path",
+                "/org/a11y/bus",
+                "--method",
+                "org.a11y.Bus.GetAddress",
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != 0:
+        return None
+    parts = completed.stdout.strip().split("'")
+    if len(parts) < 3 or not parts[1].startswith("unix:"):
+        return None
+    return parts[1]
+
+
+def _product_wayland_atspi_preflight() -> None:
+    address = _product_atspi_bus_address()
+    if address is None:
+        raise HarnessError("linux/keld/dev-hello Wayland evidence requires a live AT-SPI bus")
+    environment = os.environ.copy()
+    environment["AT_SPI_BUS_ADDRESS"] = address
+    probe = (
+        'import gi; '
+        'gi.require_version("Atspi", "2.0"); '
+        'from gi.repository import Atspi; '
+        'assert Atspi.get_desktop_count() >= 1'
+    )
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", probe],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=environment,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise HarnessError(
+            f"linux/keld/dev-hello Wayland AT-SPI probe failed: {error}"
+        ) from error
+    if completed.returncode != 0:
+        raise HarnessError(
+            "linux/keld/dev-hello Wayland AT-SPI probe could not enumerate the desktop"
+        )
+
+
+WAYLAND_ATSPI_CLOSE_SCRIPT = r"""
+import gi
+import sys
+import time
+
+gi.require_version("Atspi", "2.0")
+from gi.repository import Atspi
+
+host_pid = int(sys.argv[1])
+title = sys.argv[2]
+deadline = time.monotonic() + 5.0
+last_state = 10
+
+while time.monotonic() < deadline:
+    desktop = Atspi.get_desktop(0)
+    apps = []
+    for index in range(desktop.get_child_count()):
+        app = desktop.get_child_at_index(index)
+        try:
+            if app.get_name() == "keld-host" and app.get_process_id() == host_pid:
+                apps.append(app)
+        except Exception:
+            pass
+    if len(apps) != 1:
+        last_state = 10
+        time.sleep(0.05)
+        continue
+
+    frames = []
+    app = apps[0]
+    for index in range(app.get_child_count()):
+        child = app.get_child_at_index(index)
+        try:
+            if child.get_role_name() == "frame" and child.get_name() == title:
+                frames.append(child)
+        except Exception:
+            pass
+    if len(frames) != 1:
+        last_state = 11
+        time.sleep(0.05)
+        continue
+
+    close_buttons = []
+    stack = [frames[0]]
+    while stack:
+        accessible = stack.pop()
+        try:
+            if accessible.get_role_name() == "button" and accessible.get_name() == "Close":
+                close_buttons.append(accessible)
+            for index in range(accessible.get_child_count()):
+                stack.append(accessible.get_child_at_index(index))
+        except Exception:
+            pass
+    if len(close_buttons) != 1:
+        last_state = 12
+        time.sleep(0.05)
+        continue
+
+    action = close_buttons[0].get_action_iface()
+    if action is None or action.get_n_actions() != 1 or action.get_action_name(0) != "click":
+        raise SystemExit(13)
+    if not action.do_action(0):
+        raise SystemExit(14)
+    raise SystemExit(0)
+
+raise SystemExit(last_state)
+"""
+
+
+def _product_wayland_close(
+    host_pid: int,
+    title: str,
+) -> tuple[bool, int | None, str | None]:
+    address = _product_atspi_bus_address()
+    if address is None:
+        return False, None, "wayland_atspi_bus_unavailable"
+    environment = os.environ.copy()
+    environment["AT_SPI_BUS_ADDRESS"] = address
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", WAYLAND_ATSPI_CLOSE_SCRIPT, str(host_pid), title],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=environment,
+            timeout=8,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False, None, "wayland_atspi_close_failed"
+    if completed.returncode != 0:
+        return False, None, f"wayland_atspi_close_rejected_{completed.returncode}"
+    return True, None, None
+
+
+def _product_native_close(
+    root: ProcessIdentity,
+    title: str,
+) -> tuple[bool, int | None, str | None]:
+    records = _product_process_records(root)
+    if records is None:
+        return False, None, "product_tree_unavailable"
+    hosts = [
+        record
+        for record in records
+        if _product_process_class(record, root.pid) == "keld-host"
+    ]
+    if len(hosts) != 1:
+        return False, None, "product_host_count_invalid"
+    host_pid = hosts[0].identity.pid
+    backend = os.environ.get("GDK_BACKEND")
+    if backend == "x11":
+        return _product_x11_close(host_pid, title)
+    if backend == "wayland":
+        return _product_wayland_close(host_pid, title)
+    return False, None, "native_close_backend_unsupported"
 
 
 def _product_force_cleanup(
@@ -2308,7 +2496,8 @@ def _run_product_metric(
         notes = (
             "Shipping Linux keld dev spawn-to-double-rAF product developer flow: CLI doctor, "
             "owner-private stage, no-flag host, strict-profile Bun, authenticated stock echo, "
-            "real WebKitGTK window, and native X11 close. This is developer-flow startup, not "
+            f"real WebKitGTK window, and native {os.environ.get('GDK_BACKEND', 'unknown')} close. "
+            "This is developer-flow startup, not "
             f"packaged-app startup. Power evidence: {power_evidence}."
         )
     elif args.metric == "MEM-IDLE":
@@ -2322,8 +2511,9 @@ def _run_product_metric(
             "Shipping Linux keld dev product developer flow. The scored value preserves the "
             "existing MEM-IDLE denominator: staged keld-host RSS after a valid paint and four "
             "stable generation-identical censuses. CLI, Bun, engine-helper, Keld-owned "
-            "CLI+host and total-tree RSS remain named diagnostics. Native X11 close and "
-            f"normal lifecycle cleanup are required for every valid sample. Power evidence: {power_evidence}."
+            "CLI+host and total-tree RSS remain named diagnostics. Native "
+            f"{os.environ.get('GDK_BACKEND', 'unknown')} close and normal lifecycle cleanup "
+            f"are required for every valid sample. Power evidence: {power_evidence}."
         )
     else:
         raise HarnessError("linux/keld/dev-hello implements only PAINT-OPPORTUNITY and MEM-IDLE")

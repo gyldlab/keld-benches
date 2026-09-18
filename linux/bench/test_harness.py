@@ -32,9 +32,12 @@ from harness import (
     ROOT,
     _prepare_product_workspace,
     _proc_identity,
+    _product_atspi_bus_address,
     _product_memory_observation,
+    _product_native_close,
     _product_process_class,
     _product_runtime_preflight,
+    _product_wayland_close,
     _publication_reasons,
     _paint_attempt,
     _verify_committed_file_digests,
@@ -544,7 +547,7 @@ class ProductRunnerTests(unittest.TestCase):
                 shutil.rmtree(workspace.root, ignore_errors=True)
         self.assertEqual(stock_path.read_bytes(), stock_before)
 
-    def test_product_preflight_requires_forced_x11_and_no_wayland_socket(self) -> None:
+    def test_product_preflight_requires_explicit_backend_and_matching_display(self) -> None:
         with mock.patch.dict(
             os.environ,
             {"GDK_BACKEND": "x11", "DISPLAY": ":99", "WAYLAND_DISPLAY": "wayland-0"},
@@ -555,10 +558,27 @@ class ProductRunnerTests(unittest.TestCase):
 
         with mock.patch.dict(
             os.environ,
-            {"GDK_BACKEND": "wayland", "DISPLAY": ":99"},
+            {
+                "GDK_BACKEND": "wayland",
+                "WAYLAND_DISPLAY": "wayland-0",
+                "DISPLAY": ":99",
+                "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus",
+            },
             clear=True,
         ):
-            with self.assertRaisesRegex(HarnessError, "GDK_BACKEND=x11"):
+            with self.assertRaisesRegex(HarnessError, "DISPLAY to be unset"):
+                _product_runtime_preflight()
+
+        with mock.patch.dict(
+            os.environ,
+            {"GDK_BACKEND": "wayland", "WAYLAND_DISPLAY": "wayland-0"},
+            clear=True,
+        ):
+            with self.assertRaisesRegex(HarnessError, "session D-Bus"):
+                _product_runtime_preflight()
+
+        with mock.patch.dict(os.environ, {"GDK_BACKEND": "broadway"}, clear=True):
+            with self.assertRaisesRegex(HarnessError, "GDK_BACKEND=x11 or GDK_BACKEND=wayland"):
                 _product_runtime_preflight()
 
         with mock.patch.dict(
@@ -569,6 +589,82 @@ class ProductRunnerTests(unittest.TestCase):
             "harness.run_text", return_value="1.4.2+test"
         ):
             self.assertEqual(_product_runtime_preflight(), "1.4.2+test")
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "GDK_BACKEND": "wayland",
+                "WAYLAND_DISPLAY": "wayland-0",
+                "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus",
+            },
+            clear=True,
+        ), mock.patch("harness.shutil.which", return_value="/usr/bin/tool"), mock.patch(
+            "harness._product_wayland_atspi_preflight"
+        ) as atspi_preflight, mock.patch(
+            "harness.run_text", return_value="1.4.2+test"
+        ):
+            self.assertEqual(_product_runtime_preflight(), "1.4.2+test")
+            atspi_preflight.assert_called_once_with()
+
+    def test_product_atspi_bus_address_is_fail_closed(self) -> None:
+        good = subprocess.CompletedProcess(
+            ["gdbus"],
+            0,
+            "('unix:path=/run/user/1000/at-spi/bus,guid=test',)\n",
+            "",
+        )
+        with mock.patch("harness.subprocess.run", return_value=good):
+            self.assertEqual(
+                _product_atspi_bus_address(),
+                "unix:path=/run/user/1000/at-spi/bus,guid=test",
+            )
+
+        bad = subprocess.CompletedProcess(
+            ["gdbus"], 0, "('tcp:host=example',)\n", ""
+        )
+        with mock.patch("harness.subprocess.run", return_value=bad):
+            self.assertIsNone(_product_atspi_bus_address())
+
+        failed = subprocess.CompletedProcess(["gdbus"], 1, "", "no bus")
+        with mock.patch("harness.subprocess.run", return_value=failed):
+            self.assertIsNone(_product_atspi_bus_address())
+
+    def test_product_wayland_close_binds_pid_title_and_bus(self) -> None:
+        completed = subprocess.CompletedProcess(["python"], 0, b"", b"")
+        with mock.patch(
+            "harness._product_atspi_bus_address", return_value="unix:path=/tmp/atspi"
+        ), mock.patch("harness.subprocess.run", return_value=completed) as run:
+            self.assertEqual(
+                _product_wayland_close(4242, "product-bench"),
+                (True, None, None),
+            )
+        args, kwargs = run.call_args
+        self.assertEqual(args[0][-2:], ["4242", "product-bench"])
+        self.assertEqual(kwargs["env"]["AT_SPI_BUS_ADDRESS"], "unix:path=/tmp/atspi")
+        self.assertEqual(kwargs["timeout"], 8)
+
+        rejected = subprocess.CompletedProcess(["python"], 11, b"", b"")
+        with mock.patch(
+            "harness._product_atspi_bus_address", return_value="unix:path=/tmp/atspi"
+        ), mock.patch("harness.subprocess.run", return_value=rejected):
+            self.assertEqual(
+                _product_wayland_close(4242, "product-bench"),
+                (False, None, "wayland_atspi_close_rejected_11"),
+            )
+
+    def test_product_native_close_dispatches_exact_wayland_host(self) -> None:
+        root = self.record(10, 1, "/bench/keld dev", comm="keld")
+        host = self.record(20, 10, "/stage/keld-host", comm="keld-host")
+        with mock.patch(
+            "harness._product_process_records", return_value=(root, host)
+        ), mock.patch.dict(os.environ, {"GDK_BACKEND": "wayland"}, clear=True), mock.patch(
+            "harness._product_wayland_close", return_value=(True, None, None)
+        ) as close:
+            self.assertEqual(
+                _product_native_close(root.identity, "product-bench"),
+                (True, None, None),
+            )
+            close.assert_called_once_with(20, "product-bench")
 
     def test_product_publication_reasons_do_not_claim_hello_adapter(self) -> None:
         environment = {

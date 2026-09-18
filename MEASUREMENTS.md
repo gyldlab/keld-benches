@@ -1212,3 +1212,79 @@ roughly 0.97 s to double-rAF paint on this X11/Xwayland machine, while the host
 RSS denominator stays near 173 MiB and the complete observed descendant tree is
 about 469 MiB. Native Xorg, Wayland product-flow automation, non-Debian Linux,
 and packaged release startup remain separate unmeasured limbs.
+
+
+### Shipping Linux `keld dev` product flow — native Wayland (2026-09-18)
+
+The same shipping `linux/keld/dev-hello` developer-flow arm was qualified on
+the machine's native GNOME Wayland session. Measurement forces
+`GDK_BACKEND=wayland`, keeps `WAYLAND_DISPLAY=wayland-0`, removes `DISPLAY`,
+and records the resulting backend state in every result document.
+
+Wayland lifecycle closure is not signal-based. The runner queries the live
+AT-SPI bus, binds the accessibility application to the captured `keld-host`
+PID, requires exactly one `product-bench` frame and one accessible `Close`
+button, invokes that button's `click` action, and then applies the same normal
+lifecycle gates as the X11 lane: CLI exit code 0, per-launch stage removal, and
+no captured CLI/host/Bun/WebKit generation left alive. Cleanup signals remain a
+failure-recovery path and do not satisfy the lifecycle oracle.
+
+The benchmark recipe is
+`d23e55cb2320ed15c3ffca409e4074eca577ba4b`; Keld remains pinned to
+`0ea0780bb574ad242e9f1105fa4af5842872bad3`. The three shipping executable
+artifacts are byte-identical to the prior X11 product campaign.
+
+#### Native Wayland product paint
+
+Both 30-sample sessions completed with zero rejected samples and the same
+10-process census on every scored launch:
+`bun:1,keld-cli:1,keld-host:1,other-descendant:1,sandbox-wrapper:4,webkit-network:1,webkit-web:1`.
+
+| Cache state | Valid | Median | p90 | Min | Max | Bootstrap median CI95 |
+|---|---:|---:|---:|---:|---:|---:|
+| fresh-process | 30/30 | **533.646 ms** | 561.148 | 513.018 | 601.560 | **[524.7025, 543.4085]** |
+| warm-cache | 30/30 | **542.832 ms** | 565.752 | 511.209 | 576.556 | **[529.963, 549.687]** |
+
+Fresh evidence:
+[`PAINT-OPPORTUNITY`](./linux/bench/results/paint-opportunity/2026-09-18.kel90-linux-product-wayland-30.fresh-process.json).
+Warm evidence:
+[`PAINT-OPPORTUNITY`](./linux/bench/results/paint-opportunity/2026-09-18.kel90-linux-product-wayland-30.warm-cache.json).
+
+Every scored sample proves the Bun-ready IPC markers, exact PID-bound Wayland
+close action, product exit code 0, stage cleanup and generation-bound descendant
+cleanup. The paint interval remains the developer-flow observable from shipping
+`keld dev` spawn to nonce-bound double-rAF in the real product window.
+
+#### Native Wayland product memory
+
+The scored denominator remains staged `keld-host` RSS, preserving the existing
+`MEM-IDLE` contract. CLI, Bun, helper and total-tree values remain diagnostics.
+
+| Cache state | Host RSS median | Host CI95 | CLI RSS median | Bun RSS median | CLI+host median | Full tree RSS median |
+|---|---:|---:|---:|---:|---:|---:|
+| fresh-process | **179,710 KiB** | **[179,648, 179,800]** | 36,998 KiB | 21,604 KiB | 216,732 KiB | **494,352 KiB** |
+| warm-cache | **179,818 KiB** | **[179,738, 179,860]** | 37,020 KiB | 21,604 KiB | 216,846 KiB | **494,744 KiB** |
+
+Fresh private-dirty medians are 30,552 KiB for the host, 45,394 KiB for the
+remaining tree, and 75,978 KiB total. Warm medians are 30,550, 45,422 and
+76,000 KiB respectively. Associated paint medians inside the memory sessions
+are 545.902 ms fresh and 542.947 ms warm.
+
+Fresh evidence:
+[`MEM-IDLE`](./linux/bench/results/mem-idle/2026-09-18.kel90-linux-product-wayland-memory-30.fresh-process.json).
+Warm evidence:
+[`MEM-IDLE`](./linux/bench/results/mem-idle/2026-09-18.kel90-linux-product-wayland-memory-30.warm-cache.json).
+
+All four native-Wayland documents remain diagnostic-only for the same explicit
+reasons as the X11 product arm: Linux thermal state is independently unverified,
+there is no semantically matched paired arm for the full developer flow, and
+`keld dev` developer startup is not packaged-app startup. They do not carry the
+historical `DIAGNOSTIC_HELLO_ONLY` or `BENCHMARK_ADAPTER_ARTIFACT` blockers.
+
+Fresh and warm sessions were separate campaigns and their confidence intervals
+overlap; no causal cache-state improvement is claimed. The earlier X11/Xwayland
+product-flow campaign and this Wayland campaign were also measured in separate
+sessions. Their medians may be reported as separate observations, but subtracting
+or dividing them to claim a backend speedup/regression is not admitted evidence.
+A balanced same-session backend comparison is required before attributing the
+large observed difference to X11 versus Wayland itself.
