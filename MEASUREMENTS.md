@@ -751,3 +751,92 @@ caches; the paired median/bootstrap result—not the minimum—is the applicable
 diagnostic. This session closes the Linux paired-arm evidence slice of KEL-90,
 but it does not prove Keld on X11, a non-Debian distro, window controls, or the
 no-flag product path.
+
+
+---
+
+## Linux current-main refresh — 2026-09-18 (diagnostic)
+
+This refresh measures Keld 0ea0780bb574ad242e9f1105fa4af5842872bad3
+against keld-benches e5f204d6b243e2eca0f262be02b7e6b1d8faea38
+on Ubuntu 26.04.1 LTS, kernel 7.0.0-31-generic, Intel i5-10500H, GNOME
+Wayland, WebKitGTK 2.52.6, AC power, performance profile. Thermal state is
+still independently unverified, so these remain diagnostics.
+
+The GTK4/WebKitGTK native artifact rebuilt from the landed recipe is
+byte-identical to the previously reviewed native floor:
+0ac343715de021af1af162564f31ac040b4f2937294e08acd9bd21e5d4e57970
+(21,992 bytes).
+
+### Paired paint diagnostic
+
+The first requested 30-round session is retained as rejection evidence:
+[29/30 Keld + 30/30 GTK4](./linux/bench/results/paint-opportunity/2026-09-18.kel90-linux-keld-vs-gtk4-current-main-30.fresh-process.json).
+Keld run 20 was rejected as document_not_focused; the page and beacon were
+observed and cleanup remained generation-bound. No comparison verdict was
+emitted. Before retrying, a one-retry stop rule was recorded on KEL-90.
+
+The single bounded retry then completed all requested rounds:
+[30/30 + 30/30](./linux/bench/results/paint-opportunity/2026-09-18.kel90-linux-keld-vs-gtk4-current-main-30-r2.fresh-process.json).
+
+| Arm | Valid | Median | p90 | Bootstrap median CI95 |
+|---|---:|---:|---:|---:|
+| Keld keld-host --hello diagnostic | 30/30 | **437.3585 ms** | 483.109 | [431.5905, 448.5585] |
+| GTK4 + WebKitGTK native floor | 30/30 | **543.205 ms** | 575.113 | [534.4485, 559.45] |
+
+The complete matched-round candidate/baseline ratio CI95 is
+**[0.785386, 0.831101]**, which is PASS against the registry's 1.05
+diagnostic threshold. This is not a product scoreboard verdict: Keld still
+uses the --hello benchmark adapter and the session has no independent
+thermal-state oracle.
+
+Do not subtract this result from the 2026-09-04 medians to claim a percentage
+speedup. The native GTK4 arm itself moved from 405.7345 ms in that session to
+543.205 ms here, demonstrating material cross-session drift. Only the
+same-session paired ratio above is supported.
+
+### Memory and raw host size
+
+The current-main MEM-IDLE diagnostic completed
+[30/30 valid samples](./linux/bench/results/mem-idle/2026-09-18.kel90-linux-keld-current-main-memory-30.fresh-process.json).
+Main RSS median is **179,712 KiB**, CI95 [179,660, 179,772]; WebKit/helper RSS
+median is **254,724 KiB**. Main/helper private-dirty medians are 30,354 KiB
+and 34,188 KiB. This remains an unpaired adapter measurement, not a product
+memory verdict.
+
+The deterministic unmodified Release host
+[DISK lane](./linux/bench/results/disk/2026-09-18.kel90-linux-keld-current-main-host.fresh-process.json)
+is **1,688,160 bytes**, SHA-256
+08b5b75d4bad8f2a20124ca2f99c2576e2fc69b7b58834c53c9ed933be7b2538.
+
+### Authenticated IPC library floor
+
+The Linux Rust-to-Rust fixture at
+[linux/keld/kipc-rust-echo](./linux/keld/kipc-rust-echo/) is pinned to the same
+Keld SHA and uses two OS processes over the authenticated Unix app-link wire
+path. A forged-token negative control produced server-side KELD-IPC-007 and
+no result file before the campaign was allowed to run.
+
+The registry ipc policy was executed in full: 20 independent fresh-process
+sessions × 100,000 requested calls × two payload tiers. Call 1 includes HELLO
+and is reported separately; each raw session contains 99,999 timed
+CALL-to-REPLY deltas. All 40 sessions completed and validated. Aggregate
+evidence is bound by the
+[campaign manifest](./linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-rust-library-arm.manifest.json).
+
+| Tier | Payload | Pooled p50 | Pooled p90 | Pooled p99 | 95% session-block bootstrap CI p99 |
+|---|---:|---:|---:|---:|---:|
+| small | 6 B | 7.686 µs | 9.197 µs | **11.809 µs** | **[11.391, 12.241] µs** |
+| representative | 1,024 B | 8.141 µs | 9.719 µs | **13.197 µs** | **[12.970, 13.456] µs** |
+
+Statistics use nearest-rank percentiles over 1,999,980 timed calls per tier and
+2,000 whole-session bootstrap resamples (seed 20260918). At the p99 CI upper
+bound the Rust wire path retains about **8.17×** headroom for the 6-byte tier
+and **7.43×** for the 1 KiB tier against the 100 µs architecture target.
+
+This result proves only the authenticated cross-process keld-ipc library/wire
+path on this Linux machine. It contains no Bun product client, host lifecycle,
+window, or renderer; it must not be reported as Bun-to-Rust product IPC
+performance. Handshake time is separate from the scored deltas and was about
+8 ms median in this Linux campaign; that is retained as a separate observation,
+not folded into the RTT claim.
