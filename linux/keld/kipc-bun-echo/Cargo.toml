@@ -1,0 +1,17 @@
+[package]
+name = "kel90-linux-bun-kipc-runner"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+keld-core = { git = "https://github.com/gyldlab/keld.git", rev = "0ea0780bb574ad242e9f1105fa4af5842872bad3" }
+keld-runtime = { git = "https://github.com/gyldlab/keld.git", rev = "0ea0780bb574ad242e9f1105fa4af5842872bad3" }
+
+[[bin]]
+name = "kel90-linux-bun-kipc-runner"
+path = "src/runner.rs"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

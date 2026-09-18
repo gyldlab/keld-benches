@@ -842,6 +842,49 @@ CALL/REPLY and is retained as a separate observation; it is not folded into
 the scored RTT deltas or claim.
 
 
+### Shipping Bun product-client IPC diagnostic (2026-09-18)
+
+The Linux Bun fixture at
+[linux/keld/kipc-bun-echo](./linux/keld/kipc-bun-echo/) uses the shipping
+`AppLinkSession` client and canonical `@keld/kipc` transport from Keld
+`0ea0780bb574ad242e9f1105fa4af5842872bad3`, byte-bound by SHA-256. The host
+side is `keld_core::HostOwnedHelloSession`, the production primitive used by
+the Keld app-session path. Only the fixture's `main.ts` adds timing.
+
+Both negative controls passed before timing: a forged app-link token produced
+no result, and an authenticated echo with a deliberately wrong expected reply
+was rejected rather than accepted as a timing sample. Two 100,000-call pilots
+then passed the predeclared 300 µs p99 sanity stop.
+
+The full IPC sample policy was executed: 20 independent fresh-process sessions
+× 100,000 calls × two tiers, for 2,000,000 timed calls per tier. Every session
+completed and the 40 raw compact documents are bound by the
+[Bun campaign manifest](./linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-bun-product-client.manifest.raw.json).
+
+| Tier | Payload | Pooled p50 | Pooled p90 | Pooled p99 | 95% session-block bootstrap CI p99 |
+|---|---:|---:|---:|---:|---:|
+| small | 6 B | **14.204 µs** | 19.032 µs | **27.506 µs** | **[26.723, 28.376] µs** |
+| representative | 1,024 B | **18.605 µs** | 26.272 µs | **35.518 µs** | **[34.656, 36.443] µs** |
+
+The p99 CI upper bounds retain about **3.52×** and **2.74×** headroom,
+respectively, against the 100 µs architecture target. The scored interval is
+`Bun.nanoseconds()` immediately before the shipping `session.echo` call
+through decoded `EchoResponse` return. Socket connection + authenticated HELLO
+is measured separately and excluded from the RTT samples.
+
+The Rust library floor above and this Bun campaign use the same machine, Keld
+revision, payload sizes, and session policy, but they were not interleaved in
+one paired campaign. Their numerical difference therefore localizes likely
+client/codec/transport/scheduling headroom but must **not** be presented as an
+exact causal Bun-overhead ratio.
+
+This evidence is stronger than the earlier Windows KEL-99 one-session
+diagnostic, but it is still not an end-to-end application latency result: no
+window or renderer is in the timed path. Linux thermal state remains
+independently unverified, and result-v2 still lacks the independent-session
+block-bootstrap corpus shape, so the result remains publication-ineligible.
+
+
 ### X11 backend via GNOME Xwayland (2026-09-18)
 
 KEL-28's X11 lane was exercised on the same Ubuntu 26.04.1 laptop while the
