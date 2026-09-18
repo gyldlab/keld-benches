@@ -755,6 +755,14 @@ no-flag product path.
 
 ---
 
+> **History normalization (2026-09-18):** the macOS IPC raw corpus was rewritten
+> from pretty-printed JSON to compact JSON without changing any parsed evidence
+> value. This changed descendant Git commit IDs. Rewritten Linux benchmark-owned
+> paths (`linux/bench`, `linux/keld/hello`, `linux/gtk4/hello`, `schema/`) are
+> byte-identical to the originally measured commits; the provenance SHAs in the
+> rewritten documents name those canonical rewritten equivalents. The original
+> merged PR commit objects remain available through GitHub's PR history.
+
 ## Linux current-main refresh — 2026-09-18 (diagnostic)
 
 This refresh measures Keld 0ea0780bb574ad242e9f1105fa4af5842872bad3

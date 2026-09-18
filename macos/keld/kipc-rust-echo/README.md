@@ -94,6 +94,8 @@ use `echo_invoke` directly and are what `deltas_ns` times), matching the
 registry oracle's "handshake excluded and reported separately."
 
 Each session is a fresh server + client process pair (`fresh-process` cache
-
-Raw session documents are emitted as compact JSON. This preserves every timing sample while avoiding one Git diff line per call; whitespace is not part of the evidence contract.
 state); no OS-level cache warming is attempted or claimed.
+
+Raw session documents are emitted as compact JSON. This preserves every timing
+sample while avoiding one Git diff line per call; whitespace is not part of the
+evidence contract.
