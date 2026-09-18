@@ -13,10 +13,12 @@ import platform
 import random
 import re
 import selectors
+import shutil
 import signal
 import statistics
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.parse
@@ -35,10 +37,18 @@ HARNESS_PATH = ROOT / "linux" / "bench" / "run.py"
 MODULE_PATH = ROOT / "linux" / "bench" / "harness.py"
 TEMPLATE_PATH = ROOT / "linux" / "keld" / "hello" / "index.html"
 KELD_FIXTURE_PATH = "linux/keld/hello"
+KELD_DEV_FIXTURE_PATH = "linux/keld/dev-hello"
+KELD_DEV_PROJECT_PATH = ROOT / "linux" / "keld" / "dev-hello" / "project"
+KELD_DEV_BEACON_PATH = ROOT / "linux" / "keld" / "dev-hello" / "paint-beacon.js"
 GTK4_FIXTURE_PATH = "linux/gtk4/hello"
 TAURI_FIXTURE_PATH = "linux/tauri/hello"
 FIXTURE_PATH = KELD_FIXTURE_PATH
-SUPPORTED_FIXTURES = (KELD_FIXTURE_PATH, GTK4_FIXTURE_PATH, TAURI_FIXTURE_PATH)
+SUPPORTED_FIXTURES = (
+    KELD_FIXTURE_PATH,
+    KELD_DEV_FIXTURE_PATH,
+    GTK4_FIXTURE_PATH,
+    TAURI_FIXTURE_PATH,
+)
 IMPLEMENTED_METRICS = ("PAINT-OPPORTUNITY", "MEM-IDLE", "DISK")
 SUPPORTED_GUI_STATES = ("fresh-process", "warm-cache")
 MEMORY_STABLE_SNAPSHOTS = 4
@@ -361,6 +371,38 @@ class MemorySnapshot:
     total_private_dirty_kib: int
 
 
+@dataclass(frozen=True)
+class ProductProcessRecord:
+    """One process in the shipping keld-dev descendant tree."""
+
+    identity: ProcessIdentity
+    parent_pid: int
+    command: str
+    comm: str
+
+
+@dataclass(frozen=True)
+class ProductMemoryObservation:
+    """Stable-memory candidate with product-role diagnostics."""
+
+    snapshot: MemorySnapshot
+    records: tuple[ProductProcessRecord, ...]
+    cli_rss_kib: int
+    bun_rss_kib: int
+    keld_owned_rss_kib: int
+
+
+@dataclass(frozen=True)
+class ProductWorkspace:
+    """Owner-private derived launch workspace for one product sample."""
+
+    root: pathlib.Path
+    bin_dir: pathlib.Path
+    project: pathlib.Path
+    cli: pathlib.Path
+
+
+
 class MemoryStability:
     """Accept only identical process membership with bounded RSS drift."""
 
@@ -556,6 +598,429 @@ def _memory_snapshot(owner: "OwnedProcess") -> MemorySnapshot | None:
         helper_private_dirty_kib=total_private_dirty_kib - main_private_dirty_kib,
         total_private_dirty_kib=total_private_dirty_kib,
     )
+
+
+def render_product_renderer(
+    index_html: bytes,
+    beacon_script: bytes,
+    port: int,
+    nonce: str,
+) -> bytes:
+    """Inject the committed measurement script into a temporary stock renderer."""
+    if not (0 < port <= 65535) or not NONCE_PATTERN.fullmatch(nonce):
+        raise HarnessError("product renderer received an invalid port or nonce")
+    if index_html.count(b"</body>") != 1:
+        raise HarnessError("product renderer must contain exactly one closing body tag")
+    rendered_script = beacon_script.replace(
+        b"__KELD_BENCH_PORT__", str(port).encode("ascii")
+    ).replace(b"__KELD_BENCH_NONCE__", nonce.encode("ascii"))
+    if b"__KELD_BENCH_" in rendered_script:
+        raise HarnessError("product beacon script contains an unresolved placeholder")
+    origin = f"http://127.0.0.1:{port}".encode("ascii")
+    if origin not in rendered_script or nonce.encode("ascii") not in rendered_script:
+        raise HarnessError("product beacon script did not bind the listener identity")
+    injection = b"\n<script>\n" + rendered_script + b"</script>\n"
+    return index_html.replace(b"</body>", injection + b"</body>", 1)
+
+
+def _product_process_record(pid: int) -> ProductProcessRecord | None:
+    try:
+        raw = pathlib.Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
+    except (FileNotFoundError, ProcessLookupError, PermissionError):
+        return None
+    if not raw:
+        return None
+    close = raw.rfind(")")
+    if close < 0:
+        return None
+    fields = raw[close + 2 :].split()
+    if len(fields) < 20 or fields[0] == "Z":
+        return None
+    identity = ProcessIdentity(
+        pid=pid,
+        process_group=int(fields[2]),
+        start_ticks=int(fields[19]),
+    )
+    try:
+        command = (
+            pathlib.Path(f"/proc/{pid}/cmdline")
+            .read_bytes()
+            .replace(b"\0", b" ")
+            .decode("utf-8", "replace")
+            .strip()
+        )
+        comm = pathlib.Path(f"/proc/{pid}/comm").read_text(encoding="utf-8").strip()
+    except (FileNotFoundError, ProcessLookupError, PermissionError):
+        return None
+    return ProductProcessRecord(
+        identity=identity,
+        parent_pid=int(fields[1]),
+        command=command,
+        comm=comm,
+    )
+
+
+def _product_process_records(root: ProcessIdentity) -> tuple[ProductProcessRecord, ...] | None:
+    current_root = _product_process_record(root.pid)
+    if current_root is None:
+        return None
+    if current_root.identity.start_ticks != root.start_ticks:
+        raise HarnessError("product CLI PID was reused during descendant census")
+    records: dict[int, ProductProcessRecord] = {}
+    for entry in pathlib.Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        record = _product_process_record(int(entry.name))
+        if record is not None:
+            records[record.identity.pid] = record
+    if root.pid not in records:
+        return None
+    members = {root.pid}
+    changed = True
+    while changed:
+        changed = False
+        for pid, record in records.items():
+            if pid not in members and record.parent_pid in members:
+                members.add(pid)
+                changed = True
+    return tuple(records[pid] for pid in sorted(members))
+
+
+def _product_process_class(record: ProductProcessRecord, root_pid: int) -> str:
+    if record.identity.pid == root_pid:
+        return "keld-cli"
+    command = record.command.lower()
+    argv0 = command.split(" ", 1)[0] if command else ""
+    basename = pathlib.PurePosixPath(argv0).name
+    if basename == "keld-host":
+        return "keld-host"
+    if "webkitwebprocess" in command:
+        return "webkit-web"
+    if "webkitnetworkprocess" in command:
+        return "webkit-network"
+    if "webkitgpuprocess" in command:
+        return "webkit-gpu"
+    if "xdg-dbus-proxy" in command:
+        return "sandbox-dbus-proxy"
+    if basename in {"bwrap", "bubblewrap"} or " /bwrap " in f" {command} ":
+        return "sandbox-wrapper"
+    if record.comm.lower() == "bun" or basename == "bun" or command.startswith("/runtime/program run "):
+        return "bun"
+    if "keld-role-launcher" in command:
+        return "role-launcher"
+    return "other-descendant"
+
+
+def _product_memory_counters(identity: ProcessIdentity) -> tuple[int, int] | None:
+    try:
+        descriptor = os.pidfd_open(identity.pid)
+    except ProcessLookupError:
+        return None
+    try:
+        current = _proc_identity(identity.pid)
+        if current is None:
+            return None
+        if current.start_ticks != identity.start_ticks:
+            raise HarnessError("PID was reused during product memory census")
+        statm = _read_proc_text(pathlib.Path(f"/proc/{identity.pid}/statm"))
+        smaps = _read_proc_text(pathlib.Path(f"/proc/{identity.pid}/smaps_rollup"))
+        if statm is None or smaps is None:
+            return None
+        fields = statm.split()
+        if len(fields) < 2:
+            return None
+        try:
+            rss_kib = int(fields[1]) * os.sysconf("SC_PAGE_SIZE") // 1024
+        except ValueError:
+            return None
+        private_dirty_kib: int | None = None
+        for line in smaps.splitlines():
+            if line.startswith("Private_Dirty:"):
+                parts = line.split()
+                if len(parts) >= 2:
+                    try:
+                        private_dirty_kib = int(parts[1])
+                    except ValueError:
+                        return None
+                break
+        if private_dirty_kib is None:
+            return None
+        after = _proc_identity(identity.pid)
+        if after is None:
+            return None
+        if after.start_ticks != identity.start_ticks:
+            raise HarnessError("PID was reused while product memory counters were read")
+        return rss_kib, private_dirty_kib
+    finally:
+        os.close(descriptor)
+
+
+def _product_memory_observation(root: ProcessIdentity) -> ProductMemoryObservation | None:
+    records = _product_process_records(root)
+    if records is None:
+        return None
+    observations: list[tuple[ProductProcessRecord, str, int, int]] = []
+    for record in records:
+        counters = _product_memory_counters(record.identity)
+        if counters is None:
+            return None
+        rss_kib, private_dirty_kib = counters
+        observations.append(
+            (
+                record,
+                _product_process_class(record, root.pid),
+                rss_kib,
+                private_dirty_kib,
+            )
+        )
+    hosts = [item for item in observations if item[1] == "keld-host"]
+    clis = [item for item in observations if item[1] == "keld-cli"]
+    buns = [item for item in observations if item[1] == "bun"]
+    if len(hosts) != 1 or len(clis) != 1 or not buns:
+        return None
+    host_rss = hosts[0][2]
+    host_private_dirty = hosts[0][3]
+    cli_rss = clis[0][2]
+    bun_rss = sum(item[2] for item in buns)
+    total_rss = sum(item[2] for item in observations)
+    total_private_dirty = sum(item[3] for item in observations)
+    classes = Counter(item[1] for item in observations)
+    engine_processes = sum(
+        count for name, count in classes.items() if name.startswith("webkit-")
+    )
+    snapshot = MemorySnapshot(
+        membership=tuple(
+            (item[0].identity.pid, item[0].identity.start_ticks, item[1])
+            for item in observations
+        ),
+        process_classes=",".join(
+            f"{name}:{classes[name]}" for name in sorted(classes)
+        ),
+        process_count=len(observations),
+        engine_processes=engine_processes,
+        main_rss_kib=host_rss,
+        helper_rss_kib=total_rss - host_rss,
+        total_rss_kib=total_rss,
+        main_private_dirty_kib=host_private_dirty,
+        helper_private_dirty_kib=total_private_dirty - host_private_dirty,
+        total_private_dirty_kib=total_private_dirty,
+    )
+    return ProductMemoryObservation(
+        snapshot=snapshot,
+        records=records,
+        cli_rss_kib=cli_rss,
+        bun_rss_kib=bun_rss,
+        keld_owned_rss_kib=cli_rss + host_rss,
+    )
+
+
+def _product_runtime_preflight() -> str:
+    if os.environ.get("GDK_BACKEND") != "x11":
+        raise HarnessError("linux/keld/dev-hello currently requires GDK_BACKEND=x11")
+    if not os.environ.get("DISPLAY"):
+        raise HarnessError("linux/keld/dev-hello requires a reachable X11 DISPLAY")
+    if os.environ.get("WAYLAND_DISPLAY"):
+        raise HarnessError(
+            "linux/keld/dev-hello X11 evidence requires WAYLAND_DISPLAY to be unset"
+        )
+    for executable in ("bun", "xdotool", "wmctrl"):
+        if shutil.which(executable) is None:
+            raise HarnessError(f"linux/keld/dev-hello requires {executable} on PATH")
+    return run_text(["bun", "--revision"])
+
+
+def _prepare_product_workspace(
+    artifact_dir: pathlib.Path,
+    renderer: bytes,
+    *,
+    home_root: pathlib.Path | None = None,
+) -> ProductWorkspace:
+    parent = (home_root or pathlib.Path.home()).resolve()
+    if not parent.is_dir():
+        raise HarnessError("product benchmark home root is unavailable")
+    root = pathlib.Path(
+        tempfile.mkdtemp(prefix=".keld-benches-product-", dir=parent)
+    )
+    try:
+        os.chmod(root, 0o700)
+        if root.stat().st_mode & 0o777 != 0o700:
+            raise HarnessError("product benchmark workspace is not owner-private")
+        bin_dir = root / "bin"
+        project_parent = root / "project-parent"
+        bin_dir.mkdir(mode=0o755)
+        project_parent.mkdir(mode=0o755)
+        for name in ("keld", "keld-host", "keld-role-launcher"):
+            destination = bin_dir / name
+            shutil.copy2(artifact_dir / name, destination)
+            destination.chmod(0o755)
+        project = project_parent / "product-bench"
+        shutil.copytree(KELD_DEV_PROJECT_PATH, project)
+        project.chmod(0o700)
+        (project / "index.html").write_bytes(renderer)
+        return ProductWorkspace(root=root, bin_dir=bin_dir, project=project, cli=bin_dir / "keld")
+    except BaseException:
+        shutil.rmtree(root, ignore_errors=True)
+        raise
+
+
+def _product_generation_alive(identity: ProcessIdentity) -> bool:
+    current = _proc_identity(identity.pid)
+    return current is not None and current.start_ticks == identity.start_ticks
+
+
+def _product_native_close(
+    root: ProcessIdentity,
+    title: str,
+) -> tuple[bool, int | None, str | None]:
+    records = _product_process_records(root)
+    if records is None:
+        return False, None, "product_tree_unavailable"
+    hosts = [
+        record
+        for record in records
+        if _product_process_class(record, root.pid) == "keld-host"
+    ]
+    if len(hosts) != 1:
+        return False, None, "product_host_count_invalid"
+    host_pid = hosts[0].identity.pid
+    xdotool = shutil.which("xdotool")
+    wmctrl = shutil.which("wmctrl")
+    if xdotool is None or wmctrl is None:
+        return False, None, "native_close_tool_missing"
+    try:
+        search = subprocess.run(
+            [
+                xdotool,
+                "search",
+                "--all",
+                "--onlyvisible",
+                "--pid",
+                str(host_pid),
+                "--name",
+                f"^{re.escape(title)}$",
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False, None, "native_window_search_failed"
+    ids = [item for item in search.stdout.split() if item.isdigit()]
+    if search.returncode != 0 or len(ids) != 1:
+        return False, None, "native_window_count_invalid"
+    window_id = int(ids[0])
+    try:
+        owner = run_text([xdotool, "getwindowpid", str(window_id)])
+    except HarnessError:
+        return False, window_id, "native_window_owner_unavailable"
+    if owner != str(host_pid):
+        return False, window_id, "native_window_owner_mismatch"
+    close = subprocess.run(
+        [wmctrl, "-ic", f"0x{window_id:x}"],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=5,
+    )
+    if close.returncode != 0:
+        return False, window_id, "native_window_close_failed"
+    return True, window_id, None
+
+
+def _product_force_cleanup(
+    process: subprocess.Popen[bytes],
+    captured: set[ProcessIdentity],
+) -> bool:
+    if process.poll() is None:
+        current_root = _proc_identity(process.pid)
+        if current_root is not None:
+            records = _product_process_records(current_root)
+            if records is not None:
+                captured.update(record.identity for record in records)
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+    for requested_signal in (signal.SIGTERM, signal.SIGKILL):
+        survivors = [identity for identity in captured if _product_generation_alive(identity)]
+        if not survivors:
+            break
+        for identity in survivors:
+            try:
+                descriptor = os.pidfd_open(identity.pid)
+            except ProcessLookupError:
+                continue
+            try:
+                current = _proc_identity(identity.pid)
+                if current is None or current.start_ticks != identity.start_ticks:
+                    continue
+                signal.pidfd_send_signal(descriptor, requested_signal)
+            finally:
+                os.close(descriptor)
+        deadline = time.monotonic() + 1.0
+        while time.monotonic() < deadline:
+            if not any(_product_generation_alive(identity) for identity in captured):
+                break
+            time.sleep(0.02)
+    if process.poll() is None:
+        process.kill()
+        process.wait(timeout=2)
+    return not any(_product_generation_alive(identity) for identity in captured)
+
+
+def _product_finish_lifecycle(
+    process: subprocess.Popen[bytes],
+    root: ProcessIdentity,
+    captured: set[ProcessIdentity],
+    project: pathlib.Path,
+    title: str,
+) -> dict[str, int | str | bool | None]:
+    records = _product_process_records(root)
+    if records is not None:
+        captured.update(record.identity for record in records)
+    native_close = False
+    window_id: int | None = None
+    close_error: str | None = None
+    if process.poll() is None:
+        native_close, window_id, close_error = _product_native_close(root, title)
+        if native_close:
+            try:
+                process.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                close_error = "product_cli_exit_timeout"
+    exit_code = process.poll()
+    time.sleep(0.2)
+    survivors = [identity for identity in captured if _product_generation_alive(identity)]
+    dev_root = project / ".keld" / "dev"
+    stage_clean = not dev_root.exists() or not any(dev_root.iterdir())
+    normal = native_close and exit_code == 0 and not survivors and stage_clean
+    generation_bound = not survivors
+    if not normal:
+        generation_bound = _product_force_cleanup(process, captured)
+        exit_code = process.poll()
+    return {
+        "native_window_close": native_close,
+        "native_window_id": window_id,
+        "native_close_error": close_error,
+        "product_exit_code": exit_code,
+        "stage_clean": stage_clean,
+        "cleanup_generation_bound": generation_bound,
+        "normal_lifecycle": normal,
+    }
+
+
+def _product_stdout_ready(stream: Any) -> bool:
+    stream.flush()
+    stream.seek(0)
+    output = stream.read().decode("utf-8", "replace")
+    return (
+        'ipc-echo ok: message="keld" count=1' in output
+        and "product-bench: main process ready (IPC echo ok)" in output
+    )
+
 
 
 class OwnedProcess:
@@ -879,6 +1344,303 @@ def _memory_attempt(
     }
 
 
+def _product_paint_attempt(
+    artifact_dir: pathlib.Path,
+    run_number: int,
+    timeout: float,
+) -> dict[str, Any]:
+    template = TEMPLATE_PATH.read_bytes()
+    index_html = (KELD_DEV_PROJECT_PATH / "index.html").read_bytes()
+    beacon_script = KELD_DEV_BEACON_PATH.read_bytes()
+    server = BeaconServer(template)
+    server.start()
+    renderer = render_product_renderer(index_html, beacon_script, server.port, server.nonce)
+    workspace: ProductWorkspace | None = None
+    process: subprocess.Popen[bytes] | None = None
+    root: ProcessIdentity | None = None
+    captured: set[ProcessIdentity] = set()
+    reject_reason: str | None = None
+    value: float | None = None
+    lifecycle: dict[str, int | str | bool | None] = {
+        "native_window_close": False,
+        "native_window_id": None,
+        "native_close_error": None,
+        "product_exit_code": None,
+        "stage_clean": False,
+        "cleanup_generation_bound": False,
+        "normal_lifecycle": False,
+    }
+    process_classes: str | None = None
+    process_count: int | None = None
+    census_complete = False
+    stdout_ready = False
+    exited_before_beacon = False
+    with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+        try:
+            workspace = _prepare_product_workspace(artifact_dir, renderer)
+            started_ns = time.monotonic_ns()
+            process = subprocess.Popen(
+                [str(workspace.cli), "dev"],
+                cwd=workspace.project,
+                env=os.environ.copy(),
+                stdin=subprocess.DEVNULL,
+                stdout=stdout,
+                stderr=stderr,
+                start_new_session=True,
+            )
+            root = _proc_identity(process.pid)
+            if root is None:
+                reject_reason = "product_cli_identity_unavailable"
+            else:
+                captured.add(root)
+                deadline = time.monotonic() + timeout
+                accepted = False
+                while reject_reason is None:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    if server.wait_for_beacon(min(remaining, 0.1)):
+                        accepted = True
+                        break
+                    if process.poll() is not None:
+                        exited_before_beacon = True
+                        break
+                snapshot = server.snapshot()
+                records = _product_process_records(root)
+                if records is not None:
+                    captured.update(record.identity for record in records)
+                    classes = Counter(
+                        _product_process_class(record, root.pid) for record in records
+                    )
+                    process_classes = ",".join(
+                        f"{name}:{classes[name]}" for name in sorted(classes)
+                    )
+                    process_count = len(records)
+                    census_complete = (
+                        classes["keld-cli"] == 1
+                        and classes["keld-host"] == 1
+                        and classes["bun"] >= 1
+                        and sum(
+                            count
+                            for name, count in classes.items()
+                            if name.startswith("webkit-")
+                        )
+                        >= 1
+                    )
+                if accepted and snapshot.accepted_ns is not None and snapshot.protocol_error is None:
+                    if census_complete:
+                        value = round((snapshot.accepted_ns - started_ns) / 1_000_000, 3)
+                    else:
+                        reject_reason = "product_process_census_incomplete"
+                elif snapshot.protocol_error is not None:
+                    reject_reason = snapshot.protocol_error
+                elif exited_before_beacon:
+                    reject_reason = f"product_process_exited_{process.returncode}"
+                elif snapshot.rejections:
+                    reject_reason = snapshot.rejections[-1]
+                else:
+                    reject_reason = "beacon_timeout"
+            if process is not None and root is not None and workspace is not None:
+                lifecycle = _product_finish_lifecycle(
+                    process, root, captured, workspace.project, "product-bench"
+                )
+            stdout_ready = _product_stdout_ready(stdout)
+            if value is not None and not stdout_ready:
+                reject_reason = "product_bun_ready_marker_missing"
+                value = None
+            if value is not None and not lifecycle["normal_lifecycle"]:
+                reject_reason = str(
+                    lifecycle["native_close_error"] or "product_lifecycle_cleanup_failed"
+                )
+                value = None
+        finally:
+            if process is not None and process.poll() is None:
+                _product_force_cleanup(process, captured)
+            server.close()
+            if workspace is not None:
+                shutil.rmtree(workspace.root, ignore_errors=True)
+
+    beacon = server.snapshot()
+    return {
+        "run": run_number,
+        "value": value,
+        "valid": value is not None,
+        "reject_reason": reject_reason,
+        "diagnostics": {
+            "page_requests": beacon.page_requests,
+            "beacon_requests": beacon.beacon_requests,
+            "process_exit_before_beacon": exited_before_beacon,
+            "processes": process_count,
+            "process_classes": process_classes,
+            "product_bun_ready": stdout_ready,
+            "derived_renderer_sha256": hashlib.sha256(renderer).hexdigest(),
+            **lifecycle,
+        },
+    }
+
+
+def _product_memory_attempt(
+    artifact_dir: pathlib.Path,
+    run_number: int,
+    timeout: float,
+) -> dict[str, Any]:
+    template = TEMPLATE_PATH.read_bytes()
+    index_html = (KELD_DEV_PROJECT_PATH / "index.html").read_bytes()
+    beacon_script = KELD_DEV_BEACON_PATH.read_bytes()
+    server = BeaconServer(template)
+    server.start()
+    renderer = render_product_renderer(index_html, beacon_script, server.port, server.nonce)
+    workspace: ProductWorkspace | None = None
+    process: subprocess.Popen[bytes] | None = None
+    root: ProcessIdentity | None = None
+    captured: set[ProcessIdentity] = set()
+    reject_reason: str | None = None
+    value: int | None = None
+    stable: ProductMemoryObservation | None = None
+    drift_percent: float | None = None
+    paint_ms: float | None = None
+    exited_before_ready = False
+    stdout_ready = False
+    lifecycle: dict[str, int | str | bool | None] = {
+        "native_window_close": False,
+        "native_window_id": None,
+        "native_close_error": None,
+        "product_exit_code": None,
+        "stage_clean": False,
+        "cleanup_generation_bound": False,
+        "normal_lifecycle": False,
+    }
+    stability = MemoryStability()
+    poll_wait = threading.Event()
+    with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+        try:
+            workspace = _prepare_product_workspace(artifact_dir, renderer)
+            started_ns = time.monotonic_ns()
+            process = subprocess.Popen(
+                [str(workspace.cli), "dev"],
+                cwd=workspace.project,
+                env=os.environ.copy(),
+                stdin=subprocess.DEVNULL,
+                stdout=stdout,
+                stderr=stderr,
+                start_new_session=True,
+            )
+            root = _proc_identity(process.pid)
+            if root is None:
+                reject_reason = "product_cli_identity_unavailable"
+            else:
+                captured.add(root)
+                deadline = time.monotonic() + timeout
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    if server.wait_for_beacon(min(remaining, 0.1)):
+                        break
+                    if process.poll() is not None:
+                        exited_before_ready = True
+                        break
+                beacon = server.snapshot()
+                if beacon.accepted_ns is None:
+                    if exited_before_ready:
+                        reject_reason = f"product_process_exited_{process.returncode}"
+                    elif beacon.rejections:
+                        reject_reason = beacon.rejections[-1]
+                    else:
+                        reject_reason = "beacon_timeout"
+                elif beacon.protocol_error is not None:
+                    reject_reason = beacon.protocol_error
+                else:
+                    paint_ms = round((beacon.accepted_ns - started_ns) / 1_000_000, 3)
+                    while True:
+                        if process.poll() is not None:
+                            reject_reason = f"product_process_exited_{process.returncode}"
+                            break
+                        current_beacon = server.snapshot()
+                        if current_beacon.protocol_error is not None:
+                            reject_reason = current_beacon.protocol_error
+                            break
+                        observation = _product_memory_observation(root)
+                        if observation is not None:
+                            captured.update(record.identity for record in observation.records)
+                            if stability.observe(observation.snapshot):
+                                stable = observation
+                                drift_percent = stability.drift_percent()
+                                value = observation.snapshot.main_rss_kib
+                                break
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            reject_reason = (
+                                stability.last_reject_reason or "memory_stability_timeout"
+                            )
+                            break
+                        poll_wait.wait(min(MEMORY_SAMPLE_INTERVAL_SECONDS, remaining))
+            if process is not None and root is not None and workspace is not None:
+                lifecycle = _product_finish_lifecycle(
+                    process, root, captured, workspace.project, "product-bench"
+                )
+            stdout_ready = _product_stdout_ready(stdout)
+            if value is not None and not stdout_ready:
+                reject_reason = "product_bun_ready_marker_missing"
+                value = None
+            if value is not None and not lifecycle["normal_lifecycle"]:
+                reject_reason = str(
+                    lifecycle["native_close_error"] or "product_lifecycle_cleanup_failed"
+                )
+                value = None
+        finally:
+            if process is not None and process.poll() is None:
+                _product_force_cleanup(process, captured)
+            server.close()
+            if workspace is not None:
+                shutil.rmtree(workspace.root, ignore_errors=True)
+
+    beacon = server.snapshot()
+    snapshot = stable.snapshot if stable is not None else None
+    diagnostics: dict[str, int | float | str | bool | None] = {
+        "paint_ms": paint_ms,
+        "page_requests": beacon.page_requests,
+        "beacon_requests": beacon.beacon_requests,
+        "process_exit_before_ready": exited_before_ready,
+        "cleanup_generation_bound": lifecycle["cleanup_generation_bound"],
+        "native_window_close": lifecycle["native_window_close"],
+        "native_window_id": lifecycle["native_window_id"],
+        "native_close_error": lifecycle["native_close_error"],
+        "product_exit_code": lifecycle["product_exit_code"],
+        "stage_clean": lifecycle["stage_clean"],
+        "product_bun_ready": stdout_ready,
+        "derived_renderer_sha256": hashlib.sha256(renderer).hexdigest(),
+        "stability_snapshots": MEMORY_STABLE_SNAPSHOTS if stable is not None else 0,
+        "stability_interval_ms": int(MEMORY_SAMPLE_INTERVAL_SECONDS * 1000),
+        "rss_drift_percent": drift_percent,
+        "processes": snapshot.process_count if snapshot is not None else None,
+        "engine_processes": snapshot.engine_processes if snapshot is not None else None,
+        "process_classes": snapshot.process_classes if snapshot is not None else None,
+        "cli_rss_kib": stable.cli_rss_kib if stable is not None else None,
+        "bun_rss_kib": stable.bun_rss_kib if stable is not None else None,
+        "keld_owned_rss_kib": stable.keld_owned_rss_kib if stable is not None else None,
+        "helper_rss_kib": snapshot.helper_rss_kib if snapshot is not None else None,
+        "total_tree_rss_kib": snapshot.total_rss_kib if snapshot is not None else None,
+        "main_private_dirty_kib": (
+            snapshot.main_private_dirty_kib if snapshot is not None else None
+        ),
+        "helper_private_dirty_kib": (
+            snapshot.helper_private_dirty_kib if snapshot is not None else None
+        ),
+        "total_private_dirty_kib": (
+            snapshot.total_private_dirty_kib if snapshot is not None else None
+        ),
+    }
+    return {
+        "run": run_number,
+        "value": value,
+        "valid": value is not None,
+        "reject_reason": reject_reason,
+        "diagnostics": diagnostics,
+    }
+
+
+
 def percentile(values: list[float], fraction: float) -> float:
     ordered = sorted(values)
     return ordered[max(0, math.ceil(fraction * len(ordered)) - 1)]
@@ -1058,6 +1820,66 @@ def read_keld_artifacts(
         if record.get("bytes") != path.stat().st_size:
             raise HarnessError(f"artifact size provenance mismatch: {path.name}")
     return provenance, product, adapter
+
+
+def read_keld_dev_artifacts(
+    artifact_dir: pathlib.Path,
+) -> tuple[dict[str, Any], pathlib.Path, pathlib.Path, pathlib.Path]:
+    """Validate the provenance-bound shipping keld-dev sibling executable set."""
+    provenance_path = artifact_dir / "provenance.json"
+    try:
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise HarnessError(f"could not read product artifact provenance: {error}") from error
+    if provenance.get("schema_version") != 1:
+        raise HarnessError("unsupported product artifact provenance schema")
+    if provenance.get("source_repository") != "github.com/gyldlab/keld":
+        raise HarnessError("product provenance names a non-canonical Keld source")
+    if provenance.get("recipe_repository") != "github.com/gyldlab/keld-benches":
+        raise HarnessError("product provenance names a non-canonical benchmark recipe")
+    for field in ("source_git_sha", "recipe_commit"):
+        value = provenance.get(field)
+        if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{40}", value):
+            raise HarnessError(f"product provenance has an invalid {field}")
+    expected_files = {
+        "linux/keld/dev-hello/build.sh",
+        "linux/keld/dev-hello/paint-beacon.js",
+        "linux/keld/dev-hello/project/.gitignore",
+        "linux/keld/dev-hello/project/index.html",
+        "linux/keld/dev-hello/project/keld.config.ts",
+        "linux/keld/dev-hello/project/package.json",
+        "linux/keld/dev-hello/project/src/kipc-transport.ts",
+        "linux/keld/dev-hello/project/src/kipc.ts",
+        "linux/keld/dev-hello/project/src/main.ts",
+    }
+    _verify_committed_file_digests(
+        provenance["recipe_commit"],
+        provenance.get("recipe_files", {}),
+        expected_files,
+        "Keld product artifact",
+    )
+    if provenance.get("project_name") != "product-bench":
+        raise HarnessError("product provenance names the wrong generated project")
+    artifacts = provenance.get("artifacts")
+    if not isinstance(artifacts, dict):
+        raise HarnessError("product provenance is missing artifact records")
+    paths = {
+        "cli": artifact_dir / "keld",
+        "host": artifact_dir / "keld-host",
+        "role_launcher": artifact_dir / "keld-role-launcher",
+    }
+    for name, artifact in paths.items():
+        record = artifacts.get(name)
+        if not isinstance(record, dict):
+            raise HarnessError(f"product provenance is missing {name}")
+        if artifact.is_symlink() or not artifact.is_file() or not os.access(artifact, os.X_OK):
+            raise HarnessError(f"product artifact is missing or not executable: {artifact.name}")
+        if record.get("basename") != artifact.name or record.get("sha256") != sha256_file(artifact):
+            raise HarnessError(f"product artifact provenance mismatch: {artifact.name}")
+        if record.get("bytes") != artifact.stat().st_size:
+            raise HarnessError(f"product artifact size provenance mismatch: {artifact.name}")
+    return provenance, paths["cli"], paths["host"], paths["role_launcher"]
+
 
 
 def _read_gtk4_artifact(artifact_dir: pathlib.Path) -> tuple[dict[str, Any], pathlib.Path]:
@@ -1276,6 +2098,7 @@ def _publication_reasons(
     recipe_commits: tuple[str, ...],
     bench_sha: str,
     paired: bool,
+    keld_mode: str = "host-adapter",
 ) -> list[dict[str, str]]:
     reasons: list[dict[str, str]] = []
 
@@ -1303,11 +2126,19 @@ def _publication_reasons(
     if metric_id in {"PAINT-OPPORTUNITY", "MEM-IDLE"}:
         if not paired:
             add("NO_PAIRED_ARM", f"Linux {metric_id} session currently contains only the Keld arm")
-        add(
-            "DIAGNOSTIC_HELLO_ONLY",
-            "the Keld arm measures keld-host --hello rather than no-flag product boot",
-        )
-    if metric_id == "MEM-IDLE":
+        if keld_mode == "host-adapter":
+            add(
+                "DIAGNOSTIC_HELLO_ONLY",
+                "the Keld arm measures keld-host --hello rather than no-flag product boot",
+            )
+        elif keld_mode == "dev-product":
+            add(
+                "DEVELOPER_FLOW_SCOPE",
+                "measurement starts at the shipping keld dev CLI and is not packaged-app startup",
+            )
+        else:
+            raise HarnessError(f"unknown Linux Keld measurement mode: {keld_mode}")
+    if metric_id == "MEM-IDLE" and keld_mode == "host-adapter":
         add(
             "BENCHMARK_ADAPTER_ARTIFACT",
             "memory is sampled after the committed loopback-navigation paint adapter",
@@ -1319,6 +2150,140 @@ def _publication_reasons(
             "file size is deterministic and is recorded once rather than padded statistically",
         )
     return reasons
+
+
+def _run_product_metric(
+    args: Any,
+    registry: dict[str, Any],
+    contract: dict[str, Any],
+    artifact_dir: pathlib.Path,
+    output: pathlib.Path,
+) -> tuple[dict[str, Any], bool]:
+    provenance, cli, host, _launcher = read_keld_dev_artifacts(artifact_dir)
+    bun_revision = _product_runtime_preflight()
+    bench_sha, tree_state, advertised = _git_state()
+    environment, power_evidence = _environment(provenance, args.metric)
+    environment["toolchains"].append({"name": "bun", "version": bun_revision})
+    started_utc = utc_now()
+    stock_renderer = (KELD_DEV_PROJECT_PATH / "index.html").read_bytes()
+    beacon_script = KELD_DEV_BEACON_PATH.read_bytes()
+    payload_sha = hashlib.sha256(stock_renderer + b"\0" + beacon_script).hexdigest()
+
+    if args.cache_state == "warm-cache":
+        if args.metric == "PAINT-OPPORTUNITY":
+            priming = _product_paint_attempt(artifact_dir, 0, args.timeout_seconds)
+        else:
+            priming = _product_memory_attempt(artifact_dir, 0, args.timeout_seconds)
+        if not priming["valid"]:
+            raise HarnessError(
+                f"warm-cache product priming launch failed: {priming['reject_reason']}"
+            )
+
+    if args.metric == "PAINT-OPPORTUNITY":
+        samples = [
+            _product_paint_attempt(artifact_dir, run, args.timeout_seconds)
+            for run in range(1, args.samples + 1)
+        ]
+        artifact = cli
+        artifact_record = provenance["artifacts"]["cli"]
+        notes = (
+            "Shipping Linux keld dev spawn-to-double-rAF product developer flow: CLI doctor, "
+            "owner-private stage, no-flag host, strict-profile Bun, authenticated stock echo, "
+            "real WebKitGTK window, and native X11 close. This is developer-flow startup, not "
+            f"packaged-app startup. Power evidence: {power_evidence}."
+        )
+    elif args.metric == "MEM-IDLE":
+        samples = [
+            _product_memory_attempt(artifact_dir, run, args.timeout_seconds)
+            for run in range(1, args.samples + 1)
+        ]
+        artifact = host
+        artifact_record = provenance["artifacts"]["host"]
+        notes = (
+            "Shipping Linux keld dev product developer flow. The scored value preserves the "
+            "existing MEM-IDLE denominator: staged keld-host RSS after a valid paint and four "
+            "stable generation-identical censuses. CLI, Bun, engine-helper, Keld-owned "
+            "CLI+host and total-tree RSS remain named diagnostics. Native X11 close and "
+            f"normal lifecycle cleanup are required for every valid sample. Power evidence: {power_evidence}."
+        )
+    else:
+        raise HarnessError("linux/keld/dev-hello implements only PAINT-OPPORTUNITY and MEM-IDLE")
+
+    arm = {
+        "arm_id": "keld-linux-dev",
+        "framework": {"name": "Keld", "version": provenance["source_git_sha"][:12]},
+        "fixture_path": KELD_DEV_FIXTURE_PATH,
+        "artifact": {
+            "sha256": artifact_record["sha256"],
+            "basename": artifact.name,
+            "version": provenance["source_git_sha"][:12],
+        },
+        "lane": "webkitgtk",
+        "role": "diagnostic",
+        "samples": samples,
+        "statistics": summarize(samples),
+    }
+    valid_samples = arm["statistics"]["valid_samples"]
+    reasons = _publication_reasons(
+        metric_id=args.metric,
+        requested_samples=args.samples,
+        valid_samples=valid_samples,
+        tree_state=tree_state,
+        advertised=advertised,
+        environment=environment,
+        recipe_commits=(provenance["recipe_commit"],),
+        bench_sha=bench_sha,
+        paired=False,
+        keld_mode="dev-product",
+    )
+    document = {
+        "schema_version": SCHEMA_VERSION,
+        "metric": {
+            "id": args.metric,
+            "unit": contract["unit"],
+            "registry_version": registry["registry_version"],
+        },
+        "cache_state": args.cache_state,
+        "session": {
+            "started_utc": started_utc,
+            "finished_utc": utc_now(),
+            "requested_samples": args.samples,
+            "interleaving": "none",
+            "label": args.label,
+            "notes": notes,
+        },
+        "environment": environment,
+        "provenance": {
+            "bench_sha": bench_sha,
+            "bench_tree_state": tree_state,
+            "keld_sha": provenance["source_git_sha"],
+            "harness": {
+                "path": "linux/bench/run.py",
+                "sha256": sha256_file(HARNESS_PATH),
+                "version": "1.0.0",
+                "modules": [
+                    {"path": "linux/bench/run.py", "sha256": sha256_file(HARNESS_PATH)},
+                    {"path": "linux/bench/harness.py", "sha256": sha256_file(MODULE_PATH)},
+                ],
+            },
+            "fixtures": [{"path": KELD_DEV_FIXTURE_PATH, "sha": provenance["recipe_commit"]}],
+            "payload_sha256": payload_sha,
+        },
+        "arms": [arm],
+        "publication": {
+            "policy_version": 2,
+            "requested": args.publish,
+            "eligible": not reasons,
+            "reasons": reasons,
+        },
+    }
+    validate_result(document)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("x", encoding="utf-8", newline="\n") as destination:
+        json.dump(document, destination, indent=2, sort_keys=True)
+        destination.write("\n")
+    return document, valid_samples != args.samples
+
 
 
 def validate_result(document: dict[str, Any]) -> None:
@@ -1349,17 +2314,25 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
     artifact_dirs = args.artifact_dir if isinstance(args.artifact_dir, list) else [args.artifact_dir]
     artifact_by_fixture = fixture_artifact_pairs(args.fixture, artifact_dirs)
     fixture_set = set(args.fixture)
+    product_mode = args.fixture == [KELD_DEV_FIXTURE_PATH]
     paired_gtk4 = fixture_set == {KELD_FIXTURE_PATH, GTK4_FIXTURE_PATH}
     paired_tauri = fixture_set == {KELD_FIXTURE_PATH, TAURI_FIXTURE_PATH}
     paired = paired_gtk4 or paired_tauri
     if args.metric == "PAINT-OPPORTUNITY":
         if fixture_set not in (
             {KELD_FIXTURE_PATH},
+            {KELD_DEV_FIXTURE_PATH},
             {KELD_FIXTURE_PATH, GTK4_FIXTURE_PATH},
             {KELD_FIXTURE_PATH, TAURI_FIXTURE_PATH},
         ):
             raise HarnessError(
-                "Linux PAINT-OPPORTUNITY requires Keld alone or exactly one Keld+GTK4/Keld+Tauri pair"
+                "Linux PAINT-OPPORTUNITY requires the host adapter, product dev fixture, "
+                "or exactly one host-adapter+GTK4/host-adapter+Tauri pair"
+            )
+    elif args.metric == "MEM-IDLE":
+        if args.fixture not in ([KELD_FIXTURE_PATH], [KELD_DEV_FIXTURE_PATH]):
+            raise HarnessError(
+                "Linux MEM-IDLE requires exactly one Keld host-adapter or product-dev fixture"
             )
     elif args.fixture != [KELD_FIXTURE_PATH]:
         raise HarnessError(f"Linux {args.metric} currently requires exactly {KELD_FIXTURE_PATH}")
@@ -1385,6 +2358,15 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
         raise HarnessError(f"--out must use the immutable result name {expected_name}")
     if output.exists() or output.is_symlink():
         raise HarnessError(f"refusing to overwrite immutable result: {output.name}")
+
+    if product_mode:
+        return _run_product_metric(
+            args,
+            registry,
+            contract,
+            artifact_by_fixture[KELD_DEV_FIXTURE_PATH],
+            output,
+        )
 
     provenance, product_artifact, bench_artifact = read_keld_artifacts(
         artifact_by_fixture[KELD_FIXTURE_PATH]

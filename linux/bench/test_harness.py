@@ -11,6 +11,8 @@ import selectors
 import signal
 import subprocess
 import sys
+import tempfile
+import shutil
 import unittest
 import urllib.parse
 from unittest import mock
@@ -18,18 +20,27 @@ from unittest import mock
 from harness import (
     BeaconServer,
     HarnessError,
+    KELD_DEV_BEACON_PATH,
+    KELD_DEV_PROJECT_PATH,
     MemorySnapshot,
     MemoryStability,
     OwnedProcess,
     ProcessIdentity,
+    ProductProcessRecord,
     ROOT,
+    _prepare_product_workspace,
     _proc_identity,
+    _product_memory_observation,
+    _product_process_class,
+    _product_runtime_preflight,
+    _publication_reasons,
     _paint_attempt,
     _verify_committed_file_digests,
     fixture_artifact_pairs,
     paired_ratio_comparison,
     paired_round_orders,
     render_payload,
+    render_product_renderer,
     request,
     summarize,
 )
@@ -346,6 +357,10 @@ class PairingTests(unittest.TestCase):
             ["linux/keld/hello", "linux/tauri/hello"], ["a", "b"]
         )
         self.assertEqual(set(mapping), {"linux/keld/hello", "linux/tauri/hello"})
+        self.assertEqual(
+            fixture_artifact_pairs(["linux/keld/dev-hello"], ["product"]),
+            {"linux/keld/dev-hello": (ROOT / "product").resolve()},
+        )
         with self.assertRaisesRegex(HarnessError, "unsupported Linux fixture"):
             fixture_artifact_pairs(["linux/foreign/hello"], ["a"])
 
@@ -363,6 +378,198 @@ class PairingTests(unittest.TestCase):
             paired_round_orders(("keld-linux-host",), 2, random.Random(1))
         with self.assertRaisesRegex(HarnessError, "positive sample count"):
             paired_round_orders(("keld-linux-host", "gtk4-native"), 0, random.Random(1))
+
+
+class ProductRunnerTests(unittest.TestCase):
+    @staticmethod
+    def record(
+        pid: int,
+        parent_pid: int,
+        command: str,
+        *,
+        comm: str = "process",
+        process_group: int = 100,
+        start_ticks: int | None = None,
+    ) -> ProductProcessRecord:
+        return ProductProcessRecord(
+            identity=ProcessIdentity(
+                pid=pid,
+                process_group=process_group,
+                start_ticks=start_ticks if start_ticks is not None else pid * 10,
+            ),
+            parent_pid=parent_pid,
+            command=command,
+            comm=comm,
+        )
+
+    def test_product_renderer_derivation_is_nonce_bound_and_non_mutating(self) -> None:
+        stock = KELD_DEV_PROJECT_PATH.joinpath("index.html").read_bytes()
+        beacon = KELD_DEV_BEACON_PATH.read_bytes()
+        stock_before = bytes(stock)
+        rendered = render_product_renderer(stock, beacon, 43123, NONCE)
+
+        self.assertEqual(stock, stock_before)
+        self.assertNotEqual(rendered, stock)
+        self.assertNotIn(b"__KELD_BENCH_", rendered)
+        self.assertIn(b"http://127.0.0.1:43123", rendered)
+        self.assertGreaterEqual(rendered.count(NONCE.encode("ascii")), 2)
+        self.assertIn(stock.split(b"</body>")[0], rendered)
+        self.assertEqual(rendered.count(b"</body>"), 1)
+
+    def test_product_role_classification_keeps_cli_host_bun_and_engine_distinct(self) -> None:
+        root = self.record(10, 1, "/bench/keld dev", comm="keld")
+        host = self.record(20, 10, "/stage/keld-host", comm="keld-host")
+        wrapper = self.record(30, 20, "/usr/bin/bwrap -- /runtime/launcher", comm="bwrap")
+        bun = self.record(40, 30, "/runtime/program run /code/main.ts", comm="bun")
+        web = self.record(
+            50,
+            20,
+            "/usr/lib/webkit2gtk/WebKitWebProcess 4 50",
+            comm="WebKitWebProcess",
+        )
+
+        self.assertEqual(_product_process_class(root, 10), "keld-cli")
+        self.assertEqual(_product_process_class(host, 10), "keld-host")
+        self.assertEqual(_product_process_class(wrapper, 10), "sandbox-wrapper")
+        self.assertEqual(_product_process_class(bun, 10), "bun")
+        self.assertEqual(_product_process_class(web, 10), "webkit-web")
+
+    def test_product_memory_scores_host_not_cli_or_total_tree(self) -> None:
+        records = (
+            self.record(10, 1, "/bench/keld dev", comm="keld"),
+            self.record(20, 10, "/stage/keld-host", comm="keld-host"),
+            self.record(30, 20, "/runtime/program run /code/main.ts", comm="bun"),
+            self.record(
+                40,
+                20,
+                "/usr/lib/webkit2gtk/WebKitWebProcess",
+                comm="WebKitWebProcess",
+            ),
+        )
+        counters = {
+            10: (100, 10),
+            20: (200, 20),
+            30: (300, 30),
+            40: (400, 40),
+        }
+
+        with mock.patch("harness._product_process_records", return_value=records), mock.patch(
+            "harness._product_memory_counters",
+            side_effect=lambda identity: counters[identity.pid],
+        ):
+            observation = _product_memory_observation(records[0].identity)
+
+        self.assertIsNotNone(observation)
+        assert observation is not None
+        self.assertEqual(observation.snapshot.main_rss_kib, 200)
+        self.assertEqual(observation.cli_rss_kib, 100)
+        self.assertEqual(observation.bun_rss_kib, 300)
+        self.assertEqual(observation.keld_owned_rss_kib, 300)
+        self.assertEqual(observation.snapshot.helper_rss_kib, 800)
+        self.assertEqual(observation.snapshot.total_rss_kib, 1000)
+        self.assertEqual(observation.snapshot.engine_processes, 1)
+        self.assertEqual(
+            observation.snapshot.process_classes,
+            "bun:1,keld-cli:1,keld-host:1,webkit-web:1",
+        )
+
+    def test_product_workspace_is_owner_private_and_source_fixture_stays_immutable(self) -> None:
+        stock_path = KELD_DEV_PROJECT_PATH / "index.html"
+        stock_before = stock_path.read_bytes()
+        renderer = render_product_renderer(
+            stock_before,
+            KELD_DEV_BEACON_PATH.read_bytes(),
+            43123,
+            NONCE,
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            artifacts = root / "artifacts"
+            artifacts.mkdir()
+            for name in ("keld", "keld-host", "keld-role-launcher"):
+                path = artifacts / name
+                path.write_bytes(name.encode("ascii"))
+                path.chmod(0o755)
+            home = root / "home"
+            home.mkdir()
+            workspace = _prepare_product_workspace(
+                artifacts,
+                renderer,
+                home_root=home,
+            )
+            try:
+                self.assertEqual(workspace.root.stat().st_mode & 0o777, 0o700)
+                self.assertEqual(workspace.project.stat().st_mode & 0o777, 0o700)
+                self.assertEqual((workspace.project / "index.html").read_bytes(), renderer)
+                for name in ("keld", "keld-host", "keld-role-launcher"):
+                    self.assertEqual(
+                        (workspace.bin_dir / name).read_bytes(),
+                        name.encode("ascii"),
+                    )
+                    self.assertTrue(os.access(workspace.bin_dir / name, os.X_OK))
+            finally:
+                shutil.rmtree(workspace.root, ignore_errors=True)
+        self.assertEqual(stock_path.read_bytes(), stock_before)
+
+    def test_product_preflight_requires_forced_x11_and_no_wayland_socket(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {"GDK_BACKEND": "x11", "DISPLAY": ":99", "WAYLAND_DISPLAY": "wayland-0"},
+            clear=True,
+        ):
+            with self.assertRaisesRegex(HarnessError, "WAYLAND_DISPLAY"):
+                _product_runtime_preflight()
+
+        with mock.patch.dict(
+            os.environ,
+            {"GDK_BACKEND": "wayland", "DISPLAY": ":99"},
+            clear=True,
+        ):
+            with self.assertRaisesRegex(HarnessError, "GDK_BACKEND=x11"):
+                _product_runtime_preflight()
+
+        with mock.patch.dict(
+            os.environ,
+            {"GDK_BACKEND": "x11", "DISPLAY": ":99"},
+            clear=True,
+        ), mock.patch("harness.shutil.which", return_value="/usr/bin/tool"), mock.patch(
+            "harness.run_text", return_value="1.4.2+test"
+        ):
+            self.assertEqual(_product_runtime_preflight(), "1.4.2+test")
+
+    def test_product_publication_reasons_do_not_claim_hello_adapter(self) -> None:
+        environment = {
+            "power": {
+                "ac_power": True,
+                "low_power_mode": False,
+                "thermal_state": "unverified",
+            }
+        }
+        common = dict(
+            metric_id="MEM-IDLE",
+            requested_samples=30,
+            valid_samples=30,
+            tree_state="clean",
+            advertised=True,
+            environment=environment,
+            recipe_commits=("a" * 40,),
+            bench_sha="a" * 40,
+            paired=False,
+        )
+        historical = {
+            item["code"] for item in _publication_reasons(**common)
+        }
+        product = {
+            item["code"]
+            for item in _publication_reasons(**common, keld_mode="dev-product")
+        }
+        self.assertIn("DIAGNOSTIC_HELLO_ONLY", historical)
+        self.assertIn("BENCHMARK_ADAPTER_ARTIFACT", historical)
+        self.assertNotIn("DEVELOPER_FLOW_SCOPE", historical)
+        self.assertIn("DEVELOPER_FLOW_SCOPE", product)
+        self.assertNotIn("DIAGNOSTIC_HELLO_ONLY", product)
+        self.assertNotIn("BENCHMARK_ADAPTER_ARTIFACT", product)
+
 
 
 class MemoryStabilityTests(unittest.TestCase):
