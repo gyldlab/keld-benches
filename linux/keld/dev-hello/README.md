@@ -14,9 +14,10 @@ things:
 
 The benchmark runner never patches Keld source. For each measured launch it
 copies this committed project into a fresh owner-private temporary root and
-replaces only that temporary copy's `index.html` with the runner's standard
-nonce-bound double-rAF beacon payload. The committed project remains byte
-identical to `keld create`.
+injects the separately committed `paint-beacon.js` into only that temporary
+copy's stock `index.html`. The committed seven-file project remains byte
+identical to `keld create`, while measurement instrumentation has its own
+reviewable digest.
 
 ## Build
 

@@ -61,6 +61,7 @@ esac
 recipe_commit=$(clean_git -C "$recipe_root" rev-parse --verify HEAD^{commit})
 recipe_files="
 linux/keld/dev-hello/build.sh
+linux/keld/dev-hello/paint-beacon.js
 linux/keld/dev-hello/project/.gitignore
 linux/keld/dev-hello/project/index.html
 linux/keld/dev-hello/project/keld.config.ts
@@ -174,6 +175,7 @@ from datetime import datetime, timezone
 root = pathlib.Path(os.environ["RECIPE_ROOT"])
 files = [
     "linux/keld/dev-hello/build.sh",
+    "linux/keld/dev-hello/paint-beacon.js",
     "linux/keld/dev-hello/project/.gitignore",
     "linux/keld/dev-hello/project/index.html",
     "linux/keld/dev-hello/project/keld.config.ts",
