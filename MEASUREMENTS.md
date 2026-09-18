@@ -826,17 +826,17 @@ evidence is bound by the
 
 | Tier | Payload | Pooled p50 | Pooled p90 | Pooled p99 | 95% session-block bootstrap CI p99 |
 |---|---:|---:|---:|---:|---:|
-| small | 6 B | 7.686 µs | 9.197 µs | **11.809 µs** | **[11.391, 12.241] µs** |
-| representative | 1,024 B | 8.141 µs | 9.719 µs | **13.197 µs** | **[12.970, 13.456] µs** |
+| small | 6 B | 7.641 µs | 9.069 µs | **11.312 µs** | **[11.090, 11.559] µs** |
+| representative | 1,024 B | 8.059 µs | 9.705 µs | **13.194 µs** | **[12.725, 13.494] µs** |
 
 Statistics use nearest-rank percentiles over 1,999,980 timed calls per tier and
 2,000 whole-session bootstrap resamples (seed 20260918). At the p99 CI upper
-bound the Rust wire path retains about **8.17×** headroom for the 6-byte tier
-and **7.43×** for the 1 KiB tier against the 100 µs architecture target.
+bound the Rust wire path retains about **8.65×** headroom for the 6-byte tier
+and **7.41×** for the 1 KiB tier against the 100 µs architecture target.
 
 This result proves only the authenticated cross-process keld-ipc library/wire
 path on this Linux machine. It contains no Bun product client, host lifecycle,
 window, or renderer; it must not be reported as Bun-to-Rust product IPC
 performance. The separate `handshake_ns` interval covers HELLO plus the first
-CALL/REPLY and was about 8 ms median in this Linux campaign; it is retained as
-a separate observation and is not folded into the scored RTT deltas or claim.
+CALL/REPLY and is retained as a separate observation; it is not folded into
+the scored RTT deltas or claim.
