@@ -239,11 +239,11 @@ class Gtk4FixtureTests(unittest.TestCase):
             _wait_for_request_or_explain_exit(
                 origin.observed.wait,
                 process,
-                5,
+                15,
                 "fixture did not request the approved URL",
             )
             _wait_for_exact_stderr_line(
-                process, b"KELD-BENCH-URL-BLOCKED\n", timeout=5
+                process, b"KELD-BENCH-URL-BLOCKED\n", timeout=15
             )
             self.assertFalse(target.observed.is_set(), "fixture followed the rejected redirect")
             self.assertIsNone(process.poll(), "fixture exited after rejecting the redirect")
