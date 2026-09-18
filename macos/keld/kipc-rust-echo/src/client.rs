@@ -17,7 +17,7 @@ use std::io::Read as _;
 use std::os::unix::net::UnixStream;
 use std::time::Instant;
 
-use keld_ipc::{CorrelationId, EchoRequest, SessionToken, echo_call, echo_invoke, parse_app_link};
+use keld_ipc::{echo_call, echo_invoke, parse_app_link, CorrelationId, EchoRequest, SessionToken};
 
 fn representative_message() -> String {
     // Deterministic ASCII, count 0, so the encoded payload is exactly 1,024
@@ -77,14 +77,19 @@ fn build_request(tier: &str) -> Result<(EchoRequest, usize), String> {
                 target_payload_bytes,
             ))
         }
-        other => Err(format!("unknown tier '{other}' (want small|representative)")),
+        other => Err(format!(
+            "unknown tier '{other}' (want small|representative)"
+        )),
     }
 }
 
 fn main() -> std::process::ExitCode {
     let raw_args: Vec<String> = std::env::args().skip(1).collect();
     let bad_token = raw_args.iter().any(|a| a == "--bad-token");
-    let positional: Vec<&String> = raw_args.iter().filter(|a| a.as_str() != "--bad-token").collect();
+    let positional: Vec<&String> = raw_args
+        .iter()
+        .filter(|a| a.as_str() != "--bad-token")
+        .collect();
     let [app_link_path, tier, calls_str, out_path] = positional[..] else {
         eprintln!(
             "usage: kel129-echo-client <app-link-path> <tier> <calls> <out-json-path> [--bad-token]"
@@ -125,8 +130,8 @@ fn main() -> std::process::ExitCode {
         // collide with the real one by construction.
         let mut bytes = [0u8; keld_ipc::SESSION_TOKEN_LEN];
         for (dst, src) in bytes.iter_mut().zip(token.to_hex().as_bytes().chunks(2)) {
-            let hex_byte = u8::from_str_radix(std::str::from_utf8(src).unwrap_or("00"), 16)
-                .unwrap_or(0);
+            let hex_byte =
+                u8::from_str_radix(std::str::from_utf8(src).unwrap_or("00"), 16).unwrap_or(0);
             *dst = !hex_byte;
         }
         SessionToken::from_bytes(bytes)
@@ -231,11 +236,13 @@ fn main() -> std::process::ExitCode {
         "deltas_ns": deltas_ns,
         "bun_context_process_revision_unused_control": bun_revision,
     });
-    if let Err(error) = std::fs::write(out_path, serde_json::to_vec(&json).unwrap_or_default())
-    {
+    if let Err(error) = std::fs::write(out_path, serde_json::to_vec(&json).unwrap_or_default()) {
         eprintln!("write {out_path}: {error}");
         return std::process::ExitCode::FAILURE;
     }
-    println!("wrote {out_path}: {} timed calls, handshake {handshake_ns} ns", deltas_ns.len());
+    println!(
+        "wrote {out_path}: {} timed calls, handshake {handshake_ns} ns",
+        deltas_ns.len()
+    );
     std::process::ExitCode::SUCCESS
 }

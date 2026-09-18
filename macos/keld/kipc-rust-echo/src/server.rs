@@ -16,7 +16,7 @@ use std::io::Write as _;
 use std::os::unix::fs::OpenOptionsExt as _;
 use std::os::unix::net::UnixListener;
 
-use keld_ipc::{SessionToken, format_app_link, serve_echo_session};
+use keld_ipc::{format_app_link, serve_echo_session, SessionToken};
 
 fn main() -> std::process::ExitCode {
     let mut args = std::env::args().skip(1);
