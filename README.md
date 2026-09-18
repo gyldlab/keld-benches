@@ -109,3 +109,29 @@ fires.
 ## License
 
 MIT — see [`LICENSE`](./LICENSE).
+
+## History maintenance: 2026-09-18
+
+Main was intentionally rewritten from PR #21 onward to compact the 40 macOS
+IPC raw-evidence JSON documents without changing their parsed values. The
+rewrite also translated downstream benchmark provenance fields to the
+equivalent rewritten commits. Raw IPC corpora are now marked -diff, and the
+macOS producer emits compact JSON so sample-per-line diff explosions do not
+recur.
+
+Old commit references map to the rewritten history as follows:
+
+| Before rewrite | Rewritten equivalent |
+|---|---|
+| b7137c1c2107e0f622eb350819d32605be7a781f | 43ec7358fe6a5baeb7b183be17f07708198982ba |
+| b31a0d7dfbc89e38aa4a1d999f6162fe610753fc | e5f204d6b243e2eca0f262be02b7e6b1d8faea38 |
+| 5a2d6d3b4039c44abcb77c327b86166ffde5c752 | edaae38dd321881b2444097dbc1700c159be26dd |
+| e3712ee3d4324d49a3e17c0960e7f1e32ede8f0c | 17f66666746834dda1a272d63e7ad23c46533a0f |
+| 05cbc070d087d45038d21caedfb7aae6fb6f341f | 082d5fff8597e640a9549daacbe4c096e1316977 |
+| aa0db1276bbd5ba9e037b58f56aa3a492de8b7be | a37023344381d26e470e64014528284f78dd9643 |
+| f6af26893a5ac76af1cae12e89e0a2bf39f89cf9 | 6ef1a7d321a711927e1d24665bc6bbdc9e1a0ada |
+| be6143c8d494a35d24c3063fc73fd9635cc0ee55 | 437720a8275684675f4aa97293179091347e0c1b |
+
+The current history then adds 80da58b86581748a232c54bb427823796edcfcff
+for rustfmt-only cleanup of the macOS IPC fixture. The pre-rewrite branch tips
+were removed from normal remote refs after the migration.
