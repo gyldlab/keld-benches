@@ -1168,6 +1168,7 @@ def _environment(provenance: dict[str, Any], metric_id: str) -> tuple[dict[str, 
             f"desktop={os.environ.get('XDG_CURRENT_DESKTOP', 'unknown')}",
             f"display={os.environ.get('DISPLAY', 'unset')}",
             f"wayland={os.environ.get('WAYLAND_DISPLAY', 'unset')}",
+            f"gdk_backend={os.environ.get('GDK_BACKEND', 'auto')}",
         )
         if part
     )
