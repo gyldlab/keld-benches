@@ -231,7 +231,7 @@ fn main() -> std::process::ExitCode {
         "deltas_ns": deltas_ns,
         "bun_context_process_revision_unused_control": bun_revision,
     });
-    if let Err(error) = std::fs::write(out_path, serde_json::to_vec_pretty(&json).unwrap_or_default())
+    if let Err(error) = std::fs::write(out_path, serde_json::to_vec(&json).unwrap_or_default())
     {
         eprintln!("write {out_path}: {error}");
         return std::process::ExitCode::FAILURE;

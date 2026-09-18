@@ -95,3 +95,8 @@ registry oracle's "handshake excluded and reported separately."
 
 Each session is a fresh server + client process pair (`fresh-process` cache
 state); no OS-level cache warming is attempted or claimed.
+
+Raw session documents are emitted as compact JSON (one object per file, with no
+pretty-print expansion). This preserves every individual timing sample while
+avoiding one Git diff line per call. Formatting is not part of the measurement
+or statistical unit.
