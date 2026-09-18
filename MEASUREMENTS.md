@@ -971,3 +971,58 @@ under the forced X11 backend on Xwayland, Keld's diagnostic paint path is more
 than 2.14x the matched native GTK4 arm at the lower bound of the paired CI.
 A native Xorg login and the required non-Debian distro spot-check remain
 unverified KEL-28 acceptance limbs.
+
+
+### Paired shipping Bun client vs Rust library floor (2026-09-18)
+
+To remove the separate-session ambiguity between the Linux Rust floor and Bun
+product-client campaigns, a fresh-process paired campaign was run from
+keld-benches 76f00e9895e9ce08237cdc4cc632582414cbbd69 against Keld
+0ea0780bb574ad242e9f1105fa4af5842872bad3.
+
+The campaign used 20 paired rounds per payload tier. Tier order alternated by
+round, and each arm ran first exactly 10/20 rounds per tier. Both arms scored
+exactly 100,000 post-handshake CALL/REPLY operations per round. The Rust
+fixture was invoked with 100,001 requested calls because its first call combines
+HELLO plus the first CALL and is excluded from its deltas; the remaining
+100,000 echo_invoke calls match the Bun arm's 100,000 scored
+AppLinkSession.echo calls.
+
+The 80 compact raw session documents and paired-round bootstrap are bound by the
+[paired manifest](./linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-bun-rust-paired.fresh-process.manifest.raw.json).
+
+| Tier | Rust floor p50 | Bun client p50 | Paired p50 ratio CI95 | Rust floor p99 | Bun client p99 | Paired p99 ratio CI95 |
+|---|---:|---:|---:|---:|---:|---:|
+| small, 6 B | 7.564 µs | 15.118 µs | 1.999× [1.972, 2.028] | 11.713 µs | 30.231 µs | **2.581× [2.478, 2.684]** |
+| representative, 1,024 B | 8.116 µs | 19.400 µs | 2.390× [2.362, 2.415] | 13.310 µs | 40.507 µs | **3.043× [2.974, 3.131]** |
+
+At p99, the paired Bun-minus-Rust delta is **18.518 µs** with paired CI95
+[17.761, 19.319] for 6 B and **27.197 µs** with CI95 [26.367, 28.142] for
+1 KiB. The Bun arm's own p99 session-block CI is [29.659, 30.856] µs for
+6 B and [39.555, 41.699] µs for 1 KiB, leaving about **3.24×** and
+**2.40×** headroom respectively against the 100 µs architecture target at the
+conservative CI upper bounds.
+
+This is a product-client-versus-library-floor diagnostic, not a pure Bun
+language/runtime tax. The Bun arm includes the shipping TypeScript codec,
+AppLinkSession client, async scheduling and HostOwnedHelloSession product
+orchestration; the Rust arm is the direct keld-ipc library floor. The paired
+ratio therefore quantifies the distance from the shipping Bun slice to that
+floor, not the cause of every additional nanosecond.
+
+The two handshake fields are also not compared: the Rust fixture's
+handshake_ns contains HELLO plus its first CALL/REPLY, while the Bun fixture's
+handshake_ns measures AppLinkSession.connect/HELLO before any scored echo.
+Only the post-handshake RTT samples are matched by this campaign.
+
+All three fail-closed controls passed before timing: Rust forged-token rejection
+reported server-side KELD-IPC-007 with no result file, while Bun bad-token and
+wrong-response controls both failed without a timing result. Four 100,000-call
+pilots passed the predeclared 300 µs p99 sanity stop.
+
+This closes the fresh-process same-round Rust/Bun pairing gap for the Linux IPC
+diagnostic. It does not make the result publication-eligible: thermal state is
+still independently unverified, result-v2 still lacks the session-block corpus
+shape, and the comparison remains product-client versus library floor rather
+than identical host orchestration. The warm-cache Bun campaign remains
+unpaired with a Rust warm-cache arm.
