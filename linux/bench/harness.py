@@ -36,8 +36,9 @@ MODULE_PATH = ROOT / "linux" / "bench" / "harness.py"
 TEMPLATE_PATH = ROOT / "linux" / "keld" / "hello" / "index.html"
 KELD_FIXTURE_PATH = "linux/keld/hello"
 GTK4_FIXTURE_PATH = "linux/gtk4/hello"
+TAURI_FIXTURE_PATH = "linux/tauri/hello"
 FIXTURE_PATH = KELD_FIXTURE_PATH
-SUPPORTED_FIXTURES = (KELD_FIXTURE_PATH, GTK4_FIXTURE_PATH)
+SUPPORTED_FIXTURES = (KELD_FIXTURE_PATH, GTK4_FIXTURE_PATH, TAURI_FIXTURE_PATH)
 IMPLEMENTED_METRICS = ("PAINT-OPPORTUNITY", "MEM-IDLE", "DISK")
 SUPPORTED_GUI_STATES = ("fresh-process", "warm-cache")
 MEMORY_STABLE_SNAPSHOTS = 4
@@ -1105,6 +1106,57 @@ def _read_gtk4_artifact(artifact_dir: pathlib.Path) -> tuple[dict[str, Any], pat
     return provenance, artifact
 
 
+def _read_tauri_artifact(artifact_dir: pathlib.Path) -> tuple[dict[str, Any], pathlib.Path]:
+    provenance_path = artifact_dir / "provenance.json"
+    try:
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise HarnessError(f"could not read Tauri artifact provenance: {error}") from error
+    if provenance.get("schema_version") != 1:
+        raise HarnessError("unsupported Tauri artifact provenance schema")
+    if provenance.get("fixture_repository") != "github.com/gyldlab/keld-benches":
+        raise HarnessError("Tauri artifact provenance names a non-canonical fixture repository")
+    fixture_commit = provenance.get("fixture_commit")
+    if not isinstance(fixture_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", fixture_commit):
+        raise HarnessError("Tauri artifact provenance has an invalid fixture_commit")
+    expected_files = {
+        "linux/tauri/hello/build.sh",
+        "linux/tauri/hello/src/index.html",
+        "linux/tauri/hello/src-tauri/Cargo.toml",
+        "linux/tauri/hello/src-tauri/Cargo.lock",
+        "linux/tauri/hello/src-tauri/build.rs",
+        "linux/tauri/hello/src-tauri/tauri.conf.json",
+        "linux/tauri/hello/src-tauri/src/main.rs",
+        "linux/tauri/hello/src-tauri/icons/icon.png",
+    }
+    _verify_committed_file_digests(
+        fixture_commit,
+        provenance.get("fixture_files"),
+        expected_files,
+        "Tauri artifact",
+    )
+    artifact = artifact_dir / "tauri-linux-hello"
+    record = provenance.get("artifact")
+    if not isinstance(record, dict):
+        raise HarnessError("Tauri artifact provenance is missing its artifact record")
+    if artifact.is_symlink() or not artifact.is_file() or not os.access(artifact, os.X_OK):
+        raise HarnessError("Tauri artifact is missing, non-regular, symlinked, or non-executable")
+    if record.get("basename") != artifact.name or record.get("sha256") != sha256_file(artifact):
+        raise HarnessError("Tauri artifact provenance mismatch")
+    if record.get("bytes") != artifact.stat().st_size:
+        raise HarnessError("Tauri artifact size provenance mismatch")
+    framework = provenance.get("framework")
+    if framework != {"name": "Tauri", "version": "2.11.5"}:
+        raise HarnessError("Tauri artifact does not pin framework version 2.11.5")
+    toolchains = provenance.get("toolchains")
+    if not isinstance(toolchains, dict) or any(
+        not isinstance(toolchains.get(name), str) or not toolchains[name]
+        for name in ("cargo", "rustc", "gtk+-3.0", "webkit2gtk-4.1")
+    ):
+        raise HarnessError("Tauri artifact provenance has incomplete toolchains")
+    return provenance, artifact
+
+
 def _power_state() -> tuple[bool, bool, str]:
     supplies = pathlib.Path("/sys/class/power_supply")
     online: list[bool] = []
@@ -1296,11 +1348,18 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
     contract = metric_contract(registry, args.metric)
     artifact_dirs = args.artifact_dir if isinstance(args.artifact_dir, list) else [args.artifact_dir]
     artifact_by_fixture = fixture_artifact_pairs(args.fixture, artifact_dirs)
-    paired = set(args.fixture) == {KELD_FIXTURE_PATH, GTK4_FIXTURE_PATH}
+    fixture_set = set(args.fixture)
+    paired_gtk4 = fixture_set == {KELD_FIXTURE_PATH, GTK4_FIXTURE_PATH}
+    paired_tauri = fixture_set == {KELD_FIXTURE_PATH, TAURI_FIXTURE_PATH}
+    paired = paired_gtk4 or paired_tauri
     if args.metric == "PAINT-OPPORTUNITY":
-        if set(args.fixture) not in ({KELD_FIXTURE_PATH}, {KELD_FIXTURE_PATH, GTK4_FIXTURE_PATH}):
+        if fixture_set not in (
+            {KELD_FIXTURE_PATH},
+            {KELD_FIXTURE_PATH, GTK4_FIXTURE_PATH},
+            {KELD_FIXTURE_PATH, TAURI_FIXTURE_PATH},
+        ):
             raise HarnessError(
-                "Linux PAINT-OPPORTUNITY requires the Keld fixture alone or the exact Keld+GTK4 pair"
+                "Linux PAINT-OPPORTUNITY requires Keld alone or exactly one Keld+GTK4/Keld+Tauri pair"
             )
     elif args.fixture != [KELD_FIXTURE_PATH]:
         raise HarnessError(f"Linux {args.metric} currently requires exactly {KELD_FIXTURE_PATH}")
@@ -1359,7 +1418,7 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
                 "role": "diagnostic",
             }
         ]
-        if paired:
+        if paired_gtk4:
             gtk_provenance, gtk_artifact = _read_gtk4_artifact(
                 artifact_by_fixture[GTK4_FIXTURE_PATH]
             )
@@ -1397,6 +1456,40 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
             recipe_commits.append(gtk_provenance["fixture_commit"])
             fixtures.append(
                 {"path": GTK4_FIXTURE_PATH, "sha": gtk_provenance["fixture_commit"]}
+            )
+
+        if paired_tauri:
+            tauri_provenance, tauri_artifact = _read_tauri_artifact(
+                artifact_by_fixture[TAURI_FIXTURE_PATH]
+            )
+            tauri_toolchains = tauri_provenance["toolchains"]
+            if tauri_toolchains["webkit2gtk-4.1"] != environment["engine"]["version"]:
+                raise HarnessError(
+                    "Keld and Tauri artifacts use different webkit2gtk-4.1 releases"
+                )
+            environment["engine"]["name"] = "WebKitGTK 4.1 (Keld / Tauri)"
+            environment["toolchains"].extend(
+                (
+                    {"name": "tauri", "version": tauri_provenance["framework"]["version"]},
+                    {"name": "tauri-gtk+-3.0", "version": tauri_toolchains["gtk+-3.0"]},
+                )
+            )
+            paint_configs.append(
+                {
+                    "arm_id": "tauri-linux-host",
+                    "framework": tauri_provenance["framework"],
+                    "fixture_path": TAURI_FIXTURE_PATH,
+                    "fixture_sha": tauri_provenance["fixture_commit"],
+                    "artifact": tauri_artifact,
+                    "artifact_record": tauri_provenance["artifact"],
+                    "artifact_version": tauri_provenance["framework"]["version"],
+                    "arguments": (),
+                    "role": "diagnostic",
+                }
+            )
+            recipe_commits.append(tauri_provenance["fixture_commit"])
+            fixtures.append(
+                {"path": TAURI_FIXTURE_PATH, "sha": tauri_provenance["fixture_commit"]}
             )
 
         if args.cache_state == "warm-cache":
@@ -1467,7 +1560,8 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
             )
         if paired:
             by_id = {arm["arm_id"]: arm for arm in arms}
-            baseline = by_id["gtk4-native"]["samples"]
+            baseline_arm = "gtk4-native" if paired_gtk4 else "tauri-linux-host"
+            baseline = by_id[baseline_arm]["samples"]
             candidate = by_id["keld-linux-host"]["samples"]
             if all(
                 arm["statistics"]["valid_samples"] == args.samples for arm in arms
@@ -1476,12 +1570,18 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
                     baseline,
                     candidate,
                     threshold=registry["regression_rule"]["threshold_ratio"],
+                    baseline_arm=baseline_arm,
+                    candidate_arm="keld-linux-host",
                 )
         notes = (
             "External monotonic spawn-to-double-rAF image-beacon proxy. The Keld arm uses "
             "the declared keld-host --hello benchmark adapter rather than no-flag product boot. "
             + (
-                "Every round runs Keld and GTK4 once with balanced randomized within-round order. "
+                (
+                    "Every round runs Keld and GTK4 once with balanced randomized within-round order. "
+                    if paired_gtk4
+                    else "Every round runs Keld and Tauri once with balanced randomized within-round order. "
+                )
                 if paired
                 else "This is a single-arm diagnostic. "
             )

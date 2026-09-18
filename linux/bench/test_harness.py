@@ -342,6 +342,10 @@ class PairingTests(unittest.TestCase):
             fixture_artifact_pairs(
                 ["linux/keld/hello", "linux/keld/hello"], ["a", "b"]
             )
+        mapping = fixture_artifact_pairs(
+            ["linux/keld/hello", "linux/tauri/hello"], ["a", "b"]
+        )
+        self.assertEqual(set(mapping), {"linux/keld/hello", "linux/tauri/hello"})
         with self.assertRaisesRegex(HarnessError, "unsupported Linux fixture"):
             fixture_artifact_pairs(["linux/foreign/hello"], ["a"])
 

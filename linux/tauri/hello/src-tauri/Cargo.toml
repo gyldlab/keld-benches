@@ -1,0 +1,16 @@
+[package]
+name = "tauri-hello"
+version = "0.1.0"
+description = "keld-benches Linux Tauri 2 WebKitGTK paint fixture"
+authors = ["gyldlab"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }
+
+[dependencies]
+tauri = { version = "=2.11.5", features = [] }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
