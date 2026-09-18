@@ -1081,3 +1081,96 @@ comfortably below the 100 µs p99 target.
 This closes the remaining Linux warm-cache Rust/Bun same-round pairing gap.
 Thermal state remains independently unverified and result-v2 still lacks the
 session-block corpus shape, so the diagnostic remains publication-ineligible.
+
+
+### Shipping Linux `keld dev` product developer flow (2026-09-18)
+
+A new Linux product arm measures the ordinary Release `keld dev` path rather
+than the historical `keld-host --hello` navigation adapter. The fixture at
+[`linux/keld/dev-hello`](./linux/keld/dev-hello/) is the exact seven-file output
+of `keld create product-bench` at Keld
+`0ea0780bb574ad242e9f1105fa4af5842872bad3`. A separately committed paint
+script is injected only into a fresh owner-private temporary copy of the stock
+renderer for each launch; Keld source and the committed generated project are
+never patched.
+
+The build recipe follows Keld's documented developer installation layout and
+emits the sibling Release executables `keld`, `keld-host`, and
+`keld-role-launcher`. Measurement artifacts are bound to keld-benches
+`a15dc83f521f94294012f7bdfb182db6ac6297c4`. The executable receipts are:
+
+- `keld`: 3,302,192 B, SHA-256 `673b9b7d52c6bcd4f3ccc2524bae6fcee80727c9156d702e4f68f0adb2f13ee6`;
+- `keld-host`: 1,688,160 B, SHA-256 `665977e46ca76b2ae1f2bf6a4d82e1a7f1e689ac3953fc42c4fb45b5309cffa0`;
+- `keld-role-launcher`: 406,960 B, SHA-256 `baa25723b136d5442bc197e1f000b35041dc2d23dcf26f7491ade1b69478a588`.
+
+The three-file sum is 5,397,312 B. It is a developer sibling-set diagnostic,
+**not** an installer, compressed package, update payload, or replacement for
+the existing host-only DISK metric.
+
+The first admitted product-flow lane is X11 through the machine's live GNOME
+Xwayland server. Every measured process has `GDK_BACKEND=x11`, `DISPLAY=:0`,
+and `WAYLAND_DISPLAY` unset. A valid sample must additionally prove the shipping
+Bun-ready echo markers, one CLI, one staged host, at least one Bun process and
+WebKit helper, then close the actual native X11 window, receive CLI exit code 0,
+leave no captured descendant generation alive, and remove the per-launch stage.
+All four 30-sample sessions below completed with **zero rejected samples** and
+the same census on every run:
+`bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1`.
+
+#### Product developer-flow paint
+
+| Cache state | Valid | Median | p90 | Min | Max | Bootstrap median CI95 |
+|---|---:|---:|---:|---:|---:|---:|
+| fresh-process | 30/30 | **973.723 ms** | 986.346 | 922.031 | 1007.782 | **[958.468, 981.844]** |
+| warm-cache | 30/30 | **968.0375 ms** | 984.549 | 933.897 | 996.135 | **[960.5485, 974.6175]** |
+
+Fresh-process evidence:
+[`PAINT-OPPORTUNITY`](./linux/bench/results/paint-opportunity/2026-09-18.kel90-linux-product-dev-30.fresh-process.json).
+Warm-cache evidence:
+[`PAINT-OPPORTUNITY`](./linux/bench/results/paint-opportunity/2026-09-18.kel90-linux-product-dev-30.warm-cache.json).
+
+The clock starts before spawning the shipping `keld dev` CLI and stops at the
+nonce-bound double-rAF beacon in the real product window. The interval therefore
+includes CLI doctor/staging, no-flag host startup, Linux strict-profile Bun
+admission, the stock authenticated echo, WebKitGTK window creation and renderer
+paint. This is intentionally a **developer-flow** observable, not packaged-app
+startup. A raw GTK4 application is not treated as a paired baseline for this
+lane because it does not perform equivalent CLI/staging/Bun work.
+
+#### Product memory with preserved host denominator
+
+The scored `MEM-IDLE` value remains staged `keld-host` RSS so this lane does not
+silently redefine the existing metric. CLI, Bun, Keld-owned CLI+host and the
+complete descendant-tree RSS are retained as diagnostics for every sample.
+Four generation-identical memory censuses with bounded drift are required after
+a valid paint, followed by the same native-close lifecycle gate.
+
+| Cache state | Host RSS median | Host CI95 | CLI RSS median | Bun RSS median | CLI+host median | Full tree RSS median |
+|---|---:|---:|---:|---:|---:|---:|
+| fresh-process | **173,102 KiB** | **[173,052, 173,154]** | 36,990 KiB | 22,742 KiB | 210,090 KiB | **468,718 KiB** |
+| warm-cache | **173,056 KiB** | **[172,994, 173,098]** | 36,988 KiB | 22,742 KiB | 210,032 KiB | **468,664 KiB** |
+
+Fresh-process private-dirty medians are 28,176 KiB for the host, 43,236 KiB
+for the remaining tree, and 71,416 KiB total. Warm-cache medians are 28,172,
+43,224 and 71,418 KiB respectively. The associated paint medians inside the
+memory sessions are 974.862 ms fresh and 970.862 ms warm.
+
+Fresh evidence:
+[`MEM-IDLE`](./linux/bench/results/mem-idle/2026-09-18.kel90-linux-product-dev-memory-30.fresh-process.json).
+Warm evidence:
+[`MEM-IDLE`](./linux/bench/results/mem-idle/2026-09-18.kel90-linux-product-dev-memory-30.warm-cache.json).
+
+All four documents remain publication-ineligible for three explicit reasons:
+Linux thermal state is independently unverified, there is no semantically
+matched paired arm for this full developer flow, and the observable is
+`keld dev` developer startup rather than packaged-app startup. They do **not**
+carry the historical `DIAGNOSTIC_HELLO_ONLY` or `BENCHMARK_ADAPTER_ARTIFACT`
+blockers.
+
+Fresh and warm sessions were separate campaigns. Their paint and memory CIs
+overlap, so the data do not support a causal percentage claim for cache warming.
+They establish instead that the full shipping Linux developer flow is stable at
+roughly 0.97 s to double-rAF paint on this X11/Xwayland machine, while the host
+RSS denominator stays near 173 MiB and the complete observed descendant tree is
+about 469 MiB. Native Xorg, Wayland product-flow automation, non-Debian Linux,
+and packaged release startup remain separate unmeasured limbs.

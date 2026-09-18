@@ -1,0 +1,794 @@
+{
+  "arms": [
+    {
+      "arm_id": "keld-linux-dev",
+      "artifact": {
+        "basename": "keld",
+        "sha256": "673b9b7d52c6bcd4f3ccc2524bae6fcee80727c9156d702e4f68f0adb2f13ee6",
+        "version": "0ea0780bb574"
+      },
+      "fixture_path": "linux/keld/dev-hello",
+      "framework": {
+        "name": "Keld",
+        "version": "0ea0780bb574"
+      },
+      "lane": "webkitgtk",
+      "role": "diagnostic",
+      "samples": [
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "3b9e87db936aea1cd8d6bf006a1583823074833314e02b324d8f092f93b5ecf6",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 1,
+          "valid": true,
+          "value": 1007.782
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "ca891604a196b480055ed22e69b30b13a93f3aef2af1391080d829b908f6841e",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 2,
+          "valid": true,
+          "value": 976.864
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "53bd4f6693f9e51221d3d12ce20a4c49b5016c9bd93c6476bdb6ef6790b632c7",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 3,
+          "valid": true,
+          "value": 985.32
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "3ef7ce60c4edcc2712b3c38ee3a952397cfefec67ecfc67264ce0a307cf250c9",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 4,
+          "valid": true,
+          "value": 983.196
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "543b49fb1a0522ed26d724ba8fa2a089c665e94340c84cc89585806f4cd51b1a",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 5,
+          "valid": true,
+          "value": 975.35
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "8da27a82a3e5106b527055351d4ffffabf174c648cbe49b11fd891fb05ec2d5e",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 6,
+          "valid": true,
+          "value": 984.819
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "eb4faf9ac5393edf0d7076ebf1df616600265a77f74ab2f8e3e4bb134a2e6d35",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 7,
+          "valid": true,
+          "value": 997.262
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "0b43513034536dbca05ef75cbeb6002acb0ce718fc882b0f0ba0ba7001fb6c3c",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 8,
+          "valid": true,
+          "value": 982.151
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "78ff42462ff2dad5a4a8906cf4c419eafb3ef47e327f504377da0133d5d99f0c",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 9,
+          "valid": true,
+          "value": 951.73
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "a2673f450aa61d7112dfa902cede0b53f4c764283ed0242d9f8d52de400debb9",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 10,
+          "valid": true,
+          "value": 953.406
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "0bcd3fe1e26dcfb53b29350b5193a10cc635ec9f3b45f3adf4192b823e14476a",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 11,
+          "valid": true,
+          "value": 956.213
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "674e8cee81b64cd2d6ebc9f28790988007b1f333fc63a00dcff38a5097331184",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 12,
+          "valid": true,
+          "value": 983.766
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "edaab21ccc461aed4436bfe65d54409e4ebbc99e553680b909ab54ea2db8896e",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 13,
+          "valid": true,
+          "value": 950.139
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "25d9be4c3d1069bf10f5bf3f2ec1a89dced59b8927a4a1e908a64d92091e58f9",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 14,
+          "valid": true,
+          "value": 972.096
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "e219a0cb85d14229e0b92ae68d26b9ee58c7e25678b4837fc0fd20006039e94b",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 15,
+          "valid": true,
+          "value": 946.422
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "0d1981c03a05a23a9ddec55acf39ae66393f32f81e8f37c53260054438034b00",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 16,
+          "valid": true,
+          "value": 983.087
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "c9312b17c6fe1fd03d4de3fc667820a1655aa923f221b1c4f87a62cac2835066",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 17,
+          "valid": true,
+          "value": 922.031
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "349fc351d9e14ecef04ccb21475b6d30ffd238c0746f017c2af28d8e56766118",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 18,
+          "valid": true,
+          "value": 978.571
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "0577c84f5473704251a3ec27d80a28bfa991f7987c67044cab250f9dc700c263",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 19,
+          "valid": true,
+          "value": 991.69
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "748ce32ae8985d1393dcb8b22567a9cea5fdbecb7275a9b310d4a25cce441122",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 20,
+          "valid": true,
+          "value": 964.423
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "714492ab5bfc0cc4d6909790b4de4f7887b3d4801d323326da8608094ad23999",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 21,
+          "valid": true,
+          "value": 981.537
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "e810f77218c0cdd53d74e02dcb014aa5e5462fb6514c5ed57add8123e3e95e26",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 22,
+          "valid": true,
+          "value": 960.723
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "86233306c35c5c5fa72e664769fea2c0c7c10a13cd460bc20242e2b73d9d2415",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 23,
+          "valid": true,
+          "value": 986.346
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "c2ed126dddec317c0063e20b15194ac1cdf88d9473c7951eaaa7c202b1c6bbf2",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 24,
+          "valid": true,
+          "value": 966.497
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "6c3c07692ceefe020585b8e3684d01b213b88c4826d5dbb7ff1d0ec82eaa2988",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 25,
+          "valid": true,
+          "value": 978.962
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "d3476a1d7f3009352545d0e44ae4fdbd9afa3e72e8451d12ca524daae99da3ca",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 26,
+          "valid": true,
+          "value": 941.629
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "a2204abd4b31be271e483a5ddbdc87cd5b59364868405c529697c7d4ea787fc5",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 27,
+          "valid": true,
+          "value": 962.67
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "5f8f1202b0d84547151d0a1c2b000514ed0112c8886ad3654b4cf28518096f1d",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 28,
+          "valid": true,
+          "value": 953.864
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "6aecd09270906c9057895101faeb6233b78ccae3742eeea433543c602978b744",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 29,
+          "valid": true,
+          "value": 953.542
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "derived_renderer_sha256": "d8a189d1cdb81fc21f625ac5f674ec730595b7637426eb7800c2af5d57341c6b",
+            "native_close_error": null,
+            "native_window_close": true,
+            "native_window_id": 23068675,
+            "normal_lifecycle": true,
+            "page_requests": 0,
+            "process_classes": "bun:1,keld-cli:1,keld-host:1,sandbox-wrapper:2,webkit-network:1,webkit-web:1",
+            "process_exit_before_beacon": false,
+            "processes": 7,
+            "product_bun_ready": true,
+            "product_exit_code": 0,
+            "stage_clean": true
+          },
+          "reject_reason": null,
+          "run": 30,
+          "valid": true,
+          "value": 942.565
+        }
+      ],
+      "statistics": {
+        "bootstrap_ci95": {
+          "lower": 958.468,
+          "resamples": 10000,
+          "upper": 981.844
+        },
+        "max": 1007.782,
+        "median": 973.723,
+        "min": 922.031,
+        "p90": 986.346,
+        "valid_samples": 30
+      }
+    }
+  ],
+  "cache_state": "fresh-process",
+  "environment": {
+    "display": "session=wayland;desktop=ubuntu:GNOME;display=:0;wayland=unset;gdk_backend=x11",
+    "engine": {
+      "name": "WebKitGTK",
+      "version": "2.52.6"
+    },
+    "hardware": {
+      "arch": "x86_64",
+      "cpu": "Intel(R) Core(TM) i5-10500H CPU @ 2.50GHz",
+      "ram_bytes": 24558964736
+    },
+    "os": {
+      "build": "7.0.0-31-generic",
+      "name": "linux",
+      "version": "Ubuntu 26.04.1 LTS"
+    },
+    "power": {
+      "ac_power": true,
+      "low_power_mode": false,
+      "thermal_state": "unverified"
+    },
+    "toolchains": [
+      {
+        "name": "rustc",
+        "version": "rustc 1.97.1 (8bab26f4f 2026-07-14);binary: rustc;commit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452;commit-date: 2026-07-14;host: x86_64-unknown-linux-gnu;release: 1.97.1;LLVM version: 22.1.6"
+      },
+      {
+        "name": "cargo",
+        "version": "cargo 1.97.1 (c980f4866 2026-06-30)"
+      },
+      {
+        "name": "webkit2gtk-4.1",
+        "version": "2.52.6"
+      },
+      {
+        "name": "bun",
+        "version": "1.4.2+744846f84"
+      }
+    ]
+  },
+  "metric": {
+    "id": "PAINT-OPPORTUNITY",
+    "registry_version": 1,
+    "unit": "ms"
+  },
+  "provenance": {
+    "bench_sha": "a15dc83f521f94294012f7bdfb182db6ac6297c4",
+    "bench_tree_state": "clean",
+    "fixtures": [
+      {
+        "path": "linux/keld/dev-hello",
+        "sha": "a15dc83f521f94294012f7bdfb182db6ac6297c4"
+      }
+    ],
+    "harness": {
+      "modules": [
+        {
+          "path": "linux/bench/run.py",
+          "sha256": "b02933a7dca4c5a8d921b98d6a246f82232841db43d4f81e24527fc8d8e1afde"
+        },
+        {
+          "path": "linux/bench/harness.py",
+          "sha256": "a40bb91cc4f5b4adc0517ab79e6d89054272879c2daf3aae361b7eb36160f915"
+        }
+      ],
+      "path": "linux/bench/run.py",
+      "sha256": "b02933a7dca4c5a8d921b98d6a246f82232841db43d4f81e24527fc8d8e1afde",
+      "version": "1.0.0"
+    },
+    "keld_sha": "0ea0780bb574ad242e9f1105fa4af5842872bad3",
+    "payload_sha256": "dd04e8ec4ecb767b8b0e63eea32aa4a53d6cbf48d12ded7433da10ca0493b2a6"
+  },
+  "publication": {
+    "eligible": false,
+    "policy_version": 2,
+    "reasons": [
+      {
+        "code": "THERMAL_STATE_UNVERIFIED",
+        "label": "Linux thermal state was not independently verified"
+      },
+      {
+        "code": "NO_PAIRED_ARM",
+        "label": "Linux PAINT-OPPORTUNITY session currently contains only the Keld arm"
+      },
+      {
+        "code": "DEVELOPER_FLOW_SCOPE",
+        "label": "measurement starts at the shipping keld dev CLI and is not packaged-app startup"
+      }
+    ],
+    "requested": false
+  },
+  "schema_version": 2,
+  "session": {
+    "finished_utc": "2026-09-18T20:50:23.441783Z",
+    "interleaving": "none",
+    "label": "kel90-linux-product-dev-30",
+    "notes": "Shipping Linux keld dev spawn-to-double-rAF product developer flow: CLI doctor, owner-private stage, no-flag host, strict-profile Bun, authenticated stock echo, real WebKitGTK window, and native X11 close. This is developer-flow startup, not packaged-app startup. Power evidence: sysfs-power-supply;power-profile=performance.",
+    "requested_samples": 30,
+    "started_utc": "2026-09-18T20:49:39.206012Z"
+  }
+}

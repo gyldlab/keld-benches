@@ -122,6 +122,7 @@ jobs:
         run: |
           sh -n linux/gtk4/hello/build.sh
           sh -n linux/keld/hello/build.sh
+          sh -n linux/keld/dev-hello/build.sh
 
       - name: List Linux metrics
         env:
