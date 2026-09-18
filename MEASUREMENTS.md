@@ -822,7 +822,7 @@ sessions × 100,000 requested calls × two payload tiers. Call 1 includes HELLO
 and is reported separately; each raw session contains 99,999 timed
 CALL-to-REPLY deltas. All 40 sessions completed and validated. Aggregate
 evidence is bound by the
-[campaign manifest](./linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-rust-library-arm.manifest.json).
+[campaign manifest](./linux/bench/results/ipc-rtt/2026-09-18.kel90-linux-rust-library-arm.manifest.raw.json).
 
 | Tier | Payload | Pooled p50 | Pooled p90 | Pooled p99 | 95% session-block bootstrap CI p99 |
 |---|---:|---:|---:|---:|---:|
