@@ -88,3 +88,25 @@ format does not change the data or the statistical unit.
 The existing result-v2 schema does not model this independent-session
 library-arm corpus. These raw documents therefore remain diagnostic sidecars;
 they do not become publication-eligible product results.
+
+
+## Optional warmup before scored calls
+
+The Linux Rust client also supports an optional --warmup N argument. Warmup
+calls run after the authenticated HELLO-bearing first call, validate the same
+echo fields, use monotonically increasing correlation IDs, and are excluded
+from deltas_ns.
+
+For a warm-cache scored process with 1,000 untimed echoes and exactly 100,000
+timed echoes, request 101,001 total calls:
+
+    ./target/release/kel90-linux-echo-client       "$LINK" small 101001 "$OUT" --warmup 1000
+
+The resulting raw document records cache_state=warm-cache, warmup_calls=1000,
+calls_requested=101001, and calls_timed=100000. With no --warmup argument the
+client records cache_state=fresh-process and preserves the fresh paired
+100,001-request / 100,000-scored behavior.
+
+This option exists only to match the registry's established warm-cache
+treatment in paired Rust/Bun diagnostics. It does not redefine warm-cache and
+does not change historical raw evidence.

@@ -5,13 +5,14 @@
 //! separately").
 //!
 //! Usage:
-//!   kel90-linux-echo-client <app-link-path> <tier> <calls> <out-json-path> [--bad-token]
+//!   kel90-linux-echo-client <app-link-path> <tier> <calls> <out-json-path> [--bad-token] [--warmup N]
 //!
 //! `<tier>` is `small` (the codec's pinned `{message:"kipc",count:3}` vector,
 //! 6-byte payload / 22-byte frame) or `representative` (a 1,024-byte
 //! deterministic payload / 1,040-byte frame). `--bad-token` is the negative
-//! control: it flips the last byte of the parsed token before connecting and
-//! must fail the HELLO handshake before any timing or output happens.
+//! control and must fail HELLO before output. `--warmup N` validates N
+//! post-handshake echoes without timing them; `<calls>` still counts every
+//! CALL including the HELLO-bearing first call.
 
 use std::io::Read as _;
 use std::os::unix::net::UnixStream;
@@ -85,14 +86,43 @@ fn build_request(tier: &str) -> Result<(EchoRequest, usize), String> {
 
 fn main() -> std::process::ExitCode {
     let raw_args: Vec<String> = std::env::args().skip(1).collect();
-    let bad_token = raw_args.iter().any(|a| a == "--bad-token");
-    let positional: Vec<&String> = raw_args
-        .iter()
-        .filter(|a| a.as_str() != "--bad-token")
-        .collect();
+    let mut bad_token = false;
+    let mut warmup_calls: u32 = 0;
+    let mut positional: Vec<&String> = Vec::new();
+    let mut index = 0usize;
+    while index < raw_args.len() {
+        match raw_args[index].as_str() {
+            "--bad-token" => {
+                bad_token = true;
+                index += 1;
+            }
+            "--warmup" => {
+                let Some(value) = raw_args.get(index + 1) else {
+                    eprintln!("--warmup requires a non-negative integer");
+                    return std::process::ExitCode::FAILURE;
+                };
+                warmup_calls = match value.parse::<u32>() {
+                    Ok(value) => value,
+                    Err(_) => {
+                        eprintln!("--warmup requires a non-negative integer");
+                        return std::process::ExitCode::FAILURE;
+                    }
+                };
+                index += 2;
+            }
+            option if option.starts_with("--") => {
+                eprintln!("unknown option {option}");
+                return std::process::ExitCode::FAILURE;
+            }
+            _ => {
+                positional.push(&raw_args[index]);
+                index += 1;
+            }
+        }
+    }
     let [app_link_path, tier, calls_str, out_path] = positional[..] else {
         eprintln!(
-            "usage: kel90-linux-echo-client <app-link-path> <tier> <calls> <out-json-path> [--bad-token]"
+            "usage: kel90-linux-echo-client <app-link-path> <tier> <calls> <out-json-path> [--bad-token] [--warmup N]"
         );
         return std::process::ExitCode::FAILURE;
     };
@@ -195,8 +225,33 @@ fn main() -> std::process::ExitCode {
             return std::process::ExitCode::FAILURE;
         }
     };
-    let mut deltas_ns: Vec<u64> = Vec::with_capacity(calls as usize);
-    for corr in 2..=calls_u32 {
+    let post_handshake_calls = calls_u32.saturating_sub(1);
+    if warmup_calls > post_handshake_calls {
+        eprintln!(
+            "--warmup {warmup_calls} exceeds the {post_handshake_calls} post-handshake calls"
+        );
+        return std::process::ExitCode::FAILURE;
+    }
+
+    let warmup_end = 1u32.saturating_add(warmup_calls);
+    for corr in 2..=warmup_end {
+        let reply = match echo_invoke(&mut stream, &request, CorrelationId(corr)) {
+            Ok(reply) => reply,
+            Err(error) => {
+                eprintln!("warmup echo_invoke call {corr}: {error}");
+                return std::process::ExitCode::FAILURE;
+            }
+        };
+        if reply.count != request.count || reply.message != request.message {
+            eprintln!("warmup call {corr}: reply did not match request fields");
+            return std::process::ExitCode::FAILURE;
+        }
+    }
+
+    let timed_start = warmup_end.saturating_add(1);
+    let timed_capacity = calls_u32.saturating_sub(warmup_end) as usize;
+    let mut deltas_ns: Vec<u64> = Vec::with_capacity(timed_capacity);
+    for corr in timed_start..=calls_u32 {
         let t0 = Instant::now();
         let reply = match echo_invoke(&mut stream, &request, CorrelationId(corr)) {
             Ok(r) => r,
@@ -230,9 +285,13 @@ fn main() -> std::process::ExitCode {
         "payload_bytes": payload_bytes,
         "handshake_ns": handshake_ns,
         "handshake_included_in_deltas": false,
+        "cache_state": if warmup_calls == 0 { "fresh-process" } else { "warm-cache" },
+        "warmup_calls": warmup_calls,
         "calls_requested": calls,
         "calls_timed": deltas_ns.len(),
-        "note_calls_timed_is_one_less": "call 1 (the HELLO+first CALL) is in handshake_ns, not deltas_ns",
+        "note_calls_timed": format!(
+            "call 1 (HELLO + first CALL) and {warmup_calls} warmup calls are excluded from deltas_ns"
+        ),
         "deltas_ns": deltas_ns,
         "bun_context_process_revision_unused_control": bun_revision,
     });

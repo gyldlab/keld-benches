@@ -22,7 +22,7 @@ import campaign as bun_campaign
 KELD_SHA = bun_campaign.KELD_SHA
 SESSIONS = 20
 SCORED_CALLS = 100_000
-RUST_REQUESTED_CALLS = SCORED_CALLS + 1
+WARMUP_CALLS = 1_000
 BOOTSTRAP_RESAMPLES = 2_000
 BOOTSTRAP_SEED = 20260919
 PILOT_P99_STOP_NS = 300_000
@@ -33,6 +33,14 @@ RUST_ROOT = BUN_ROOT.parent / "kipc-rust-echo"
 BUN_RUNNER = BUN_ROOT / "target/release/kel90-linux-bun-kipc-runner"
 RUST_SERVER = RUST_ROOT / "target/release/kel90-linux-echo-server"
 RUST_CLIENT = RUST_ROOT / "target/release/kel90-linux-echo-client"
+
+
+def warmup_calls(cache_state: str) -> int:
+    return WARMUP_CALLS if cache_state == "warm-cache" else 0
+
+
+def rust_requested_calls(cache_state: str) -> int:
+    return SCORED_CALLS + warmup_calls(cache_state) + 1
 
 
 def sha256(path: Path) -> str:
@@ -141,7 +149,9 @@ def rust_paths(tag: str) -> tuple[Path, Path, Path, Path]:
     )
 
 
-def run_rust_case(out_path: Path, tier: str, tag: str) -> subprocess.CompletedProcess[str]:
+def run_rust_case(
+    out_path: Path, tier: str, tag: str, cache_state: str
+) -> subprocess.CompletedProcess[str]:
     if out_path.exists():
         raise RuntimeError(f"refusing to overwrite {out_path}")
     temp_dir, socket_path, link_path, err_path = rust_paths(tag)
@@ -155,14 +165,17 @@ def run_rust_case(out_path: Path, tier: str, tag: str) -> subprocess.CompletedPr
         )
     try:
         wait_for_file(link_path)
+        command = [
+            str(RUST_CLIENT),
+            str(link_path),
+            tier,
+            str(rust_requested_calls(cache_state)),
+            str(out_path),
+        ]
+        if cache_state == "warm-cache":
+            command.extend(["--warmup", str(WARMUP_CALLS)])
         completed = subprocess.run(
-            [
-                str(RUST_CLIENT),
-                str(link_path),
-                tier,
-                str(RUST_REQUESTED_CALLS),
-                str(out_path),
-            ],
+            command,
             cwd=RUST_ROOT,
             text=True,
             capture_output=True,
@@ -245,7 +258,7 @@ def rust_negative_control(out_dir: Path) -> dict:
         out_path.unlink(missing_ok=True)
 
 
-def load_rust(path: Path, tier: str) -> dict:
+def load_rust(path: Path, tier: str, cache_state: str) -> dict:
     raw = path.read_bytes()
     if raw.count(b"\n") != 0:
         raise RuntimeError(f"{path} is not compact JSON")
@@ -254,9 +267,11 @@ def load_rust(path: Path, tier: str) -> dict:
     checks = {
         "fixture": doc.get("fixture") == "kel90-linux-kipc-rust-echo",
         "keld_sha": doc.get("keld_sha") == KELD_SHA,
+        "cache_state": doc.get("cache_state") == cache_state,
         "tier": doc.get("tier") == tier,
         "payload": doc.get("payload_bytes") == expected_payload,
-        "calls_requested": doc.get("calls_requested") == RUST_REQUESTED_CALLS,
+        "warmup": doc.get("warmup_calls") == warmup_calls(cache_state),
+        "calls_requested": doc.get("calls_requested") == rust_requested_calls(cache_state),
         "calls_timed": doc.get("calls_timed") == SCORED_CALLS,
         "deltas": len(doc.get("deltas_ns", [])) == SCORED_CALLS,
         "handshake_excluded": doc.get("handshake_included_in_deltas") is False,
@@ -267,7 +282,7 @@ def load_rust(path: Path, tier: str) -> dict:
     return doc
 
 
-def load_bun(path: Path, tier: str) -> dict:
+def load_bun(path: Path, tier: str, cache_state: str) -> dict:
     raw = path.read_bytes()
     if raw.count(b"\n") != 0:
         raise RuntimeError(f"{path} is not compact JSON")
@@ -276,13 +291,13 @@ def load_bun(path: Path, tier: str) -> dict:
     checks = {
         "fixture": doc.get("fixture") == "kel90-linux-bun-kipc-echo",
         "keld_sha": doc.get("keld_sha") == KELD_SHA,
-        "cache_state": doc.get("cache_state") == "fresh-process",
+        "cache_state": doc.get("cache_state") == cache_state,
         "tier": doc.get("tier") == tier,
         "payload": doc.get("payload_bytes") == expected_payload,
         "calls_requested": doc.get("calls_requested") == SCORED_CALLS,
         "calls_timed": doc.get("calls_timed") == SCORED_CALLS,
         "deltas": len(doc.get("deltas_ns", [])) == SCORED_CALLS,
-        "warmup": doc.get("warmup_calls") == 0,
+        "warmup": doc.get("warmup_calls") == warmup_calls(cache_state),
         "handshake_excluded": doc.get("handshake_included_in_deltas") is False,
     }
     failed = [name for name, passed in checks.items() if not passed]
@@ -313,23 +328,25 @@ def arm_statistics(documents: list[dict]) -> dict:
     }
 
 
-def run_bun_case(out_path: Path, tier: str) -> subprocess.CompletedProcess[str]:
+def run_bun_case(
+    out_path: Path, tier: str, cache_state: str
+) -> subprocess.CompletedProcess[str]:
     return bun_campaign.run_case(
         out_path,
         tier,
         SCORED_CALLS,
         "none",
-        "fresh-process",
+        cache_state,
     )
 
 
-def run_arm(arm: str, out_path: Path, tier: str, tag: str) -> None:
+def run_arm(arm: str, out_path: Path, tier: str, tag: str, cache_state: str) -> None:
     if arm == "rust":
-        run_rust_case(out_path, tier, tag)
-        load_rust(out_path, tier)
+        run_rust_case(out_path, tier, tag, cache_state)
+        load_rust(out_path, tier, cache_state)
     elif arm == "bun":
-        run_bun_case(out_path, tier)
-        load_bun(out_path, tier)
+        run_bun_case(out_path, tier, cache_state)
+        load_bun(out_path, tier, cache_state)
     else:
         raise ValueError(f"unknown arm {arm}")
 
@@ -337,7 +354,13 @@ def run_arm(arm: str, out_path: Path, tier: str, tag: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out-dir", required=True, type=Path)
+    parser.add_argument(
+        "--cache-state",
+        choices=("fresh-process", "warm-cache"),
+        default="fresh-process",
+    )
     args = parser.parse_args()
+    cache_state = args.cache_state
     out_dir = args.out_dir.resolve()
     try:
         out_dir.relative_to(REPO.resolve())
@@ -376,7 +399,7 @@ def main() -> int:
             "small",
             100,
             fault,
-            "fresh-process",
+            cache_state,
         )
         bun_controls[fault] = {
             "passed": True,
@@ -384,6 +407,27 @@ def main() -> int:
             "failure_marker_seen": bun_campaign.FAILURE_MARKER in completed.stdout,
             "no_result_file": True,
         }
+
+    priming = {}
+    if cache_state == "warm-cache":
+        priming_dir = out_dir / "priming"
+        priming_dir.mkdir()
+        for tier_index, tier in enumerate(("small", "representative")):
+            priming[tier] = {}
+            arm_order = ("rust", "bun") if tier_index == 0 else ("bun", "rust")
+            for arm in arm_order:
+                path = priming_dir / f"prime-{tier}-{arm}.raw.json"
+                run_arm(arm, path, tier, f"prime-{tier}-{arm}", cache_state)
+                doc = (
+                    load_rust(path, tier, cache_state)
+                    if arm == "rust"
+                    else load_bun(path, tier, cache_state)
+                )
+                priming[tier][arm] = {
+                    "sha256": sha256(path),
+                    "calls_timed": doc["calls_timed"],
+                    "warmup_calls": doc["warmup_calls"],
+                }
 
     pilots_dir = out_dir / "pilots"
     pilots_dir.mkdir()
@@ -393,8 +437,12 @@ def main() -> int:
         arm_order = ("rust", "bun") if tier_index == 0 else ("bun", "rust")
         for arm in arm_order:
             path = pilots_dir / f"pilot-{tier}-{arm}.raw.json"
-            run_arm(arm, path, tier, f"pilot-{tier}-{arm}")
-            doc = load_rust(path, tier) if arm == "rust" else load_bun(path, tier)
+            run_arm(arm, path, tier, f"pilot-{tier}-{arm}", cache_state)
+            doc = (
+                load_rust(path, tier, cache_state)
+                if arm == "rust"
+                else load_bun(path, tier, cache_state)
+            )
             values = sorted(doc["deltas_ns"])
             p99 = percentile(values, 0.99)
             if p99 > PILOT_P99_STOP_NS:
@@ -432,11 +480,21 @@ def main() -> int:
             for arm in arm_order:
                 name = (
                     f"{date}.kel90-linux-paired-{arm}-100k-{tier}."
-                    f"fresh-process.r{round_number:02d}.raw.json"
+                    f"{cache_state}.r{round_number:02d}.raw.json"
                 )
                 path = campaign_dir / name
-                run_arm(arm, path, tier, f"r{round_number:02d}-{tier}-{arm}")
-                doc = load_rust(path, tier) if arm == "rust" else load_bun(path, tier)
+                run_arm(
+                    arm,
+                    path,
+                    tier,
+                    f"r{round_number:02d}-{tier}-{arm}",
+                    cache_state,
+                )
+                doc = (
+                    load_rust(path, tier, cache_state)
+                    if arm == "rust"
+                    else load_bun(path, tier, cache_state)
+                )
                 documents[tier][arm].append(doc)
                 raw_files.append(
                     {
@@ -503,13 +561,18 @@ def main() -> int:
         "format": "kel90-linux-bun-rust-paired-ipc-rtt/v1",
         "classification": "diagnostic-paired-product-vs-library-arm",
         "campaign": {
-            "cache_state": "fresh-process",
+            "cache_state": cache_state,
             "paired_rounds": SESSIONS,
             "scored_calls_per_arm_per_round": SCORED_CALLS,
-            "rust_requested_calls_per_round": RUST_REQUESTED_CALLS,
+            "warmup_calls_per_scored_process": warmup_calls(cache_state),
+            "priming_process_per_arm_per_tier": cache_state == "warm-cache",
+            "priming": priming,
+            "rust_requested_calls_per_round": rust_requested_calls(cache_state),
             "rust_request_note": (
-                "Rust call 1 contains HELLO plus first CALL and is excluded; requesting "
-                "100001 yields exactly 100000 scored post-handshake echo_invoke calls"
+                "Rust call 1 contains HELLO plus first CALL and is excluded; "
+                f"{warmup_calls(cache_state)} validated warmup calls are also excluded; "
+                f"requesting {rust_requested_calls(cache_state)} yields exactly "
+                "100000 scored post-handshake echo_invoke calls"
             ),
             "started_utc": started.isoformat().replace("+00:00", "Z"),
             "finished_utc": finished.isoformat().replace("+00:00", "Z"),
@@ -563,7 +626,7 @@ def main() -> int:
         },
         "claim_boundary": {
             "proves": (
-                "same-machine balanced paired fresh-process RTT comparison between the "
+                f"same-machine balanced paired {cache_state} RTT comparison between the "
                 "shipping Bun AppLinkSession/HostOwnedHelloSession slice and the direct "
                 "Rust keld-ipc library floor at one Keld SHA and matched payload/sample counts"
             ),
@@ -574,7 +637,7 @@ def main() -> int:
         },
     }
     manifest_path = out_dir / (
-        f"{date}.kel90-linux-bun-rust-paired.fresh-process.manifest.raw.json"
+        f"{date}.kel90-linux-bun-rust-paired.{cache_state}.manifest.raw.json"
     )
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     print(json.dumps({"manifest": str(manifest_path), "tiers": tiers}, indent=2))
