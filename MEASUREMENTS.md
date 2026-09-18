@@ -977,8 +977,9 @@ unverified KEL-28 acceptance limbs.
 
 To remove the separate-session ambiguity between the Linux Rust floor and Bun
 product-client campaigns, a fresh-process paired campaign was run from
-keld-benches 76f00e9895e9ce08237cdc4cc632582414cbbd69 against Keld
-0ea0780bb574ad242e9f1105fa4af5842872bad3.
+keld-benches 0ce40ea6e9b91af12efaf22d78bcb5ff2928b204 against Keld
+0ea0780bb574ad242e9f1105fa4af5842872bad3. The full corpus was rerun after
+the paired runner moved Rust case files into a private randomized temp directory.
 
 The campaign used 20 paired rounds per payload tier. Tier order alternated by
 round, and each arm ran first exactly 10/20 rounds per tier. Both arms scored
@@ -993,14 +994,14 @@ The 80 compact raw session documents and paired-round bootstrap are bound by the
 
 | Tier | Rust floor p50 | Bun client p50 | Paired p50 ratio CI95 | Rust floor p99 | Bun client p99 | Paired p99 ratio CI95 |
 |---|---:|---:|---:|---:|---:|---:|
-| small, 6 B | 7.564 µs | 15.118 µs | 1.999× [1.972, 2.028] | 11.713 µs | 30.231 µs | **2.581× [2.478, 2.684]** |
-| representative, 1,024 B | 8.116 µs | 19.400 µs | 2.390× [2.362, 2.415] | 13.310 µs | 40.507 µs | **3.043× [2.974, 3.131]** |
+| small, 6 B | 7.597 µs | 15.186 µs | 1.999× [1.976, 2.024] | 11.796 µs | 30.567 µs | **2.591× [2.474, 2.701]** |
+| representative, 1,024 B | 8.147 µs | 19.588 µs | 2.404× [2.380, 2.433] | 13.324 µs | 40.348 µs | **3.028× [2.930, 3.175]** |
 
-At p99, the paired Bun-minus-Rust delta is **18.518 µs** with paired CI95
-[17.761, 19.319] for 6 B and **27.197 µs** with CI95 [26.367, 28.142] for
-1 KiB. The Bun arm's own p99 session-block CI is [29.659, 30.856] µs for
-6 B and [39.555, 41.699] µs for 1 KiB, leaving about **3.24×** and
-**2.40×** headroom respectively against the 100 µs architecture target at the
+At p99, the paired Bun-minus-Rust delta is **18.771 µs** with paired CI95
+[17.805, 19.844] for 6 B and **27.024 µs** with CI95 [26.006, 28.305] for
+1 KiB. The Bun arm's own p99 session-block CI is [29.567, 31.741] µs for
+6 B and [39.422, 41.540] µs for 1 KiB, leaving about **3.15×** and
+**2.41×** headroom respectively against the 100 µs architecture target at the
 conservative CI upper bounds.
 
 This is a product-client-versus-library-floor diagnostic, not a pure Bun
