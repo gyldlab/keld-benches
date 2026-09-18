@@ -23,6 +23,16 @@ committed build recipe for a provenance-bound Release Keld executable;
 `Measure-KeldPaint.ps1` still accepts an externally supplied `-KeldExe`. That
 artifact-reproduction gap remains before a new Windows Keld arm can publish.
 
+Linux also carries two intentionally distinct Keld fixtures. The historical
+[`linux/keld/hello/`](./linux/keld/hello/) arm remains the host-only
+`keld-host --hello` adapter. [`linux/keld/dev-hello/`](./linux/keld/dev-hello/)
+is the exact seven-file `keld create` output plus a separately hashed paint
+instrument. Its build recipe reproduces the shipping Linux developer sibling
+set (`keld`, `keld-host`, `keld-role-launcher`) and its runner arm measures the
+ordinary Release `keld dev` flow. These arms MUST stay separately labeled:
+developer-flow startup includes CLI doctor/staging and strict Bun admission and
+is not packaged-app or installer startup.
+
 This does not rewrite the older Windows evidence: the pre-contract
 `Measure-FirstPaint.ps1 -Prepare` sessions patched `keld-wv` sources and built
 `keld-host.exe` outside this repository, so no committed benchmark fixture
@@ -271,6 +281,16 @@ the two verbs against the same schema, fixture folders per framework, and a
 native floor contract. `schema/` is untouched; existing OSes are untouched.
 
 ## 8. Keld measurement hook status
+
+`PAINT-OPPORTUNITY` and `MEM-IDLE` are different: their external browser
+beacon and process-memory census do not require a product timing API. The Linux
+`dev-hello` arm may therefore measure the shipping `keld dev` developer flow,
+provided that the result binds the exact generated project and sibling
+executables, records the Bun/runtime/display state, proves the expected
+CLI/host/Bun/WebKit process census, and requires normal native-window close plus
+generation-bound descendant cleanup for every valid sample. The scored
+`MEM-IDLE` denominator remains `keld-host` RSS; CLI, Bun and total-tree RSS are
+diagnostics rather than silently changing that metric.
 
 `IPC-RTT`, `IPC-BULK`, `BUN-READY`, and `CRASH-RECOVERY` cannot be measured
 from launched fixtures alone: they need an approved Keld-side measurement
