@@ -35,3 +35,11 @@ not include a packaged JavaScript runtime. Keld's paired arm is the existing
 `keld-host --hello` loopback-navigation diagnostic, so this is a matched
 renderer/host paint comparator, not a full Keld-vs-Tauri product or backend
 runtime verdict.
+
+## Admission status
+
+No physical-desktop performance result from this fixture is currently admitted.
+
+The runner independently rebuilds this committed fixture and compares a canonical executable digest before timing. On the Ubuntu 26.04.1 GNOME measurement machine, clean trusted builds reached the runner-owned page under both forced Wayland and X11-through-Xwayland, but their double-rAF beacons were rejected as `document_not_focused`.
+
+The focus/visibility oracle is intentionally not relaxed. A future timing campaign must first make this committed comparator pass that control reproducibly.
