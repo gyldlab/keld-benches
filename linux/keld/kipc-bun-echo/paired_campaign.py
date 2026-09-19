@@ -319,6 +319,7 @@ def arm_statistics(documents: list[dict]) -> dict:
         "max_ns": pooled[-1],
         "bootstrap_ci95_p50_ns": block_bootstrap_ci(sessions, 0.50),
         "bootstrap_ci95_p99_ns": block_bootstrap_ci(sessions, 0.99),
+        "bootstrap_resamples": BOOTSTRAP_RESAMPLES,
         "handshake_ns": {
             "min": handshakes[0],
             "median": (handshakes[9] + handshakes[10]) / 2,
@@ -348,6 +349,186 @@ def run_arm(arm: str, out_path: Path, tier: str, tag: str, cache_state: str) -> 
         load_bun(out_path, tier, cache_state)
     else:
         raise ValueError(f"unknown arm {arm}")
+
+
+def measured_rust_artifacts() -> list[dict]:
+    return [
+        {
+            "role": "rust-client",
+            "sha256": sha256(RUST_CLIENT),
+            "basename": RUST_CLIENT.name,
+            "version": KELD_SHA[:12],
+        },
+        {
+            "role": "rust-server",
+            "sha256": sha256(RUST_SERVER),
+            "basename": RUST_SERVER.name,
+            "version": KELD_SHA[:12],
+        },
+    ]
+
+
+def diagnostic_comparisons(tier_result: dict) -> list[dict]:
+    comparison = tier_result["paired_comparison"]
+    output = []
+    for statistic, key, ratio_key, delta_key in (
+        ("median", "p50", "central_p50_ratio", "central_p50_delta_ns"),
+        ("p99", "p99", "central_p99_ratio", "central_p99_delta_ns"),
+    ):
+        estimate = comparison[key]
+        output.append(
+            {
+                "baseline_arm": "rust-library-floor",
+                "candidate_arm": "bun-product-client",
+                "statistic": statistic,
+                "central_ratio": comparison[ratio_key],
+                "ratio_ci95": {
+                    "lower": estimate["ratio_ci95"][0],
+                    "upper": estimate["ratio_ci95"][1],
+                },
+                "central_delta": bun_campaign.ns_to_us(comparison[delta_key]),
+                "delta_ci95": {
+                    "lower": bun_campaign.ns_to_us(estimate["delta_ns_ci95"][0]),
+                    "upper": bun_campaign.ns_to_us(estimate["delta_ns_ci95"][1]),
+                },
+                "method": (
+                    "paired session-block bootstrap; resample identical round indices "
+                    "for Rust and Bun before recomputing the percentile ratio/delta"
+                ),
+                "notes": (
+                    "Diagnostic product-client-versus-library-floor estimate; not a pure "
+                    "Bun language/runtime tax and not a scoreboard regression verdict."
+                ),
+            }
+        )
+    return output
+
+
+def write_v3_results(
+    *,
+    out_dir: Path,
+    date: str,
+    cache_state: str,
+    bench_sha: str,
+    started_utc: str,
+    finished_utc: str,
+    environment_metadata_value: dict,
+    thermal_evidence: str,
+    raw_files: list[dict],
+    tiers: dict,
+) -> list[Path]:
+    environment = bun_campaign.linux_ipc_environment(environment_metadata_value)
+    per_arm_bootstrap = (
+        "sample 20 whole session blocks with replacement; pool selected blocks; "
+        "recompute nearest-rank percentile"
+    )
+    bootstrap = bun_campaign.block_bootstrap_metadata(
+        resamples=BOOTSTRAP_RESAMPLES,
+        method=per_arm_bootstrap,
+        seed=BOOTSTRAP_SEED,
+        rng="Python random.Random (MT19937)",
+    )
+    modules = [
+        {
+            "path": "linux/keld/kipc-bun-echo/paired_campaign.py",
+            "sha256": sha256(Path(__file__)),
+        },
+        {
+            "path": "linux/keld/kipc-bun-echo/campaign.py",
+            "sha256": sha256(BUN_ROOT / "campaign.py"),
+        },
+        {
+            "path": "linux/bench/thermal.py",
+            "sha256": sha256(bun_campaign.THERMAL_MODULE),
+        },
+        {
+            "path": "linux/bench/block_result.py",
+            "sha256": sha256(bun_campaign.BLOCK_RESULT_MODULE),
+        },
+    ]
+    fixtures = [
+        {"path": "linux/keld/kipc-bun-echo", "sha": bench_sha},
+        {"path": "linux/keld/kipc-rust-echo", "sha": bench_sha},
+    ]
+    publication_codes = bun_campaign.publication_reasons_for_thermal(
+        str(environment_metadata_value.get("thermal_state", "unverified")), paired=True
+    )
+    bun_artifacts = bun_campaign.measured_bun_artifacts(environment_metadata_value)
+    rust_artifacts = measured_rust_artifacts()
+    result_paths: list[Path] = []
+    for tier in ("small", "representative"):
+        payload_bytes = 6 if tier == "small" else 1024
+        rust_arm = bun_campaign.ipc_arm(
+            arm_id="rust-library-floor",
+            framework={"name": "Keld keld-ipc Rust library floor", "version": KELD_SHA[:12]},
+            fixture_path="linux/keld/kipc-rust-echo",
+            lane="kipc-authenticated",
+            role="diagnostic",
+            artifacts=rust_artifacts,
+            raw_files=raw_files,
+            tier=tier,
+            raw_arm="rust",
+            block_unit="paired-session-round",
+            observations_per_block=SCORED_CALLS,
+            bootstrap=bootstrap,
+            stats_ns=tiers[tier]["rust_library_floor"],
+            bootstrap_method=per_arm_bootstrap,
+        )
+        bun_arm = bun_campaign.ipc_arm(
+            arm_id="bun-product-client",
+            framework={
+                "name": "Keld shipping Bun AppLinkSession + HostOwnedHelloSession",
+                "version": KELD_SHA[:12],
+            },
+            fixture_path="linux/keld/kipc-bun-echo",
+            lane="kipc-authenticated",
+            role="diagnostic",
+            artifacts=bun_artifacts,
+            raw_files=raw_files,
+            tier=tier,
+            raw_arm="bun",
+            block_unit="paired-session-round",
+            observations_per_block=SCORED_CALLS,
+            bootstrap=bootstrap,
+            stats_ns=tiers[tier]["bun_product_client"],
+            bootstrap_method=per_arm_bootstrap,
+        )
+        document = bun_campaign.ipc_result_document(
+            metric_registry_version=bun_campaign.registry_version(),
+            cache_state=cache_state,
+            started_utc=started_utc,
+            finished_utc=finished_utc,
+            requested_blocks=SESSIONS,
+            interleaving="round-robin-randomized",
+            label=f"kel90-linux-bun-rust-paired-{tier}",
+            notes=(
+                f"Balanced paired {cache_state} IPC-RTT campaign for the {tier} payload "
+                f"tier ({payload_bytes} encoded bytes), 20 paired session rounds x 100000 "
+                "scored calls per arm. Handshake is excluded and retained in each raw "
+                "sidecar. The ratio compares the shipping Bun product-client slice with the "
+                "direct Rust library floor; it is not pure Bun runtime overhead. "
+                f"Thermal evidence: {thermal_evidence}."
+            ),
+            payload_tier=tier,
+            payload_bytes=payload_bytes,
+            environment=environment,
+            bench_sha=bench_sha,
+            keld_sha=KELD_SHA,
+            harness_path="linux/keld/kipc-bun-echo/paired_campaign.py",
+            harness_sha256=sha256(Path(__file__)),
+            harness_modules=modules,
+            fixtures=fixtures,
+            arms=[rust_arm, bun_arm],
+            publication_codes=publication_codes,
+            diagnostic_comparisons=diagnostic_comparisons(tiers[tier]),
+        )
+        bun_campaign.validate_v3_shape(document, REPO)
+        result_path = out_dir / (
+            f"{date}.kel90-linux-bun-rust-paired-{tier}.{cache_state}.json"
+        )
+        result_path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n")
+        result_paths.append(result_path)
+    return result_paths
 
 
 def main() -> int:
@@ -502,6 +683,7 @@ def main() -> int:
                         "sha256": sha256(path),
                         "bytes": path.stat().st_size,
                         "round": round_number,
+                        "block": round_number,
                         "tier": tier,
                         "arm": arm,
                     }
@@ -554,6 +736,7 @@ def main() -> int:
         BUN_ROOT / "campaign.py",
         Path(__file__),
         bun_campaign.THERMAL_MODULE,
+        bun_campaign.BLOCK_RESULT_MODULE,
         BUN_ROOT / "src/main.ts",
         BUN_ROOT / "src/runner.rs",
         BUN_ROOT / "src/kipc.ts",
@@ -562,6 +745,22 @@ def main() -> int:
         RUST_ROOT / "src/server.rs",
         RUST_ROOT / "Cargo.toml",
     ]
+    environment_receipt = bun_campaign.environment_metadata(
+        thermal_state, thermal_evidence
+    )
+    result_paths = write_v3_results(
+        out_dir=out_dir,
+        date=date,
+        cache_state=cache_state,
+        bench_sha=bench_sha,
+        started_utc=started_utc,
+        finished_utc=finished_utc,
+        environment_metadata_value=environment_receipt,
+        thermal_evidence=thermal_evidence,
+        raw_files=raw_files,
+        tiers=tiers,
+    )
+
     manifest = {
         "format": "kel90-linux-bun-rust-paired-ipc-rtt/v1",
         "classification": "diagnostic-paired-product-vs-library-arm",
@@ -604,9 +803,7 @@ def main() -> int:
             },
             "raw_corpus_digest_chain_sha256": digest_chain,
         },
-        "environment": bun_campaign.environment_metadata(
-            thermal_state, thermal_evidence
-        ),
+        "environment": environment_receipt,
         "statistics_method": {
             "percentile": "nearest-rank ceil(p*n), one-indexed",
             "per_arm_bootstrap": (
@@ -645,7 +842,16 @@ def main() -> int:
         f"{date}.kel90-linux-bun-rust-paired.{cache_state}.manifest.raw.json"
     )
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
-    print(json.dumps({"manifest": str(manifest_path), "tiers": tiers}, indent=2))
+    print(
+        json.dumps(
+            {
+                "manifest": str(manifest_path),
+                "results_v3": [str(path) for path in result_paths],
+                "tiers": tiers,
+            },
+            indent=2,
+        )
+    )
     return 0
 
 

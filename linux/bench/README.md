@@ -1,8 +1,11 @@
 # Linux metric runner
 
 `run.py` is the Linux implementation of the repository-wide metric-runner
-contract. It reads `schema/metrics.v1.json`, emits
-`schema/result.v2.schema.json`, and currently implements:
+contract. It reads `schema/metrics.v1.json` and emits the run-sample
+`schema/result.v2.schema.json` shape for the GUI/DISK metrics below. High-volume
+block-sampled IPC campaigns use the separate result-v3 helpers described in
+`linux/bench/block_result.py` rather than expanding per-call observations into
+run samples. The Linux runner currently implements:
 
 - `PAINT-OPPORTUNITY`: external monotonic spawn-to-double-rAF image beacon for
   the `linux/keld/hello` WebKitGTK diagnostic window, either alone or paired
@@ -130,8 +133,12 @@ absolute source or artifact path.
   RSS. Main RSS is the metric value; helper RSS, total RSS, and main/helper/total
   private dirty are diagnostics.
 - The environment block records distro/kernel, CPU/RAM, WebKitGTK version,
-  power profile, and X11/Wayland/desktop facts. Thermal state remains
-  `unverified` unless an independent Linux probe is added later.
+  power profile, and X11/Wayland/desktop facts. New Linux sessions use the
+  shared `linux/bench/thermal.py` boundary oracle: CPU thermal-throttle counters,
+  hardware critical-temperature limits, and NVIDIA thermal-slowdown flags are
+  checked before/after the measured session. Missing/reset/changing evidence
+  remains `unverified`; observed throttle evidence is `throttled`; otherwise the
+  session may record `nominal`.
 
 Run the negative controls and shared schema checks:
 

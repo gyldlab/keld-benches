@@ -135,11 +135,13 @@ jobs:
         run: |
           python -m py_compile \
             linux/bench/thermal.py \
+            linux/bench/block_result.py \
             linux/keld/kipc-bun-echo/campaign.py \
             linux/keld/kipc-bun-echo/paired_campaign.py
           python linux/keld/kipc-bun-echo/campaign.py --help >/dev/null
           python linux/keld/kipc-bun-echo/paired_campaign.py --help >/dev/null
           python linux/keld/kipc-bun-echo/test_campaign.py
+          python linux/bench/test_block_result.py
 
       - name: List Linux metrics
         env:
