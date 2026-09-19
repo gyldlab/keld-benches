@@ -45,7 +45,11 @@ class RouteTests(unittest.TestCase):
     def test_linux_unit_exact_routes(self) -> None:
         for path in (
             "linux/bench/run.py",
+            "linux/bench/thermal.py",
             "linux/bench/test_harness.py",
+            "linux/keld/kipc-bun-echo/campaign.py",
+            "linux/keld/kipc-bun-echo/paired_campaign.py",
+            "linux/keld/kipc-bun-echo/test_campaign.py",
             "linux/keld/hello/build.sh",
             "linux/keld/hello/keld-bench-url.patch",
         ):

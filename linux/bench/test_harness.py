@@ -1076,7 +1076,7 @@ class LinuxThermalTests(unittest.TestCase):
                 "thermal_state": "unverified",
             }
         }
-        with mock.patch("harness._linux_thermal_snapshot", return_value=end):
+        with mock.patch("thermal.linux_thermal_snapshot", return_value=end):
             evidence, finished = _finalize_thermal_environment(
                 environment, "sysfs-power-supply", start
             )

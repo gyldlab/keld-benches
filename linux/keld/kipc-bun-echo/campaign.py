@@ -15,7 +15,6 @@ import shutil
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 KELD_SHA = "0ea0780bb574ad242e9f1105fa4af5842872bad3"
@@ -28,6 +27,15 @@ BOOTSTRAP_SEED = 20260918
 PILOT_P99_STOP_NS = 300_000
 ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parents[2]
+BENCH_DIR = REPO / "linux" / "bench"
+sys.path.insert(0, str(BENCH_DIR))
+from thermal import (  # noqa: E402
+    linux_thermal_snapshot,
+    thermal_publication_reason,
+    thermal_state_from_boundaries,
+)
+
+THERMAL_MODULE = BENCH_DIR / "thermal.py"
 RUNNER = ROOT / "target/release/kel90-linux-bun-kipc-runner"
 PRODUCT_HASHES = {
     "src/kipc.ts": "fb979d377fadfd2a9058dadf087f837444f17adc59c09acbe2daf24db0596e32",
@@ -187,7 +195,24 @@ def read_text(path: Path, default: str = "unknown") -> str:
         return path.read_text().strip()
     except OSError:
         return default
-def environment_metadata() -> dict:
+def publication_reasons_for_thermal(thermal_state: str, *, paired: bool) -> list[str]:
+    """Stable raw-manifest blockers for one Linux KIPC campaign class."""
+    reasons = []
+    thermal_reason = thermal_publication_reason(thermal_state)
+    if thermal_reason is not None:
+        reasons.append(thermal_reason)
+    reasons.append("RESULT_V2_SESSION_BLOCK_SCHEMA_GAP")
+    reasons.append(
+        "PRODUCT_CLIENT_VS_LIBRARY_FLOOR_DIAGNOSTIC"
+        if paired
+        else "NO_SAME_SESSION_PAIRED_RUST_ARM"
+    )
+    return reasons
+
+
+def environment_metadata(
+    thermal_state: str = "unverified", thermal_evidence: str | None = None
+) -> dict:
     os_release: dict[str, str] = {}
     for line in Path("/etc/os-release").read_text().splitlines():
         if "=" in line:
@@ -218,7 +243,8 @@ def environment_metadata() -> dict:
         "ram_kib": ram_kib,
         "ac_power": ac_power,
         "power_profile": power_profile,
-        "thermal_state": "unverified",
+        "thermal_state": thermal_state,
+        "thermal_evidence": thermal_evidence,
         "rustc": checked(["rustc", "--version"]),
         "cargo": checked(["cargo", "--version"]),
         "bun_version": checked(["bun", "--version"]),
@@ -289,8 +315,9 @@ def main() -> int:
             raise RuntimeError(f"{tier} pilot p99 {p99} ns exceeds sanity stop")
     campaign = out_dir / "campaign"
     campaign.mkdir()
-    started = datetime.now(timezone.utc)
-    date = started.date().isoformat()
+    thermal_start = linux_thermal_snapshot()
+    started_utc = thermal_start.sampled_utc
+    date = started_utc[:10]
     documents: dict[str, list[dict]] = {"small": [], "representative": []}
     raw_files = []
 
@@ -313,7 +340,11 @@ def main() -> int:
             )
         print(f"completed Bun session pair {session:02d}", flush=True)
 
-    finished = datetime.now(timezone.utc)
+    thermal_end = linux_thermal_snapshot()
+    thermal_state, thermal_evidence = thermal_state_from_boundaries(
+        thermal_start, thermal_end
+    )
+    finished_utc = thermal_end.sampled_utc
     raw_files.sort(key=lambda item: item["path"])
     digest_chain = hashlib.sha256(
         b"".join(bytes.fromhex(item["sha256"]) for item in raw_files)
@@ -333,8 +364,8 @@ def main() -> int:
             "calls_per_session": CALLS,
             "priming_process_pair_per_tier": args.cache_state == "warm-cache",
             "priming": priming,
-            "started_utc": started.isoformat().replace("+00:00", "Z"),
-            "finished_utc": finished.isoformat().replace("+00:00", "Z"),
+            "started_utc": started_utc,
+            "finished_utc": finished_utc,
             "pilot_stop_p99_ns": PILOT_P99_STOP_NS,
             "pilot": pilot_stats,
             "negative_controls": ["bad-token", "wrong-response"],
@@ -344,12 +375,13 @@ def main() -> int:
             "keld_sha": KELD_SHA,
             "runner_artifact_sha256": sha256(RUNNER),
             "campaign_sha256": sha256(Path(__file__)),
+            "thermal_probe_sha256": sha256(THERMAL_MODULE),
             "main_ts_sha256": sha256(ROOT / "src/main.ts"),
             "runner_rs_sha256": sha256(ROOT / "src/runner.rs"),
             "product_client_sources": PRODUCT_HASHES,
             "raw_corpus_digest_chain_sha256": digest_chain,
         },
-        "environment": environment_metadata(),
+        "environment": environment_metadata(thermal_state, thermal_evidence),
         "statistics_method": {
             "percentile": "nearest-rank ceil(p*n), one-indexed",
             "bootstrap": "sample 20 whole session blocks with replacement; pool selected blocks; recompute nearest-rank percentile",
@@ -361,11 +393,7 @@ def main() -> int:
         "raw_files": raw_files,
         "publication": {
             "eligible": False,
-            "reasons": [
-                "THERMAL_STATE_UNVERIFIED",
-                "RESULT_V2_SESSION_BLOCK_SCHEMA_GAP",
-                "NO_SAME_SESSION_PAIRED_RUST_ARM",
-            ],
+            "reasons": publication_reasons_for_thermal(thermal_state, paired=False),
         },
         "claim_boundary": {
             "proves": (
