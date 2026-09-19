@@ -610,6 +610,8 @@ def render_product_renderer(
     """Inject the committed measurement script into a temporary stock renderer."""
     if not (0 < port <= 65535) or not NONCE_PATTERN.fullmatch(nonce):
         raise HarnessError("product renderer received an invalid port or nonce")
+    if index_html.count(b"</head>") != 1:
+        raise HarnessError("product renderer must contain exactly one closing head tag")
     if index_html.count(b"</body>") != 1:
         raise HarnessError("product renderer must contain exactly one closing body tag")
     rendered_script = beacon_script.replace(
@@ -628,8 +630,9 @@ def render_product_renderer(
         b"html,body{background:#000!important;color:#fff;color-scheme:dark}"
         b"</style>\n"
     )
-    injection = launch_style + b"<script>\n" + rendered_script + b"</script>\n"
-    return index_html.replace(b"</body>", injection + b"</body>", 1)
+    themed = index_html.replace(b"</head>", launch_style + b"</head>", 1)
+    script = b"<script>\n" + rendered_script + b"</script>\n"
+    return themed.replace(b"</body>", script + b"</body>", 1)
 
 
 def _product_process_record(pid: int) -> ProductProcessRecord | None:
