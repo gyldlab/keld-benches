@@ -620,7 +620,15 @@ def render_product_renderer(
     origin = f"http://127.0.0.1:{port}".encode("ascii")
     if origin not in rendered_script or nonce.encode("ascii") not in rendered_script:
         raise HarnessError("product beacon script did not bind the listener identity")
-    injection = b"\n<script>\n" + rendered_script + b"</script>\n"
+    # Visible benchmark launch surfaces are intentionally black across OSes.
+    # Keep committed shipping fixtures byte-identical and apply presentation-only
+    # CSS to this temporary renderer copy so measured runs never flash white.
+    launch_style = (
+        b"<style data-keld-bench-launch-theme>"
+        b"html,body{background:#000!important;color:#fff;color-scheme:dark}"
+        b"</style>\n"
+    )
+    injection = launch_style + b"<script>\n" + rendered_script + b"</script>\n"
     return index_html.replace(b"</body>", injection + b"</body>", 1)
 
 

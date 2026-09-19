@@ -212,7 +212,7 @@ try {
     Copy-Item -LiteralPath $templatePath -Destination (Join-Path $project 'src\kipc.ts')
     Copy-Item -LiteralPath $mainSourcePath -Destination (Join-Path $project 'src\main.ts')
     Write-Utf8NoBom (Join-Path $project 'keld.config.ts') "export default { name: 'KEL-99 IPC diagnostic', renderer: 'index.html' };`n"
-    Write-Utf8NoBom (Join-Path $project 'index.html') '<!doctype html><title>KEL-99</title>'
+    Write-Utf8NoBom (Join-Path $project 'index.html') '<!doctype html><html><head><meta charset="utf-8"><title>KEL-99</title><style>html,body{background:#000!important;color:#fff;color-scheme:dark}</style></head><body></body></html>'
     Copy-Item -LiteralPath $runnerSourcePath -Destination (Join-Path $runnerPackage 'src\main.rs')
     New-RunnerManifest (Join-Path $runnerPackage 'Cargo.toml') $KeldRepo
 

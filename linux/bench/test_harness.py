@@ -451,6 +451,9 @@ class ProductRunnerTests(unittest.TestCase):
         self.assertNotIn(b"__KELD_BENCH_", rendered)
         self.assertIn(b"http://127.0.0.1:43123", rendered)
         self.assertGreaterEqual(rendered.count(NONCE.encode("ascii")), 2)
+        self.assertIn(b"data-keld-bench-launch-theme", rendered)
+        self.assertIn(b"background:#000!important", rendered)
+        self.assertIn(b"color-scheme:dark", rendered)
         self.assertIn(stock.split(b"</body>")[0], rendered)
         self.assertEqual(rendered.count(b"</body>"), 1)
 
