@@ -1342,3 +1342,86 @@ the paired comparison is only between Wayland and X11 within each campaign.
 
 A native Xorg login is still not measured: the X11 arm uses the live Mutter
 Xwayland server. KEL-28's non-Debian distro spot-check also remains open.
+
+
+### Linux X11 NVIDIA DMA-BUF mitigation diagnostic — 2026-09-19
+
+This diagnostic isolates one Linux rendering variable inside the shipping
+`keld dev` product path. Both arms use the same Keld artifact pinned to
+`0ea0780bb574ad242e9f1105fa4af5842872bad3`, the same X11 display through
+the live Mutter Xwayland server, and the same authenticated Bun/WebKitGTK
+lifecycle. The benchmark recipe recorded by the result documents is
+`908eb479e5749176d901c8c3d8f89a3c4744917f`.
+
+The baseline removes `WEBKIT_DISABLE_DMABUF_RENDERER`; the candidate sets
+it to exactly `1`. Both arms force `GDK_BACKEND=x11` and run with
+`WAYLAND_DISPLAY` removed. The preflight refuses this lane unless the
+NVIDIA proprietary driver is loaded. This is a bounded diagnostic for the
+measured NVIDIA/X11 cell, not a generic Linux policy.
+
+A later harness-isolation commit, `3a2bb7a5600290309f9d212400ed03d98d9b2387`,
+restores the existing Wayland-vs-X11 backend-pair implementation byte-for-byte
+from `main` and keeps this DMA-BUF experiment in its own runner lane. Result
+provenance intentionally remains pinned to the immutable recipe that actually
+produced the samples.
+
+#### Paint
+
+| cache | normal X11 median | DMA-BUF disabled median | paired disabled/normal CI95 |
+|---|---:|---:|---:|
+| fresh-process | **1004.266 ms** | **436.901 ms** | **[0.421042, 0.443460]** |
+| warm-cache | **1008.5045 ms** | **425.132 ms** | **[0.413981, 0.433347]** |
+
+Both retained paint sessions completed **30/30 valid samples per arm** with
+balanced randomized ordering. The mitigation effect is large in both
+independent cache-state campaigns, but fresh and warm are separate sessions
+and are not subtracted into a causal cache percentage.
+
+#### Memory
+
+The fresh-process MEM-IDLE campaign also completed **30/30 per arm**.
+
+| lane | normal X11 | DMA-BUF disabled | paired disabled/normal CI95 |
+|---|---:|---:|---:|
+| scored `keld-host` RSS | **173,324 KiB** | **165,838 KiB** | **[0.956242, 0.957744]** |
+| full owned tree RSS median | **469,170 KiB** | **460,588 KiB** | diagnostic only |
+| paint observed inside memory samples | **1002.706 ms** | **433.775 ms** | diagnostic only |
+
+The mitigation therefore does not buy paint latency by increasing the measured
+resident-memory lanes on this host; both scored host RSS and full-tree RSS are
+lower in the disabled-DMA-BUF arm.
+
+#### Rejection and stop-rule record
+
+The retained documents are not the only campaigns that ran. Pre-publication
+sessions were rejected rather than selectively trimmed:
+
+- one 30-pair fresh-paint campaign failed completeness because the strict
+  focus oracle rejected samples as `document_not_focused`; no paired verdict
+  was emitted;
+- the one full retry completed 30/30 + 30/30 but an unrelated clean Keld/Rust
+  build overlapped the timing session, visibly inflating the tails, so that
+  session was rejected as performance evidence despite its valid sample count;
+- after those observations, a stricter quiet-host rule was recorded on KEL-90:
+  no compiler/build process, no second benchmark runner, and <=10% NVIDIA GPU
+  utilization at admission, with a side monitor during the session;
+- the single campaign allowed under that revised rule was rejected in full
+  because the monitor observed overlapping MEM-IDLE benchmark processes during
+  **280 of 349** monitor samples. The benchmark itself also returned nonzero.
+  Per the predeclared rule, there was **no further paint retry**;
+- a warm-cache MEM-IDLE session that overlapped that monitored campaign was
+  likewise excluded from the public result set.
+
+The two retained 30/30 paint sessions were collected before the stricter
+quiet-host rule was introduced. They remain useful, reproducible diagnostics
+under the repository's normal result contract, but they are **not claimed as
+quiet-host-certified publication evidence**.
+
+The separate KEL-171 fixture remains the repository's correctness protocol for
+DMA-BUF policy work. These timing and memory diagnostics do not replace that
+matrix and do not authorize a production safe-mode predicate change.
+
+All three committed result documents remain diagnostic-only because Linux
+thermal state is independently unverified and the observable begins at the
+shipping `keld dev` CLI rather than packaged-application startup. No Keld
+production GPU predicate is changed by this benchmark work.
