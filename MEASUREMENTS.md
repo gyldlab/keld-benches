@@ -1425,3 +1425,60 @@ All three committed result documents remain diagnostic-only because Linux
 thermal state is independently unverified and the observable begins at the
 shipping `keld dev` CLI rather than packaged-application startup. No Keld
 production GPU predicate is changed by this benchmark work.
+
+
+### Linux Keld host adapter vs trusted Tauri WebKitGTK comparator — 2026-09-19
+
+The Linux Tauri comparator is now timing-admissible again under the unchanged
+visible/focused double-rAF oracle. The earlier feature-branch timing was
+withdrawn because its artifact trust path was insufficient and later trusted
+builds reproduced `document_not_focused`. This refresh does not weaken that
+oracle: a fresh Tauri 2.11.5 / WebKitGTK 2.52.6 build at benchmark recipe
+`a4dcefd11e37cfb7a9726e4d3de4e0a8fd8567b0` was independently rebuilt by
+the harness and passed the same focus/visibility checks on both native Wayland
+and X11 through Mutter Xwayland.
+
+Both retained sessions use the true-black launch surface required by the
+cross-OS presentation policy. The Keld arm is pinned to
+`0ea0780bb574ad242e9f1105fa4af5842872bad3`; its benchmark-adapter artifact
+SHA-256 is
+`16c90299b30480259f67d931ed2f65e320ed2674f2e06a976b8bbf44f69f8cbc`.
+The Tauri artifact SHA-256 is
+`dcde26386571f0b46830b9cef9a15ccd57b73610fab08098a299336171472a2e`.
+
+#### Native Wayland
+
+Fresh-process, 30 matched rounds per arm, exactly 15 Keld-first and 15
+Tauri-first:
+
+| arm | median | p90 | bootstrap median CI95 |
+|---|---:|---:|---:|
+| Keld `keld-host --hello` adapter | **472.2645 ms** | 491.579 | [462.605, 479.4415] |
+| Tauri 2.11.5 / WebKitGTK | **462.413 ms** | 485.546 | [458.913, 472.306] |
+
+The paired Keld/Tauri ratio CI95 is **[0.988868, 1.033292]**, which is inside
+the registry's 1.05 diagnostic regression threshold. The interval crosses
+1.0, so this is not evidence for a directional Keld-vs-Tauri speed claim.
+
+#### X11 through Mutter Xwayland
+
+Fresh-process, 30 matched rounds per arm, exactly 15 Keld-first and 15
+Tauri-first:
+
+| arm | median | p90 | bootstrap median CI95 |
+|---|---:|---:|---:|
+| Keld `keld-host --hello` adapter | **890.959 ms** | 923.872 | [880.298, 901.8825] |
+| Tauri 2.11.5 / WebKitGTK | **911.5415 ms** | 930.755 | [902.341, 919.620] |
+
+The paired Keld/Tauri ratio CI95 is **[0.960346, 1.002498]**, also inside the
+1.05 diagnostic threshold. That interval also crosses 1.0; the lower Keld
+median must not be reported as a superiority result.
+
+The Wayland and X11 comparator sessions are independent campaigns, so their
+medians are not used to claim a causal backend percentage here. The separate
+same-session Keld backend-pair evidence owns backend attribution.
+
+Both documents remain publication-ineligible because Linux thermal state is
+not independently verified and the Keld arm is the committed
+`keld-host --hello` benchmark adapter rather than the shipping no-flag or
+`keld dev` product startup path. X11 here is Xwayland, not native Xorg.

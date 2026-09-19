@@ -1,0 +1,958 @@
+{
+  "arms": [
+    {
+      "arm_id": "keld-linux-host",
+      "artifact": {
+        "basename": "keld-host-bench",
+        "sha256": "16c90299b30480259f67d931ed2f65e320ed2674f2e06a976b8bbf44f69f8cbc",
+        "version": "0ea0780bb574"
+      },
+      "fixture_path": "linux/keld/hello",
+      "framework": {
+        "name": "Keld",
+        "version": "0ea0780bb574"
+      },
+      "lane": "webkitgtk",
+      "role": "diagnostic",
+      "samples": [
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 1,
+          "valid": true,
+          "value": 896.008
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 2,
+          "valid": true,
+          "value": 904.885
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 3,
+          "valid": true,
+          "value": 885.001
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 4,
+          "valid": true,
+          "value": 939.593
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 5,
+          "valid": true,
+          "value": 885.311
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 6,
+          "valid": true,
+          "value": 901.9
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 7,
+          "valid": true,
+          "value": 929.957
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 8,
+          "valid": true,
+          "value": 853.475
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 9,
+          "valid": true,
+          "value": 915.165
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 10,
+          "valid": true,
+          "value": 860.064
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 11,
+          "valid": true,
+          "value": 861.277
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 12,
+          "valid": true,
+          "value": 890.594
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 13,
+          "valid": true,
+          "value": 923.872
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 14,
+          "valid": true,
+          "value": 904.786
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 15,
+          "valid": true,
+          "value": 843.956
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 16,
+          "valid": true,
+          "value": 935.695
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 17,
+          "valid": true,
+          "value": 852.647
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 18,
+          "valid": true,
+          "value": 891.324
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 19,
+          "valid": true,
+          "value": 908.063
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 20,
+          "valid": true,
+          "value": 845.14
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 21,
+          "valid": true,
+          "value": 889.606
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 22,
+          "valid": true,
+          "value": 876.784
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 23,
+          "valid": true,
+          "value": 894.562
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 24,
+          "valid": true,
+          "value": 906.204
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 25,
+          "valid": true,
+          "value": 883.812
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 26,
+          "valid": true,
+          "value": 874.965
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 27,
+          "valid": true,
+          "value": 875.847
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 28,
+          "valid": true,
+          "value": 892.251
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 29,
+          "valid": true,
+          "value": 848.422
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 30,
+          "valid": true,
+          "value": 901.865
+        }
+      ],
+      "statistics": {
+        "bootstrap_ci95": {
+          "lower": 880.298,
+          "resamples": 10000,
+          "upper": 901.8824999999999
+        },
+        "max": 939.593,
+        "median": 890.9590000000001,
+        "min": 843.956,
+        "p90": 923.872,
+        "valid_samples": 30
+      }
+    },
+    {
+      "arm_id": "tauri-linux-host",
+      "artifact": {
+        "basename": "tauri-linux-hello",
+        "sha256": "dcde26386571f0b46830b9cef9a15ccd57b73610fab08098a299336171472a2e",
+        "version": "2.11.5"
+      },
+      "fixture_path": "linux/tauri/hello",
+      "framework": {
+        "name": "Tauri",
+        "version": "2.11.5"
+      },
+      "lane": "webkitgtk",
+      "role": "diagnostic",
+      "samples": [
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 1,
+          "valid": true,
+          "value": 973.637
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 2,
+          "valid": true,
+          "value": 883.769
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 3,
+          "valid": true,
+          "value": 919.883
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 4,
+          "valid": true,
+          "value": 921.518
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 5,
+          "valid": true,
+          "value": 847.751
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 6,
+          "valid": true,
+          "value": 947.082
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 7,
+          "valid": true,
+          "value": 878.903
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 8,
+          "valid": true,
+          "value": 926.086
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 9,
+          "valid": true,
+          "value": 919.357
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 10,
+          "valid": true,
+          "value": 897.198
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 11,
+          "valid": true,
+          "value": 921.079
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 12,
+          "valid": true,
+          "value": 911.506
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 13,
+          "valid": true,
+          "value": 849.174
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 14,
+          "valid": true,
+          "value": 905.026
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 15,
+          "valid": true,
+          "value": 930.755
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 16,
+          "valid": true,
+          "value": 926.041
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 17,
+          "valid": true,
+          "value": 915.605
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 18,
+          "valid": true,
+          "value": 902.341
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 19,
+          "valid": true,
+          "value": 937.084
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 20,
+          "valid": true,
+          "value": 917.946
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 21,
+          "valid": true,
+          "value": 864.202
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 22,
+          "valid": true,
+          "value": 872.196
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 23,
+          "valid": true,
+          "value": 907.925
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 24,
+          "valid": true,
+          "value": 858.395
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 25,
+          "valid": true,
+          "value": 911.577
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 26,
+          "valid": true,
+          "value": 917.815
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 27,
+          "valid": true,
+          "value": 868.973
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 28,
+          "valid": true,
+          "value": 920.997
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 2
+          },
+          "reject_reason": null,
+          "run": 29,
+          "valid": true,
+          "value": 911.007
+        },
+        {
+          "diagnostics": {
+            "beacon_requests": 1,
+            "cleanup_generation_bound": true,
+            "page_requests": 1,
+            "process_exit_before_beacon": false,
+            "round_position": 1
+          },
+          "reject_reason": null,
+          "run": 30,
+          "valid": true,
+          "value": 908.39
+        }
+      ],
+      "statistics": {
+        "bootstrap_ci95": {
+          "lower": 902.341,
+          "resamples": 10000,
+          "upper": 919.62
+        },
+        "max": 973.637,
+        "median": 911.5415,
+        "min": 847.751,
+        "p90": 930.755,
+        "valid_samples": 30
+      }
+    }
+  ],
+  "cache_state": "fresh-process",
+  "comparison": {
+    "baseline_arm": "tauri-linux-host",
+    "candidate_arm": "keld-linux-host",
+    "method": "paired percentile bootstrap over rounds, 10000 resamples; ratio = candidate/baseline",
+    "ratio_ci95": {
+      "lower": 0.960346,
+      "upper": 1.002498
+    },
+    "threshold": 1.05,
+    "verdict": "PASS"
+  },
+  "environment": {
+    "display": "session=wayland;desktop=ubuntu:GNOME;display=:0;wayland=unset;gdk_backend=x11",
+    "engine": {
+      "name": "WebKitGTK 4.1 (Keld / Tauri)",
+      "version": "2.52.6"
+    },
+    "hardware": {
+      "arch": "x86_64",
+      "cpu": "Intel(R) Core(TM) i5-10500H CPU @ 2.50GHz",
+      "ram_bytes": 24558964736
+    },
+    "os": {
+      "build": "7.0.0-31-generic",
+      "name": "linux",
+      "version": "Ubuntu 26.04.1 LTS"
+    },
+    "power": {
+      "ac_power": true,
+      "low_power_mode": false,
+      "thermal_state": "unverified"
+    },
+    "toolchains": [
+      {
+        "name": "rustc",
+        "version": "rustc 1.97.1 (8bab26f4f 2026-07-14);binary: rustc;commit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452;commit-date: 2026-07-14;host: x86_64-unknown-linux-gnu;release: 1.97.1;LLVM version: 22.1.6"
+      },
+      {
+        "name": "cargo",
+        "version": "cargo 1.97.1 (c980f4866 2026-06-30)"
+      },
+      {
+        "name": "webkit2gtk-4.1",
+        "version": "2.52.6"
+      },
+      {
+        "name": "tauri",
+        "version": "2.11.5"
+      },
+      {
+        "name": "tauri-gtk+-3.0",
+        "version": "3.24.52"
+      }
+    ]
+  },
+  "metric": {
+    "id": "PAINT-OPPORTUNITY",
+    "registry_version": 1,
+    "unit": "ms"
+  },
+  "provenance": {
+    "bench_sha": "a4dcefd11e37cfb7a9726e4d3de4e0a8fd8567b0",
+    "bench_tree_state": "clean",
+    "fixtures": [
+      {
+        "path": "linux/keld/hello",
+        "sha": "a4dcefd11e37cfb7a9726e4d3de4e0a8fd8567b0"
+      },
+      {
+        "path": "linux/tauri/hello",
+        "sha": "a4dcefd11e37cfb7a9726e4d3de4e0a8fd8567b0"
+      }
+    ],
+    "harness": {
+      "modules": [
+        {
+          "path": "linux/bench/run.py",
+          "sha256": "ad522f1459b8f45a48c457890e2378ba76ed79cd33740845ac850216e3a4e82e"
+        },
+        {
+          "path": "linux/bench/harness.py",
+          "sha256": "13bf5960a922934c957bd8d40bcb7c1179f7f2ba3440680805807889fb4a9706"
+        }
+      ],
+      "path": "linux/bench/run.py",
+      "sha256": "ad522f1459b8f45a48c457890e2378ba76ed79cd33740845ac850216e3a4e82e",
+      "version": "1.0.0"
+    },
+    "keld_sha": "0ea0780bb574ad242e9f1105fa4af5842872bad3",
+    "payload_sha256": "50815b2d2b58d8d4e4c10c1635d8d929cfc8ce332b87fe22a6305aaa638a0a4f"
+  },
+  "publication": {
+    "eligible": false,
+    "policy_version": 2,
+    "reasons": [
+      {
+        "code": "THERMAL_STATE_UNVERIFIED",
+        "label": "Linux thermal state was not independently verified"
+      },
+      {
+        "code": "DIAGNOSTIC_HELLO_ONLY",
+        "label": "the Keld arm measures keld-host --hello rather than no-flag product boot"
+      }
+    ],
+    "requested": false
+  },
+  "schema_version": 2,
+  "session": {
+    "finished_utc": "2026-09-19T04:14:14.175829Z",
+    "interleaving": "round-robin-randomized",
+    "label": "kel90-linux-keld-vs-tauri-x11-xwayland-30",
+    "notes": "External monotonic spawn-to-double-rAF image-beacon proxy. The Keld arm uses the declared keld-host --hello benchmark adapter rather than no-flag product boot. Every round runs Keld and Tauri once with balanced randomized within-round order. Power evidence: sysfs-power-supply;power-profile=performance.",
+    "requested_samples": 30,
+    "started_utc": "2026-09-19T04:10:43.174979Z"
+  }
+}
