@@ -1,0 +1,414 @@
+{
+  "campaign": {
+    "cache_state": "fresh-process",
+    "calls_per_session": 100000,
+    "finished_utc": "2026-09-19T14:56:52.049731Z",
+    "negative_controls": [
+      "bad-token",
+      "wrong-response"
+    ],
+    "pilot": {
+      "representative": {
+        "p99_ns": 35405,
+        "sha256": "24fd118ff3b2df0832e99be0d304403778bbac26b7261d445122e7bd5251a553"
+      },
+      "small": {
+        "p99_ns": 25406,
+        "sha256": "37c979e373efd2f780755a9ede02d2c91427cc803588b7838bc759edb7d95508"
+      }
+    },
+    "pilot_stop_p99_ns": 300000,
+    "priming": {},
+    "priming_process_pair_per_tier": false,
+    "sessions": 20,
+    "started_utc": "2026-09-19T14:55:23.895746Z"
+  },
+  "claim_boundary": {
+    "does_not_prove": "window/renderer latency, full keld-dev startup, or direct cross-session fresh-vs-warm / Rust-vs-Bun causal ratios",
+    "proves": "shipping Bun AppLinkSession plus HostOwnedHelloSession persistent echo RTT for cache_state=fresh-process on this Linux machine"
+  },
+  "classification": "diagnostic-product-client-arm",
+  "environment": {
+    "ac_power": true,
+    "arch": "x86_64",
+    "bun_revision": "1.4.2+744846f84",
+    "bun_version": "1.4.2",
+    "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+    "cpu": "Intel(R) Core(TM) i5-10500H CPU @ 2.50GHz",
+    "cpu_logical": 12,
+    "kernel": "7.0.0-31-generic",
+    "os": "Ubuntu 26.04.1 LTS",
+    "power_profile": "performance",
+    "ram_kib": 23983364,
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "thermal_evidence": "thermal-boundary-v1;state=nominal;cpu_counter_advances=0;cpu_start=Package id 0:71000/100000;cpu_end=Package id 0:74000/100000;nvidia_start=gpu0:48C:sw=0:hw=0;nvidia_end=gpu0:48C:sw=0:hw=0",
+    "thermal_state": "nominal"
+  },
+  "format": "kel90-linux-bun-ipc-rtt-campaign/v1",
+  "provenance": {
+    "bench_sha": "896198601e2bfbae88ad6c877473b4ee0ce40c27",
+    "block_result_sha256": "c2637c961ec8ea7ce2c4ebe170d78dfa7f99bb4a99995c574634093699ff775c",
+    "campaign_sha256": "947cd7059e16527d6947217607cbfcc1d1cf7af747f57e48a88df2b9e70ca0b7",
+    "keld_sha": "0ea0780bb574ad242e9f1105fa4af5842872bad3",
+    "main_ts_sha256": "04f2d0b623c61f27b2165feefc0f0d936ef6ae28e4e0113d0a8b859df7440ee5",
+    "product_client_sources": {
+      "src/kipc-transport.ts": "037b7fb3b2f277c28e7ccaf594200ecfba9bca9b19bc04b2234a15590f7b2901",
+      "src/kipc.ts": "fb979d377fadfd2a9058dadf087f837444f17adc59c09acbe2daf24db0596e32"
+    },
+    "raw_corpus_digest_chain_sha256": "0c196a3e78ae9948e59c1a43c69fee829c4eaccd8ec32e2c40d8dbef7b29bbef",
+    "runner_artifact_sha256": "7fe5ec545498d465cdbec30400593d263806619c70953579fee6c48f197cc8dd",
+    "runner_rs_sha256": "2297473a93cf486625d7105af9867fd2736f7fa55492361ddcf35182f90eec4a",
+    "thermal_probe_sha256": "3f73c84e3663fbf08b31661dadde79489095ce8b50aca1fd8a66882b1e9a423f"
+  },
+  "publication": {
+    "eligible": false,
+    "reasons": [
+      "NO_SAME_SESSION_PAIRED_RUST_ARM"
+    ]
+  },
+  "raw_files": [
+    {
+      "block": 1,
+      "bytes": 600813,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s01.raw.json",
+      "sha256": "c101dea4d9415e8159454a38300c2c39ff0a00f43820bcf3c87bfc386a676ec1",
+      "tier": "representative"
+    },
+    {
+      "block": 2,
+      "bytes": 600819,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s02.raw.json",
+      "sha256": "a48214b5dc6bf1a9b350da8b4d153a2427e05e01bfa8fd8e00d2062cc5ca0fed",
+      "tier": "representative"
+    },
+    {
+      "block": 3,
+      "bytes": 600812,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s03.raw.json",
+      "sha256": "12bdce603d22c96cf2071233cf0f11c8f71ed4159f9ea06ae60d6570d86b7884",
+      "tier": "representative"
+    },
+    {
+      "block": 4,
+      "bytes": 600820,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s04.raw.json",
+      "sha256": "14c31cfe3043aebc8b9215ed760619cd3caf8bdaa4b758f21b7688ebc118730e",
+      "tier": "representative"
+    },
+    {
+      "block": 5,
+      "bytes": 600805,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s05.raw.json",
+      "sha256": "6ea1988d674fffa21cde92ffbddb12ee97f328990141f38eb7c36ba61b72cce4",
+      "tier": "representative"
+    },
+    {
+      "block": 6,
+      "bytes": 600817,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s06.raw.json",
+      "sha256": "213db6df8a6ffdd1ba63b4a8d6adc9264e118b39f0def7a7c216d42d62abb611",
+      "tier": "representative"
+    },
+    {
+      "block": 7,
+      "bytes": 600824,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s07.raw.json",
+      "sha256": "2774e9b4c571d03360d7618dac4dffcdb00d3a646a55cc1944482d60fd4fef1a",
+      "tier": "representative"
+    },
+    {
+      "block": 8,
+      "bytes": 600817,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s08.raw.json",
+      "sha256": "f877d081f69a6ca993b517db792c12bf6144fda8d40beae1a311b657d6960b55",
+      "tier": "representative"
+    },
+    {
+      "block": 9,
+      "bytes": 600864,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s09.raw.json",
+      "sha256": "0e3b3555d115e7b4fcb8b2e4a31fff8b1cc9103dc88b6bb327c6afb2afabe9b4",
+      "tier": "representative"
+    },
+    {
+      "block": 10,
+      "bytes": 600824,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s10.raw.json",
+      "sha256": "3ad66a14dc622a434123c3173549dea94d7e5f8038e8d3ab6ca19fd4507b3e4c",
+      "tier": "representative"
+    },
+    {
+      "block": 11,
+      "bytes": 600817,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s11.raw.json",
+      "sha256": "9a714fbb0c646a89038b27bb633c25f8831c1c76e24e700be3f8006341c4c087",
+      "tier": "representative"
+    },
+    {
+      "block": 12,
+      "bytes": 600817,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s12.raw.json",
+      "sha256": "4ff12eb321340aecd96b62ccb1c0d9f18ca33b7f66d9d7317aaaa92611bc0dde",
+      "tier": "representative"
+    },
+    {
+      "block": 13,
+      "bytes": 600808,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s13.raw.json",
+      "sha256": "c4a15e094b85011b0051171a853eb1adff10a94c6e43bbd00bddd2dbd3561ccc",
+      "tier": "representative"
+    },
+    {
+      "block": 14,
+      "bytes": 600829,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s14.raw.json",
+      "sha256": "d61d6d925e5c1e8ab035e1f7cb2141925b310e47706e32871315b920e3aeaa38",
+      "tier": "representative"
+    },
+    {
+      "block": 15,
+      "bytes": 600849,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s15.raw.json",
+      "sha256": "434dad501cd789b80d9e3b2333c851db573446d1f14aff53d3ebcbbd163e9721",
+      "tier": "representative"
+    },
+    {
+      "block": 16,
+      "bytes": 600837,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s16.raw.json",
+      "sha256": "aa55063dbf75146247a8b03e6dafee7557d8f1f3a7dce8cb058f6244aec71912",
+      "tier": "representative"
+    },
+    {
+      "block": 17,
+      "bytes": 600824,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s17.raw.json",
+      "sha256": "1fe4d9e9c0f8f9bd47973ed1b7c2db0dea1eddbb8b324b396e28beed867adf77",
+      "tier": "representative"
+    },
+    {
+      "block": 18,
+      "bytes": 600826,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s18.raw.json",
+      "sha256": "ae5bc298af0252867c75b8e496bf26ab9c4d1c339622e5bc589d7e40c05f7536",
+      "tier": "representative"
+    },
+    {
+      "block": 19,
+      "bytes": 600808,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s19.raw.json",
+      "sha256": "d15a73ba2d9be06da8e2f4bddfb9e3a0b90a5bdb8780583c15d0a138267f8459",
+      "tier": "representative"
+    },
+    {
+      "block": 20,
+      "bytes": 600832,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-representative.fresh-process.s20.raw.json",
+      "sha256": "7e4acf26f6fb9f41fd3835990e570411ecc429697dd907b4c732bc739fd11469",
+      "tier": "representative"
+    },
+    {
+      "block": 1,
+      "bytes": 600532,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s01.raw.json",
+      "sha256": "f8d8f5cbce6b165d01292c38caa12c62dde8379a51d6f5ac37049e43ee82ea30",
+      "tier": "small"
+    },
+    {
+      "block": 2,
+      "bytes": 600618,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s02.raw.json",
+      "sha256": "db5c770956f35524429c92161eebb7ef6127240dba4bd65f69ff065b79ff0a4e",
+      "tier": "small"
+    },
+    {
+      "block": 3,
+      "bytes": 600630,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s03.raw.json",
+      "sha256": "764ff3482509582f376624bd8b8b5e2c1145ac810057178acc606499d9331afc",
+      "tier": "small"
+    },
+    {
+      "block": 4,
+      "bytes": 600627,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s04.raw.json",
+      "sha256": "8cb55e9602d983dc01efcd9ecb57efdf51d918b35dd6198664f14bc7b4ef44c7",
+      "tier": "small"
+    },
+    {
+      "block": 5,
+      "bytes": 600640,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s05.raw.json",
+      "sha256": "2a79d160482fea17b0e7e4fe5407b1069397c0b85d8cf1c38fcbb7ae6da19cb8",
+      "tier": "small"
+    },
+    {
+      "block": 6,
+      "bytes": 600647,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s06.raw.json",
+      "sha256": "7a914ffa67abaf3290572fec437694bfd681916f8205dbe25c096c52f801c741",
+      "tier": "small"
+    },
+    {
+      "block": 7,
+      "bytes": 600531,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s07.raw.json",
+      "sha256": "ad4ad451a3e569f2baaa405a6d48ef21e05b0c44ba1613da5c9ecb9abdeaefe2",
+      "tier": "small"
+    },
+    {
+      "block": 8,
+      "bytes": 600632,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s08.raw.json",
+      "sha256": "93276619d933564d5ebaecde017652c5d3cf6b05c58827c74c10ca52e7e743b9",
+      "tier": "small"
+    },
+    {
+      "block": 9,
+      "bytes": 600514,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s09.raw.json",
+      "sha256": "6a0ce113613ba5496148c16598392f68625a3bf07f01ee90c1f64146980b6d7a",
+      "tier": "small"
+    },
+    {
+      "block": 10,
+      "bytes": 600620,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s10.raw.json",
+      "sha256": "263f68ad7211fc034f10cd3aabf70f38fa42866ba784b402b7962344912f8dcb",
+      "tier": "small"
+    },
+    {
+      "block": 11,
+      "bytes": 600636,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s11.raw.json",
+      "sha256": "1e967a176e232d0dd2ff62ddfe846a70415a3e76ba8b9c9944a91911f8e62c8e",
+      "tier": "small"
+    },
+    {
+      "block": 12,
+      "bytes": 600633,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s12.raw.json",
+      "sha256": "dbc18f2f1fdbcaea993332b82056878f764404be8316515cf478c3a7327da17e",
+      "tier": "small"
+    },
+    {
+      "block": 13,
+      "bytes": 600647,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s13.raw.json",
+      "sha256": "30914ebf8dc2e20cfe5ab2d881c99a9ae8d9817edee76eaeb090505bdbe7bb1f",
+      "tier": "small"
+    },
+    {
+      "block": 14,
+      "bytes": 600645,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s14.raw.json",
+      "sha256": "22e55f8eb40f2c8472742c7e65f49f3a1a514c3ecae451069ab4f9bf36d8964a",
+      "tier": "small"
+    },
+    {
+      "block": 15,
+      "bytes": 600651,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s15.raw.json",
+      "sha256": "91285a377d198fe40255f9f85a7760cd3bd83496cd82164ed28eede9bd37b19d",
+      "tier": "small"
+    },
+    {
+      "block": 16,
+      "bytes": 600635,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s16.raw.json",
+      "sha256": "0ce375104ff7db4abb0c1cf8a5ff396b7593a7f0b6fb3762dbcfc49083010cf5",
+      "tier": "small"
+    },
+    {
+      "block": 17,
+      "bytes": 600637,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s17.raw.json",
+      "sha256": "002a409496e3f9ab3f37360b05aafc8666b1b66bb437d5587fe16de79ff7923b",
+      "tier": "small"
+    },
+    {
+      "block": 18,
+      "bytes": 600636,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s18.raw.json",
+      "sha256": "4a143fcf12aa35c63673719cfdf74fc330cdc956386570640c7c9ce2e22a7a7d",
+      "tier": "small"
+    },
+    {
+      "block": 19,
+      "bytes": 600645,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s19.raw.json",
+      "sha256": "d965db425f048010ece826e97bf12e9d5cf2bae61d8b7b9628e010b4f55dd86e",
+      "tier": "small"
+    },
+    {
+      "block": 20,
+      "bytes": 600633,
+      "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-bun-100k-small.fresh-process.s20.raw.json",
+      "sha256": "4a32135dfaa308cfaf657eeb46ece2210901df7a94ac7281f2a53f6d5810b6aa",
+      "tier": "small"
+    }
+  ],
+  "statistics_method": {
+    "bootstrap": "sample 20 whole session blocks with replacement; pool selected blocks; recompute nearest-rank percentile",
+    "percentile": "nearest-rank ceil(p*n), one-indexed",
+    "resamples": 2000,
+    "rng": "Python random.Random (MT19937)",
+    "seed": 20260918
+  },
+  "tiers": {
+    "representative": {
+      "bootstrap_ci95_p50_ns": [
+        18819,
+        19309
+      ],
+      "bootstrap_ci95_p99_ns": [
+        34980,
+        36257
+      ],
+      "bootstrap_resamples": 2000,
+      "calls_requested_per_session": 100000,
+      "calls_timed_per_session": 100000,
+      "handshake_ns": {
+        "max": 5404252,
+        "median": 5235446.5,
+        "min": 4976591
+      },
+      "max_ns": 4625545,
+      "p50_ns": 19053,
+      "p90_ns": 26250,
+      "p99_budget_us": 100,
+      "p99_ci_upper_headroom_x": 2.758088,
+      "p99_ns": 35634,
+      "payload_bytes": 1024,
+      "pooled_timed_calls": 2000000,
+      "sessions": 20
+    },
+    "small": {
+      "bootstrap_ci95_p50_ns": [
+        14833,
+        15413
+      ],
+      "bootstrap_ci95_p99_ns": [
+        26889,
+        27863
+      ],
+      "bootstrap_resamples": 2000,
+      "calls_requested_per_session": 100000,
+      "calls_timed_per_session": 100000,
+      "handshake_ns": {
+        "max": 5844758,
+        "median": 5666539.5,
+        "min": 5431745
+      },
+      "max_ns": 3000624,
+      "p50_ns": 15128,
+      "p90_ns": 20380,
+      "p99_budget_us": 100,
+      "p99_ci_upper_headroom_x": 3.588989,
+      "p99_ns": 27377,
+      "payload_bytes": 6,
+      "pooled_timed_calls": 2000000,
+      "sessions": 20
+    }
+  }
+}

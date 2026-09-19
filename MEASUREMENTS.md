@@ -1593,3 +1593,53 @@ Fedora qualification. The multi-gigabyte VM base/overlay and ephemeral SSH
 credentials are intentionally omitted; only sanitized receipts and hashes are
 committed. Native Xorg on the physical Ubuntu host and successful Fedora
 product-path acceptance remain open.
+
+
+### Thermally verified shipping Bun IPC result.v3 corpus (2026-09-19)
+
+The shipping Linux Bun product-client IPC campaign was rerun from
+keld-benches `896198601e2bfbae88ad6c877473b4ee0ce40c27` against Keld
+`0ea0780bb574ad242e9f1105fa4af5842872bad3` after the Linux thermal-boundary
+oracle and result-v3 block-corpus contract landed.
+
+The fresh-process campaign completed the registered IPC sample policy in full:
+20 independent sessions × 100,000 scored calls × two payload tiers, for
+2,000,000 scored RTT observations per tier. All 40 scored raw documents remain
+compact one-line JSON sidecars. Each v3 tier document records only the 20 block
+receipts, sidecar SHA-256/byte counts, the ordered digest chain, block-bootstrap
+metadata, and pooled statistics.
+
+The measured thermal boundary was **nominal**: CPU package temperature moved
+from 71 C to 74 C against the hardware-reported 100 C critical threshold, no
+CPU thermal-throttle counter advanced, and the NVIDIA GPU remained at 48 C
+with both software and hardware thermal-slowdown flags inactive.
+
+| Tier | Payload | p50 | p90 | p99 | 95% session-block bootstrap CI p99 |
+|---|---:|---:|---:|---:|---:|
+| small | 6 B | **15.128 us** | 20.380 us | **27.377 us** | **[26.889, 27.863] us** |
+| representative | 1,024 B | **19.053 us** | 26.250 us | **35.634 us** | **[34.980, 36.257] us** |
+
+At the p99 CI upper bounds, the shipping Bun slice retains approximately
+**3.59×** headroom for the 6-byte tier and **2.76×** for the 1 KiB tier against
+the 100 us architecture target.
+
+The new result-v3 documents are:
+
+- `2026-09-19.kel90-linux-bun-product-client-small.fresh-process.json`
+- `2026-09-19.kel90-linux-bun-product-client-representative.fresh-process.json`
+
+Each document binds 20 real raw sidecars and 2,000,000 observations while
+remaining roughly 14 KB. The per-call vectors are not expanded into the result
+document, so this evidence does not recreate the historical multi-million-line
+JSON-diff failure mode.
+
+The new p99 intervals overlap the corresponding 2026-09-18 fresh-process
+intervals. That is useful reproducibility evidence, but the two campaigns were
+separate sessions and must not be subtracted into a causal speedup/regression
+claim.
+
+The documents remain **diagnostic-only** for one explicit scope reason:
+`NO_SAME_SESSION_PAIRED_RUST_ARM`. The prior thermal-state and result-v2
+session-block schema blockers are absent. The scored interval is still the
+shipping Bun `AppLinkSession.echo` / `HostOwnedHelloSession` slice; it does
+not include a renderer/window or full `keld dev` startup.
