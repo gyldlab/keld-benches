@@ -21,6 +21,8 @@ from harness import (
     BeaconServer,
     HarnessError,
     _canonical_tauri_artifact_sha256,
+    _electron_tree_digest,
+    _read_electron_artifact,
     _verify_tauri_trusted_build,
     KELD_DEV_BEACON_PATH,
     KELD_DEV_PROJECT_PATH,
@@ -420,6 +422,82 @@ class TauriArtifactTrustTests(unittest.TestCase):
             artifact.write_bytes(b"not an ELF")
             with self.assertRaisesRegex(HarnessError, "could not inspect Tauri ELF"):
                 _canonical_tauri_artifact_sha256(artifact)
+
+
+class ElectronArtifactTrustTests(unittest.TestCase):
+    def test_electron_tree_digest_is_deterministic_and_tamper_sensitive(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary) / "electron-linux-hello"
+            (root / "resources" / "app").mkdir(parents=True)
+            executable = root / "electron"
+            executable.write_bytes(b"electron-binary")
+            executable.chmod(0o755)
+            app = root / "resources" / "app" / "main.js"
+            app.write_bytes(b"console.log('a')\n")
+            os.symlink("main.js", root / "resources" / "app" / "alias.js")
+
+            first = _electron_tree_digest(root)
+            second = _electron_tree_digest(root)
+            self.assertEqual(first, second)
+            self.assertEqual(first[1], 3)
+            self.assertEqual(first[2], len(b"electron-binary") + len(b"console.log('a')\n"))
+
+            app.write_bytes(b"console.log('b')\n")
+            changed = _electron_tree_digest(root)
+            self.assertNotEqual(first[0], changed[0])
+
+    def test_electron_reader_requires_independent_tree_match(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            artifact_dir = pathlib.Path(temporary) / "artifact"
+            runtime = artifact_dir / "electron-linux-hello"
+            runtime.mkdir(parents=True)
+            executable = runtime / "electron"
+            executable.write_bytes(b"ELF-electron")
+            executable.chmod(0o755)
+            tree_sha, tree_entries, tree_bytes = _electron_tree_digest(runtime)
+            provenance = {
+                "schema_version": 1,
+                "fixture_repository": "github.com/gyldlab/keld-benches",
+                "fixture_commit": "1" * 40,
+                "fixture_files": {},
+                "artifact": {
+                    "basename": "electron",
+                    "sha256": hashlib.sha256(b"ELF-electron").hexdigest(),
+                    "bytes": len(b"ELF-electron"),
+                    "tree_sha256": tree_sha,
+                    "tree_entries": tree_entries,
+                    "tree_bytes": tree_bytes,
+                },
+                "framework": {"name": "Electron", "version": "43.4.0"},
+                "runtime_versions": {
+                    "electron": "43.4.0",
+                    "chrome": "142.0.7444.175",
+                    "node": "22.21.1",
+                    "v8": "14.2",
+                },
+                "toolchains": {"node": "v22.22.1", "npm": "9.2.0"},
+            }
+            (artifact_dir / "provenance.json").write_text(
+                __import__("json").dumps(provenance), encoding="utf-8"
+            )
+            with mock.patch(
+                "harness._verify_committed_file_digests"
+            ), mock.patch(
+                "harness._trusted_electron_rebuild_tree_sha256", return_value=tree_sha
+            ):
+                read_provenance, read_artifact = _read_electron_artifact(artifact_dir)
+                self.assertEqual(read_provenance["framework"]["version"], "43.4.0")
+                self.assertEqual(read_artifact, executable)
+
+            with mock.patch(
+                "harness._verify_committed_file_digests"
+            ), mock.patch(
+                "harness._trusted_electron_rebuild_tree_sha256", return_value="f" * 64
+            ):
+                with self.assertRaisesRegex(
+                    HarnessError, "does not match an independent rebuild"
+                ):
+                    _read_electron_artifact(artifact_dir)
 
 
 class ProductRunnerTests(unittest.TestCase):

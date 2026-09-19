@@ -69,6 +69,12 @@ class RouteTests(unittest.TestCase):
             "linux/gtk4/hello/test_fixture.py",
             "linux/webkitgtk/dmabuf-matrix/probe.c",
             "linux/webkitgtk/dmabuf-matrix/run_matrix.py",
+            "linux/electron/hello/build.sh",
+            "linux/electron/hello/package.json",
+            "linux/electron/hello/package-lock.json",
+            "linux/electron/hello/src/main.js",
+            "linux/electron/hello/src/index.html",
+            "linux/electron/hello/test_fixture.py",
         ):
             with self.subTest(path=path):
                 self.assert_routes([path], "linux_gtk")

@@ -157,6 +157,13 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set up Node for Electron fixture
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.22.1"
+          cache: npm
+          cache-dependency-path: linux/electron/hello/package-lock.json
+
       - name: Install GTK fixture dependencies
         run: |
           sudo apt-get update
@@ -188,6 +195,17 @@ jobs:
           sh linux/webkitgtk/dmabuf-matrix/build.sh \
             "$RUNNER_TEMP/webkitgtk-dmabuf-fixture"
 
+      - name: Build Electron fixture
+        run: sh linux/electron/hello/build.sh "$RUNNER_TEMP/electron-fixture"
+
+      - name: Configure Electron SUID sandbox helper
+        run: |
+          helper="$RUNNER_TEMP/electron-fixture/electron-linux-hello/chrome-sandbox"
+          test -f "$helper"
+          sudo chown root:root "$helper"
+          sudo chmod 4755 "$helper"
+          test "$(stat -c '%U:%G:%a' "$helper")" = "root:root:4755"
+
       - name: Test GTK fixture on a real display server
         env:
           GTK4_FIXTURE_ARTIFACT: ${{ runner.temp }}/gtk4-fixture/gtk4-webkit-hello
@@ -209,6 +227,16 @@ jobs:
         run: |
           dbus-run-session -- xvfb-run --auto-servernum \
             python linux/webkitgtk/dmabuf-matrix/test_fixture.py
+
+      - name: Test Electron fixture on a real display server
+        env:
+          ELECTRON_FIXTURE_ARTIFACT: ${{ runner.temp }}/electron-fixture/electron-linux-hello/electron
+          ELECTRON_FIXTURE_REAL: "1"
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          dbus-run-session -- xvfb-run --auto-servernum \
+            python linux/electron/hello/test_fixture.py
 
   windows:
     name: windows
