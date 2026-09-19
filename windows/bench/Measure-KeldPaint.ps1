@@ -91,6 +91,10 @@ function Test-PaintOracle {
 }
 
 $templatePath = Join-Path $BenchRepo 'windows\bench\hello.template.html'
+$themeRenderer = Join-Path $BenchRepo 'windows\bench\render_launch_theme.py'
+if (-not (Test-Path -LiteralPath $themeRenderer -PathType Leaf)) {
+  throw "missing staged launch-theme renderer: $themeRenderer"
+}
 $beacon = Get-SharedBeacon -TemplatePath $templatePath
 Test-PaintOracle -Beacon $beacon
 $beaconSha = [System.BitConverter]::ToString(
@@ -132,7 +136,12 @@ for ($i = 1; $i -le $Runs; $i++) {
 
     $rendered = $beacon.Replace('__PORT__', "$port").Replace('__NONCE__', $nonce)
     $idxPath = Join-Path $tmp 'index.html'
+    & python $themeRenderer $idxPath
+    if ($LASTEXITCODE -ne 0) { throw "staged launch-theme renderer failed with exit code $LASTEXITCODE" }
     $idx = [System.IO.File]::ReadAllText($idxPath)
+    if ($idx -notmatch 'data-keld-bench-launch-theme') {
+      throw "staged launch HTML is missing the benchmark black theme"
+    }
     if ($idx -notmatch '(?s)</body>') { throw "fixture index.html has no </body> to inject before" }
     $idx = $idx -replace '(?s)</body>', ($rendered + "`n</body>")
     [System.IO.File]::WriteAllText($idxPath, $idx, (New-Object System.Text.UTF8Encoding($false)))

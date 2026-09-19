@@ -82,6 +82,11 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
         run: python schema/check.py
 
+      - name: Check cross-OS launch theme
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python ci/check_launch_theme.py
+
       - name: Test the result validator
         env:
           PYTHONDONTWRITEBYTECODE: "1"
