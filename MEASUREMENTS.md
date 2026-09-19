@@ -1689,3 +1689,49 @@ startup.
 The prior thermal-state and result-v2 block-corpus schema blockers are absent.
 Historical paired campaigns remain immutable separate sessions and must not be
 subtracted from this campaign into a causal improvement/regression claim.
+
+
+### Thermally verified paired warm-cache Bun/Rust result.v3 (2026-09-19)
+
+The registered warm-cache paired IPC treatment was rerun from keld-benches
+`ed134e360506cf1c5a9abdc817e9e31ff42af53b` against Keld
+`0ea0780bb574ad242e9f1105fa4af5842872bad3`.
+
+Before scored rounds, each payload tier ran one unscored priming process for
+each arm. Every scored Rust and Bun process then validated 1,000 untimed
+post-handshake echoes before exactly 100,000 scored RTTs. The 20 scored paired
+rounds per tier retained exact 10/10 first-arm balance, yielding 2,000,000
+scored observations per arm per tier and 8,000,000 scored observations across
+the full warm-cache campaign.
+
+The measured thermal boundary was **nominal**: CPU package temperature moved
+from 71 C to 78 C against the hardware-reported 100 C critical threshold, no
+CPU thermal-throttle counter advanced, and the NVIDIA GPU remained at 47 C
+with both software and hardware thermal-slowdown flags inactive.
+
+| Tier | Rust floor p99 | Bun product-client p99 | Paired Bun/Rust p99 ratio CI95 | Paired Bun-Rust p99 delta CI95 |
+|---|---:|---:|---:|---:|
+| small, 6 B | **11.065 us** [10.601, 11.572] | **26.504 us** [25.999, 27.020] | **2.395x** [2.290, 2.503] | **15.439 us** [14.777, 16.093] |
+| representative, 1,024 B | **12.873 us** [12.433, 13.144] | **33.369 us** [32.760, 33.870] | **2.592x** [2.524, 2.692] | **20.496 us** [19.862, 21.167] |
+
+At p50, the paired Bun/Rust ratios are 2.002x
+[1.976, 2.027] for 6 B and 2.338x
+[2.311, 2.366] for 1 KiB.
+
+The 80 scored raw documents remain compact one-line JSON sidecars. The
+result-v3 documents bind 20 paired-session-round blocks for each arm/tier by
+path, SHA-256 and byte count. The unscored priming runs follow the existing
+warm-cache evidence convention: their hashes, timed-call count and warmup count
+are retained in the manifest, while the unscored priming vectors themselves
+are not promoted into the benchmark result directory.
+
+The documents remain **diagnostic-only** for
+`PRODUCT_CLIENT_VS_LIBRARY_FLOOR_DIAGNOSTIC`. As in the fresh paired
+campaign, the Bun arm is the shipping TypeScript product-client slice while the
+Rust arm is the direct library floor. The comparison is not a pure Bun runtime
+tax and is not end-to-end application latency.
+
+Fresh-process and warm-cache are separate campaigns. Their central values must
+not be subtracted to claim that cache warming caused a percentage speedup or
+slowdown. What this campaign establishes is that the registered warm-cache
+treatment is reproducible under a thermally verified v3 block-corpus session.
