@@ -921,36 +921,6 @@ def _product_x11_dmabuf_pair_preflight() -> tuple[str, str]:
     return revisions[0], x11_display
 
 
-@contextmanager
-def _product_pair_scope(
-    pair_kind: str,
-    condition: str,
-    *,
-    wayland_display: str,
-    x11_display: str,
-):
-    """Apply one paired-product condition without leaking display or renderer state."""
-    if pair_kind == "backend":
-        with _product_backend_scope(
-            condition,
-            wayland_display=wayland_display,
-            x11_display=x11_display,
-        ):
-            yield
-        return
-    if pair_kind == "x11-dmabuf":
-        if condition not in {"normal", "disabled"}:
-            raise HarnessError(f"unknown X11 DMA-BUF condition: {condition}")
-        with _product_backend_scope(
-            "x11",
-            wayland_display=wayland_display,
-            x11_display=x11_display,
-        ), _product_dmabuf_scope(condition == "disabled"):
-            yield
-        return
-    raise HarnessError(f"unknown product pair kind: {pair_kind}")
-
-
 def _product_runtime_preflight() -> str:
     backend = os.environ.get("GDK_BACKEND")
     if backend == "x11":
@@ -2596,63 +2566,28 @@ def _publication_reasons(
     return reasons
 
 
-def _run_product_pair_metric(
+def _run_product_backend_pair_metric(
     args: Any,
     registry: dict[str, Any],
     contract: dict[str, Any],
     artifact_dir: pathlib.Path,
     output: pathlib.Path,
-    *,
-    pair_kind: str,
 ) -> tuple[dict[str, Any], bool]:
-    """Run one matched shipping-product pair with shared lifecycle and provenance rules."""
+    """Run matched shipping-product rounds under Wayland and X11 on one desktop session."""
     provenance, cli, host, _launcher = read_keld_dev_artifacts(artifact_dir)
-    if pair_kind == "backend":
-        bun_revision, wayland_display, x11_display = _product_backend_pair_preflight()
-        conditions = ("wayland", "x11")
-        display_evidence = ";".join(
-            (
-                f"session={os.environ.get('XDG_SESSION_TYPE', 'unknown')}",
-                f"desktop={os.environ.get('XDG_CURRENT_DESKTOP', 'unknown')}",
-                f"wayland={wayland_display}",
-                f"display={x11_display}",
-                "gdk_backend_pair=wayland,x11",
-            )
-        )
-        baseline_arm = "keld-linux-dev-wayland"
-        candidate_arm = "keld-linux-dev-x11"
-        pair_note = (
-            "same artifact once with GDK_BACKEND=wayland and once with GDK_BACKEND=x11. "
-            "Ratio = X11/Wayland."
-        )
-    elif pair_kind == "x11-dmabuf":
-        bun_revision, x11_display = _product_x11_dmabuf_pair_preflight()
-        wayland_display = os.environ.get("WAYLAND_DISPLAY", "")
-        conditions = ("normal", "disabled")
-        display_evidence = ";".join(
-            (
-                f"session={os.environ.get('XDG_SESSION_TYPE', 'unknown')}",
-                f"desktop={os.environ.get('XDG_CURRENT_DESKTOP', 'unknown')}",
-                f"display={x11_display}",
-                "gdk_backend=x11",
-                "dmabuf_pair=normal,disabled",
-                "nvidia_driver=loaded",
-            )
-        )
-        baseline_arm = "keld-linux-dev-x11-dmabuf-normal"
-        candidate_arm = "keld-linux-dev-x11-dmabuf-disabled"
-        pair_note = (
-            "same X11 artifact once with WEBKIT_DISABLE_DMABUF_RENDERER absent and once "
-            "with it set to exactly 1. Ratio = disabled/normal. This diagnostic does not "
-            "authorize a product safe-mode policy change."
-        )
-    else:
-        raise HarnessError(f"unknown product pair kind: {pair_kind}")
-
+    bun_revision, wayland_display, x11_display = _product_backend_pair_preflight()
     bench_sha, tree_state, advertised = _git_state()
     environment, power_evidence = _environment(provenance, args.metric)
     environment["toolchains"].append({"name": "bun", "version": bun_revision})
-    environment["display"] = display_evidence
+    environment["display"] = ";".join(
+        (
+            f"session={os.environ.get('XDG_SESSION_TYPE', 'unknown')}",
+            f"desktop={os.environ.get('XDG_CURRENT_DESKTOP', 'unknown')}",
+            f"wayland={wayland_display}",
+            f"display={x11_display}",
+            "gdk_backend_pair=wayland,x11",
+        )
+    )
     started_utc = utc_now()
     stock_renderer = (KELD_DEV_PROJECT_PATH / "index.html").read_bytes()
     beacon_script = KELD_DEV_BEACON_PATH.read_bytes()
@@ -2662,60 +2597,49 @@ def _run_product_pair_metric(
     )
     if args.metric not in {"PAINT-OPPORTUNITY", "MEM-IDLE"}:
         raise HarnessError(
-            "paired product modes implement only PAINT-OPPORTUNITY and MEM-IDLE"
+            "paired product backend mode implements only PAINT-OPPORTUNITY and MEM-IDLE"
         )
 
     if args.cache_state == "warm-cache":
-        for condition in conditions:
-            with _product_pair_scope(
-                pair_kind,
-                condition,
+        for backend in ("wayland", "x11"):
+            with _product_backend_scope(
+                backend,
                 wayland_display=wayland_display,
                 x11_display=x11_display,
             ):
                 priming = attempt(artifact_dir, 0, args.timeout_seconds)
             if not priming["valid"]:
                 raise HarnessError(
-                    f"warm-cache product-pair priming failed for {condition}: "
+                    f"warm-cache paired product priming failed for {backend}: "
                     f"{priming['reject_reason']}"
                 )
 
-    samples_by_condition: dict[str, list[dict[str, Any]]] = {
-        condition: [] for condition in conditions
+    samples_by_backend: dict[str, list[dict[str, Any]]] = {
+        "wayland": [],
+        "x11": [],
     }
-    orders = paired_round_orders(conditions, args.samples, random.SystemRandom())
+    orders = paired_round_orders(("wayland", "x11"), args.samples, random.SystemRandom())
     for run, order in enumerate(orders, start=1):
-        for position, condition in enumerate(order, start=1):
-            with _product_pair_scope(
-                pair_kind,
-                condition,
+        for position, backend in enumerate(order, start=1):
+            with _product_backend_scope(
+                backend,
                 wayland_display=wayland_display,
                 x11_display=x11_display,
             ):
                 sample = attempt(artifact_dir, run, args.timeout_seconds)
-            if pair_kind == "backend":
-                sample["diagnostics"]["gdk_backend"] = condition
-            else:
-                sample["diagnostics"]["gdk_backend"] = "x11"
-                sample["diagnostics"]["dmabuf_renderer_disabled"] = condition == "disabled"
+            sample["diagnostics"]["gdk_backend"] = backend
             sample["diagnostics"]["round_position"] = position
-            samples_by_condition[condition].append(sample)
+            samples_by_backend[backend].append(sample)
 
     artifact = cli if args.metric == "PAINT-OPPORTUNITY" else host
     artifact_key = "cli" if args.metric == "PAINT-OPPORTUNITY" else "host"
     artifact_record = provenance["artifacts"][artifact_key]
     arms: list[dict[str, Any]] = []
-    for condition in conditions:
-        if pair_kind == "backend":
-            arm_id = f"keld-linux-dev-{condition}"
-            lane = f"webkitgtk-{condition}"
-        else:
-            arm_id = f"keld-linux-dev-x11-dmabuf-{condition}"
-            lane = f"webkitgtk-x11-dmabuf-{condition}"
-        samples = samples_by_condition[condition]
+    for backend in ("wayland", "x11"):
+        samples = samples_by_backend[backend]
         arms.append(
             {
-                "arm_id": arm_id,
+                "arm_id": f"keld-linux-dev-{backend}",
                 "framework": {
                     "name": "Keld",
                     "version": provenance["source_git_sha"][:12],
@@ -2726,7 +2650,7 @@ def _run_product_pair_metric(
                     "basename": artifact.name,
                     "version": provenance["source_git_sha"][:12],
                 },
-                "lane": lane,
+                "lane": f"webkitgtk-{backend}",
                 "role": "diagnostic",
                 "samples": samples,
                 "statistics": summarize(samples),
@@ -2736,11 +2660,11 @@ def _run_product_pair_metric(
     comparison: dict[str, Any] | None = None
     if all(arm["statistics"]["valid_samples"] == args.samples for arm in arms):
         comparison = paired_ratio_comparison(
-            samples_by_condition[conditions[0]],
-            samples_by_condition[conditions[1]],
+            samples_by_backend["wayland"],
+            samples_by_backend["x11"],
             threshold=registry["regression_rule"]["threshold_ratio"],
-            baseline_arm=baseline_arm,
-            candidate_arm=candidate_arm,
+            baseline_arm="keld-linux-dev-wayland",
+            candidate_arm="keld-linux-dev-x11",
         )
 
     valid_samples = min(arm["statistics"]["valid_samples"] for arm in arms)
@@ -2757,10 +2681,12 @@ def _run_product_pair_metric(
         keld_mode="dev-product",
     )
     notes = (
-        "Same-session shipping Linux keld dev matched pair in balanced randomized order: "
-        f"{pair_note} Both arms require the stock authenticated Bun echo, nonce-bound "
-        "double-rAF, complete product process census, backend-native close, exit 0 and "
-        f"generation-bound cleanup. Power evidence: {power_evidence}."
+        "Same-session shipping Linux keld dev backend pair. Every matched round runs the "
+        "same provenance-bound product artifact once with GDK_BACKEND=wayland and once "
+        "with GDK_BACKEND=x11 in balanced randomized order. Both arms require the stock "
+        "authenticated Bun echo, nonce-bound double-rAF, complete product process census, "
+        "backend-native close, exit 0 and generation-bound cleanup. Ratio = X11/Wayland. "
+        f"Power evidence: {power_evidence}."
     )
     document: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -2816,23 +2742,6 @@ def _run_product_pair_metric(
     return document, failed
 
 
-def _run_product_backend_pair_metric(
-    args: Any,
-    registry: dict[str, Any],
-    contract: dict[str, Any],
-    artifact_dir: pathlib.Path,
-    output: pathlib.Path,
-) -> tuple[dict[str, Any], bool]:
-    """Run matched shipping-product rounds under Wayland and X11."""
-    return _run_product_pair_metric(
-        args,
-        registry,
-        contract,
-        artifact_dir,
-        output,
-        pair_kind="backend",
-    )
-
 
 def _run_product_x11_dmabuf_pair_metric(
     args: Any,
@@ -2841,15 +2750,180 @@ def _run_product_x11_dmabuf_pair_metric(
     artifact_dir: pathlib.Path,
     output: pathlib.Path,
 ) -> tuple[dict[str, Any], bool]:
-    """Run matched shipping X11 rounds with DMA-BUF mitigation absent vs enabled."""
-    return _run_product_pair_metric(
-        args,
-        registry,
-        contract,
-        artifact_dir,
-        output,
-        pair_kind="x11-dmabuf",
+    """Pair shipping X11 product rounds with WebKitGTK DMA-BUF mitigation off/on."""
+    provenance, cli, host, _launcher = read_keld_dev_artifacts(artifact_dir)
+    bun_revision, x11_display = _product_x11_dmabuf_pair_preflight()
+    wayland_display = os.environ.get("WAYLAND_DISPLAY", "")
+    bench_sha, tree_state, advertised = _git_state()
+    environment, power_evidence = _environment(provenance, args.metric)
+    environment["toolchains"].append({"name": "bun", "version": bun_revision})
+    environment["display"] = ";".join(
+        (
+            f"session={os.environ.get('XDG_SESSION_TYPE', 'unknown')}",
+            f"desktop={os.environ.get('XDG_CURRENT_DESKTOP', 'unknown')}",
+            f"display={x11_display}",
+            "gdk_backend=x11",
+            "dmabuf_pair=normal,disabled",
+            "nvidia_driver=loaded",
+        )
     )
+    started_utc = utc_now()
+    stock_renderer = (KELD_DEV_PROJECT_PATH / "index.html").read_bytes()
+    beacon_script = KELD_DEV_BEACON_PATH.read_bytes()
+    payload_sha = hashlib.sha256(stock_renderer + b"\0" + beacon_script).hexdigest()
+    attempt = (
+        _product_paint_attempt if args.metric == "PAINT-OPPORTUNITY" else _product_memory_attempt
+    )
+    if args.metric not in {"PAINT-OPPORTUNITY", "MEM-IDLE"}:
+        raise HarnessError(
+            "paired X11 DMA-BUF mode implements only PAINT-OPPORTUNITY and MEM-IDLE"
+        )
+
+    conditions = ("normal", "disabled")
+    if args.cache_state == "warm-cache":
+        for condition in conditions:
+            with _product_backend_scope(
+                "x11",
+                wayland_display=wayland_display,
+                x11_display=x11_display,
+            ), _product_dmabuf_scope(condition == "disabled"):
+                priming = attempt(artifact_dir, 0, args.timeout_seconds)
+            if not priming["valid"]:
+                raise HarnessError(
+                    f"warm-cache paired X11 DMA-BUF priming failed for {condition}: "
+                    f"{priming['reject_reason']}"
+                )
+
+    samples_by_condition: dict[str, list[dict[str, Any]]] = {
+        "normal": [],
+        "disabled": [],
+    }
+    orders = paired_round_orders(conditions, args.samples, random.SystemRandom())
+    for run, order in enumerate(orders, start=1):
+        for position, condition in enumerate(order, start=1):
+            with _product_backend_scope(
+                "x11",
+                wayland_display=wayland_display,
+                x11_display=x11_display,
+            ), _product_dmabuf_scope(condition == "disabled"):
+                sample = attempt(artifact_dir, run, args.timeout_seconds)
+            sample["diagnostics"]["gdk_backend"] = "x11"
+            sample["diagnostics"]["dmabuf_renderer_disabled"] = condition == "disabled"
+            sample["diagnostics"]["round_position"] = position
+            samples_by_condition[condition].append(sample)
+
+    artifact = cli if args.metric == "PAINT-OPPORTUNITY" else host
+    artifact_key = "cli" if args.metric == "PAINT-OPPORTUNITY" else "host"
+    artifact_record = provenance["artifacts"][artifact_key]
+    arms: list[dict[str, Any]] = []
+    for condition in conditions:
+        samples = samples_by_condition[condition]
+        arms.append(
+            {
+                "arm_id": f"keld-linux-dev-x11-dmabuf-{condition}",
+                "framework": {
+                    "name": "Keld",
+                    "version": provenance["source_git_sha"][:12],
+                },
+                "fixture_path": KELD_DEV_FIXTURE_PATH,
+                "artifact": {
+                    "sha256": artifact_record["sha256"],
+                    "basename": artifact.name,
+                    "version": provenance["source_git_sha"][:12],
+                },
+                "lane": f"webkitgtk-x11-dmabuf-{condition}",
+                "role": "diagnostic",
+                "samples": samples,
+                "statistics": summarize(samples),
+            }
+        )
+
+    comparison: dict[str, Any] | None = None
+    if all(arm["statistics"]["valid_samples"] == args.samples for arm in arms):
+        comparison = paired_ratio_comparison(
+            samples_by_condition["normal"],
+            samples_by_condition["disabled"],
+            threshold=registry["regression_rule"]["threshold_ratio"],
+            baseline_arm="keld-linux-dev-x11-dmabuf-normal",
+            candidate_arm="keld-linux-dev-x11-dmabuf-disabled",
+        )
+
+    valid_samples = min(arm["statistics"]["valid_samples"] for arm in arms)
+    reasons = _publication_reasons(
+        metric_id=args.metric,
+        requested_samples=args.samples,
+        valid_samples=valid_samples,
+        tree_state=tree_state,
+        advertised=advertised,
+        environment=environment,
+        recipe_commits=(provenance["recipe_commit"],),
+        bench_sha=bench_sha,
+        paired=True,
+        keld_mode="dev-product",
+    )
+    notes = (
+        "Same-session shipping Linux keld dev X11 DMA-BUF mitigation pair on a loaded "
+        "NVIDIA proprietary driver. Every matched round uses the same provenance-bound "
+        "product artifact with GDK_BACKEND=x11 and WAYLAND_DISPLAY unset; the baseline "
+        "removes WEBKIT_DISABLE_DMABUF_RENDERER and the candidate sets it to exactly 1. "
+        "Both arms require the stock authenticated Bun echo, nonce-bound double-rAF, "
+        "complete product process census, native X11 close, exit 0 and generation-bound "
+        "cleanup. Ratio = disabled/normal. This diagnostic does not authorize a product "
+        f"safe-mode policy change. Power evidence: {power_evidence}."
+    )
+    document: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "metric": {
+            "id": args.metric,
+            "unit": contract["unit"],
+            "registry_version": registry["registry_version"],
+        },
+        "cache_state": args.cache_state,
+        "session": {
+            "started_utc": started_utc,
+            "finished_utc": utc_now(),
+            "requested_samples": args.samples,
+            "interleaving": "round-robin-randomized",
+            "label": args.label,
+            "notes": notes,
+        },
+        "environment": environment,
+        "provenance": {
+            "bench_sha": bench_sha,
+            "bench_tree_state": tree_state,
+            "keld_sha": provenance["source_git_sha"],
+            "harness": {
+                "path": "linux/bench/run.py",
+                "sha256": sha256_file(HARNESS_PATH),
+                "version": "1.0.0",
+                "modules": [
+                    {"path": "linux/bench/run.py", "sha256": sha256_file(HARNESS_PATH)},
+                    {"path": "linux/bench/harness.py", "sha256": sha256_file(MODULE_PATH)},
+                ],
+            },
+            "fixtures": [
+                {"path": KELD_DEV_FIXTURE_PATH, "sha": provenance["recipe_commit"]}
+            ],
+            "payload_sha256": payload_sha,
+        },
+        "arms": arms,
+        "publication": {
+            "policy_version": 2,
+            "requested": args.publish,
+            "eligible": not reasons,
+            "reasons": reasons,
+        },
+    }
+    if comparison is not None:
+        document["comparison"] = comparison
+    validate_result(document)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("x", encoding="utf-8", newline="\n") as destination:
+        json.dump(document, destination, indent=2, sort_keys=True)
+        destination.write("\n")
+    failed = any(arm["statistics"]["valid_samples"] != args.samples for arm in arms)
+    return document, failed
+
 
 def _run_product_metric(
     args: Any,
