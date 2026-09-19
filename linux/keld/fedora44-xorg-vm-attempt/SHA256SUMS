@@ -1,0 +1,10 @@
+c3b9850bea864e319937fad8d5681f4791eb6d3715619a9e4e0d26f15b2a8d5b  ./README.md
+74e7e04d7fbca85f5a72a4a418ea5b07bf095b7bed257f9a544fc0bd504d8e39  ./receipt.json
+6ec50c76c11060f1671eb066e701c7baf5155ed8a2186df4aa4d95ac22b6cc10  ./receipts/keld-artifacts.txt
+233315a8002c173dc1acec5df43d9570a3f90ef3c41c17a20c8e69b8c7b2e1d8  ./receipts/local-vm-assets.sha256
+b2c07614d2e8cc90368963c51f3ae73b1ef0ce696f739b111cb636c83aa2d35e  ./receipts/modified-project-sha256.txt
+4986cfe8c38bcb51c27536f0113b2bd46832327ad4ac944dab74beccebfe171b  ./receipts/os-release.txt
+cfbe4f8527b569e69cd7f51d232c4de5b1f7723bfcb8cba1a436454cdef762a2  ./receipts/packages.txt
+2b3fbe49143b1cf00a6c2fa68d33a041a19290b0caeb6294ed4bff5140d10730  ./receipts/pristine-project-sha256.txt
+5da2f7fea1ef4283669eedf3a45082b8f9bee97fb08e722e8f311d874fd146aa  ./receipts/toolchains.txt
+a9bd0938c8aa83deee25250c336b5056c4d61d1b7e291e5a7c8fe88189d0965c  ./receipts/xorg-runtime.txt
