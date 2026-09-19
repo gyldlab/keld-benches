@@ -137,6 +137,13 @@ least one OS harness; none may regress):
   that cannot fail its own controls does not land.
 - Condition-based waiting; a fixed sleep is accepted only where the
   pre-contract Windows harness already has one, and is a named migration item.
+- **Visible launch HTML uses a black background on every OS.** New benchmark-owned
+  HTML and session-scoped instrumented renderers MUST force `#000` on `html,body`
+  before the page becomes visible. If a Keld fixture is committed specifically
+  to preserve byte identity with `keld create`, the committed source MUST stay
+  unchanged; the harness applies the black presentation rule only to its
+  temporary launch copy and binds that derived renderer in provenance. Historical
+  result payloads are immutable and are not rewritten solely for this rule.
 
 ## 3. Result document
 

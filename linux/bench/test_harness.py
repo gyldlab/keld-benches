@@ -451,7 +451,17 @@ class ProductRunnerTests(unittest.TestCase):
         self.assertNotIn(b"__KELD_BENCH_", rendered)
         self.assertIn(b"http://127.0.0.1:43123", rendered)
         self.assertGreaterEqual(rendered.count(NONCE.encode("ascii")), 2)
-        self.assertIn(stock.split(b"</body>")[0], rendered)
+        self.assertIn(b"data-keld-bench-launch-theme", rendered)
+        self.assertIn(b"background:#000!important", rendered)
+        self.assertIn(b"color-scheme:dark", rendered)
+        theme_at = rendered.index(b"data-keld-bench-launch-theme")
+        head_close_at = rendered.index(b"</head>")
+        body_open_at = rendered.index(b"<body>")
+        visible_content_at = rendered.index(b"<h1>")
+        self.assertLess(theme_at, head_close_at)
+        self.assertLess(head_close_at, body_open_at)
+        self.assertLess(theme_at, visible_content_at)
+        self.assertEqual(rendered.count(b"</head>"), 1)
         self.assertEqual(rendered.count(b"</body>"), 1)
 
     def test_product_role_classification_keeps_cli_host_bun_and_engine_distinct(self) -> None:
