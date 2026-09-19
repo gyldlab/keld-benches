@@ -1109,16 +1109,43 @@ def _product_wayland_atspi_preflight() -> None:
 
 WAYLAND_ATSPI_CLOSE_SCRIPT = r"""
 import gi
+import os
 import sys
 import time
 
 gi.require_version("Atspi", "2.0")
-from gi.repository import Atspi
+gi.require_version("Gio", "2.0")
+from gi.repository import Atspi, Gio, GLib
 
 host_pid = int(sys.argv[1])
 title = sys.argv[2]
 deadline = time.monotonic() + 5.0
 last_state = 10
+
+flags = (
+    Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT
+    | Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION
+)
+bus = Gio.DBusConnection.new_for_address_sync(
+    os.environ["AT_SPI_BUS_ADDRESS"], flags, None, None
+)
+
+def unix_pid_for_bus_name(bus_name):
+    try:
+        reply = bus.call_sync(
+            "org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus",
+            "GetConnectionUnixProcessID",
+            GLib.Variant("(s)", (bus_name,)),
+            GLib.VariantType.new("(u)"),
+            Gio.DBusCallFlags.NONE,
+            250,
+            None,
+        )
+    except Exception:
+        return None
+    return reply.unpack()[0]
 
 while time.monotonic() < deadline:
     desktop = Atspi.get_desktop(0)
@@ -1126,10 +1153,13 @@ while time.monotonic() < deadline:
     for index in range(desktop.get_child_count()):
         app = desktop.get_child_at_index(index)
         try:
-            if app.get_name() == "keld-host" and app.get_process_id() == host_pid:
-                apps.append(app)
+            bus_name = app.app.bus_name
         except Exception:
-            pass
+            continue
+        if not bus_name:
+            continue
+        if unix_pid_for_bus_name(bus_name) == host_pid:
+            apps.append(app)
     if len(apps) != 1:
         last_state = 10
         time.sleep(0.05)
