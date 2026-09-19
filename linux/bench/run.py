@@ -33,6 +33,11 @@ def parser() -> argparse.ArgumentParser:
         action="store_true",
         help="pair the shipping Linux keld dev fixture under Wayland and X11 on one session",
     )
+    run.add_argument(
+        "--product-x11-dmabuf-pair",
+        action="store_true",
+        help="pair X11 shipping keld dev with WebKitGTK DMA-BUF mitigation absent vs enabled",
+    )
     return root
 
 
