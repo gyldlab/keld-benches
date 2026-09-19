@@ -123,6 +123,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install result-contract dependencies
+        run: python -m pip install --disable-pip-version-check -r ci/requirements-contract.txt
+
       - name: Check Linux build script syntax
         run: |
           sh -n linux/gtk4/hello/build.sh
