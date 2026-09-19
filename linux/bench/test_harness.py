@@ -40,6 +40,7 @@ from harness import (
     _product_process_class,
     _product_runtime_preflight,
     _product_wayland_close,
+    WAYLAND_ATSPI_CLOSE_SCRIPT,
     _publication_reasons,
     _paint_attempt,
     _verify_committed_file_digests,
@@ -704,6 +705,12 @@ class ProductRunnerTests(unittest.TestCase):
         failed = subprocess.CompletedProcess(["gdbus"], 1, "", "no bus")
         with mock.patch("harness.subprocess.run", return_value=failed):
             self.assertIsNone(_product_atspi_bus_address())
+
+    def test_wayland_close_routes_by_bus_daemon_pid_without_scanning_remote_apps(self) -> None:
+        self.assertIn("GetConnectionUnixProcessID", WAYLAND_ATSPI_CLOSE_SCRIPT)
+        self.assertIn("app.app.bus_name", WAYLAND_ATSPI_CLOSE_SCRIPT)
+        self.assertNotIn("get_process_id()", WAYLAND_ATSPI_CLOSE_SCRIPT)
+        self.assertNotIn('app.get_name() == "keld-host"', WAYLAND_ATSPI_CLOSE_SCRIPT)
 
     def test_product_wayland_close_binds_pid_title_and_bus(self) -> None:
         completed = subprocess.CompletedProcess(["python"], 0, b"", b"")
