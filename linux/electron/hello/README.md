@@ -14,9 +14,13 @@ The packaged main process requires `KELD_BENCH_URL` to be exactly:
 
 `http://127.0.0.1:<port>/run/<32 lowercase hex>/index.html`
 
-It creates one visible 960x640 black-backed BrowserWindow, denies popup
-creation, rejects top-level navigation away from the approved loopback URL,
-and keeps:
+It creates one 960x640 black-backed BrowserWindow. The window is constructed
+hidden and, on Electron's normal `ready-to-show` lifecycle event, the app calls
+`show()` and `focus()` so the single benchmark window explicitly requests the
+foreground before the unchanged focused/visible paint oracle can pass. This is
+fixture-owned window lifecycle, not external focus automation. The app also
+denies popup creation, rejects top-level navigation away from the approved
+loopback URL, and keeps:
 
 - `contextIsolation: true`
 - `nodeIntegration: false`

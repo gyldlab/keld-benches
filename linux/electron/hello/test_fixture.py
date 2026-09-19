@@ -66,6 +66,10 @@ class ElectronFixtureTests(unittest.TestCase):
             "sandbox: true",
             "app.enableSandbox()",
             'backgroundColor: "#000000"',
+            'show: false',
+            'window.once("ready-to-show"',
+            'window.show()',
+            'window.focus()',
         ):
             self.assertIn(required, source)
         self.assertNotIn("--no-sandbox", source)
