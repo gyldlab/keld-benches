@@ -1288,3 +1288,57 @@ sessions. Their medians may be reported as separate observations, but subtractin
 or dividing them to claim a backend speedup/regression is not admitted evidence.
 A balanced same-session backend comparison is required before attributing the
 large observed difference to X11 versus Wayland itself.
+
+
+### Same-session shipping product backend pair: Wayland vs X11 (2026-09-19)
+
+The Linux runner now supports a matched shipping `keld dev` backend pair. Each
+round launches the same provenance-bound product artifact once with native
+Wayland and once with X11 through the live GNOME Xwayland server. Arm order is
+balanced and randomized: exactly 15 Wayland-first and 15 X11-first rounds per
+30-round campaign.
+
+Both arms require the stock authenticated Bun echo, nonce-bound double-rAF
+paint, complete product process census, backend-native close, exit 0, stage
+cleanup and generation-bound descendant cleanup. This removes the
+cross-session attribution problem in the earlier separate Wayland and
+X11/Xwayland campaigns.
+
+The benchmark recipe is `c17bdad8547794b23814acb13a4590a9d9f30b3c` and Keld
+remains pinned to `0ea0780bb574ad242e9f1105fa4af5842872bad3`.
+
+#### Paint
+
+| cache | Wayland median | X11 median | paired X11/Wayland CI95 |
+|---|---:|---:|---:|
+| fresh-process | **549.6235 ms** | **963.911 ms** | **[1.735841, 1.793650]** |
+| warm-cache | **553.242 ms** | **967.000 ms** | **[1.725116, 1.783941]** |
+
+Both campaigns completed 30/30 valid samples per arm. The paired diagnostic
+verdict is `FAIL` against the registry's 1.05 regression threshold in both
+cache states. The result supports a backend-specific attribution on this
+machine/session: the shipping X11/Xwayland developer-flow paint path is
+materially slower than the matched native Wayland path.
+
+#### Memory
+
+The scored MEM-IDLE value remains the staged `keld-host` RSS.
+
+| cache | Wayland host RSS | X11 host RSS | paired X11/Wayland CI95 |
+|---|---:|---:|---:|
+| fresh-process | **179,686 KiB** | **173,020 KiB** | **[0.962524, 0.963291]** |
+| warm-cache | **179,640 KiB** | **173,006 KiB** | **[0.962572, 0.963300]** |
+
+The full owned-tree medians are 494,206 KiB Wayland vs 468,552 KiB X11 in the
+fresh-process campaign, and 494,268 KiB Wayland vs 468,290 KiB X11 in the
+warm-cache campaign. The backend with lower paint latency therefore uses more
+resident memory in this workload; the two observables must not be collapsed
+into one score.
+
+All four documents remain diagnostic-only because Linux thermal state is not
+independently verified and the measured observable is the shipping `keld dev`
+developer flow, not packaged-app startup. Fresh and warm are separate campaigns;
+the paired comparison is only between Wayland and X11 within each campaign.
+
+A native Xorg login is still not measured: the X11 arm uses the live Mutter
+Xwayland server. KEL-28's non-Debian distro spot-check also remains open.
