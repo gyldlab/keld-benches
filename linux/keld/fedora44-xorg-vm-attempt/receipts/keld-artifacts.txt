@@ -1,0 +1,7 @@
+keld_sha=0ea0780bb574ad242e9f1105fa4af5842872bad3
+90dc7ad31924617ce93c09498167ec59b05353d7cf5466d0edb6c04ccd0edb5e  target/release/keld
+4c8006086fb36d5ca7ef50d288ee3dcce60b5c923674be67697ffd6b0723bbe5  target/release/keld-host
+31d9d3038d2a00c89ada16affbe6ab533614ea87757f667211bd9dd22d2d16a9  target/release/keld-role-launcher
+3302920 target/release/keld
+1688888 target/release/keld-host
+407752 target/release/keld-role-launcher

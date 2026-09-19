@@ -1573,3 +1573,23 @@ receipts; generated binaries remain omitted and hash-bound.
 This is build/package portability evidence only. It does not establish an Arch
 desktop runtime, X11/Wayland lifecycle behavior, end-to-end `keld dev`,
 containment behavior, release support, or a performance result.
+
+
+### Fedora 44 native-Xorg VM acceptance attempt — failed before window creation (2026-09-19)
+
+KEL-28 now has a sanitized public failure receipt at
+`linux/keld/fedora44-xorg-vm-attempt/` for a Fedora 44 KVM guest with a real
+guest Xorg server and Fluxbox window manager. The exact Keld source pin is
+`0ea0780bb574ad242e9f1105fa4af5842872bad3`.
+
+The guest built the shipping Keld CLI/host/role-launcher under Fedora 44 and
+attempted the ordinary `keld create` + `keld dev` path. Strict runtime
+admission failed with `KELD-RUNTIME-016` on a missing runtime-mount source,
+followed by `KELD-CLI-048`; neither IPC echo, the ready marker, nor a visible
+Keld window was reached.
+
+This is failure/portability evidence, not a result.v2 performance row and not a
+Fedora qualification. The multi-gigabyte VM base/overlay and ephemeral SSH
+credentials are intentionally omitted; only sanitized receipts and hashes are
+committed. Native Xorg on the physical Ubuntu host and successful Fedora
+product-path acceptance remain open.
