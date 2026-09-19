@@ -32,6 +32,7 @@ from harness import (
     ROOT,
     _prepare_product_workspace,
     _proc_identity,
+    _process_environment_value,
     _product_atspi_bus_address,
     _product_backend_pair_preflight,
     _product_backend_scope,
@@ -466,6 +467,40 @@ class ProductRunnerTests(unittest.TestCase):
         self.assertLess(theme_at, visible_content_at)
         self.assertEqual(rendered.count(b"</head>"), 1)
         self.assertEqual(rendered.count(b"</body>"), 1)
+
+    def test_process_environment_value_is_generation_bound_and_marks_absence(self) -> None:
+        identity = ProcessIdentity(pid=77, process_group=7, start_ticks=700)
+        with mock.patch("harness.os.pidfd_open", return_value=9), mock.patch(
+            "harness.os.close"
+        ), mock.patch(
+            "harness._proc_identity", side_effect=[identity, identity]
+        ), mock.patch(
+            "harness.pathlib.Path.read_bytes",
+            return_value=b"A=1\0WEBKIT_DISABLE_DMABUF_RENDERER=1\0",
+        ):
+            self.assertEqual(
+                _process_environment_value(identity, "WEBKIT_DISABLE_DMABUF_RENDERER"),
+                "1",
+            )
+
+        with mock.patch("harness.os.pidfd_open", return_value=9), mock.patch(
+            "harness.os.close"
+        ), mock.patch(
+            "harness._proc_identity", side_effect=[identity, identity]
+        ), mock.patch(
+            "harness.pathlib.Path.read_bytes", return_value=b"A=1\0B=2\0"
+        ):
+            self.assertEqual(
+                _process_environment_value(identity, "WEBKIT_DISABLE_DMABUF_RENDERER"),
+                "<absent>",
+            )
+
+        reused = ProcessIdentity(pid=77, process_group=7, start_ticks=701)
+        with mock.patch("harness.os.pidfd_open", return_value=9), mock.patch(
+            "harness.os.close"
+        ), mock.patch("harness._proc_identity", return_value=reused):
+            with self.assertRaisesRegex(HarnessError, "PID was reused"):
+                _process_environment_value(identity, "WEBKIT_DISABLE_DMABUF_RENDERER")
 
     def test_product_role_classification_keeps_cli_host_bun_and_engine_distinct(self) -> None:
         root = self.record(10, 1, "/bench/keld dev", comm="keld")
