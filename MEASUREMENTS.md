@@ -1559,3 +1559,17 @@ Fedora environment ran under Docker Desktop rather than a bare-metal Fedora
 login, and the accepted lifecycle oracle is Fedora-owned Xvfb + Fluxbox. It
 does not qualify native Xorg on the physical Ubuntu machine, Fedora Wayland,
 end-to-end Fedora `keld dev`, packaged startup, or release support.
+
+### Arch Linux bounded build-portability receipt (2026-09-19)
+
+KEL-28 also has a public Arch Linux build-portability receipt at
+`linux/keld/arch-build-portability/`. The exact Keld pin is
+`0ea0780bb574ad242e9f1105fa4af5842872bad3`. A pinned Arch userland produced a
+locked Release host using the recorded GTK3/WebKitGTK 4.1/libsoup3/bubblewrap
+package mapping, and the captured dynamic-link census reports zero unresolved
+links. Artifact size/hash plus Rust/Cargo/GTK/WebKitGTK versions are committed as
+receipts; generated binaries remain omitted and hash-bound.
+
+This is build/package portability evidence only. It does not establish an Arch
+desktop runtime, X11/Wayland lifecycle behavior, end-to-end `keld dev`,
+containment behavior, release support, or a performance result.

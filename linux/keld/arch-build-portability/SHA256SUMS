@@ -1,0 +1,10 @@
+22e4195e52447390cf78d410fdec6bb62dcf197cfec71a5cd112a923b3b7472e  ./README.md
+f090f8508d190fba2e86d349e01d5af47fc58b924d041ea998f5d6577d4dfb69  ./evidence-manifest.json
+ce4101e13ec3a0cc0f804249f7aa55eb4ab9fd2f5dee0fbf7f0204e15d6b3638  ./receipts/arch-packages.txt
+dfc0b6c8ddeb2dedba9a481ab562c3f7d90f65595a2fb56804932ec1f89d844f  ./receipts/cargo-version.txt
+cefd52c60571963f3812bd853ee3bf9ae61f81b9157938f0cbe0371f3745d42d  ./receipts/gtk3-version.txt
+14dfdc7a268a957f0409d5a4693208618dcb6aedb817c9a32780629a4ceb9a6b  ./receipts/keld-host-arch.bytes
+6d510ea626c639ffb73f9d046796ec0d2e064bd73902556979cd56cb251b1bfe  ./receipts/keld-host-arch.ldd.txt
+72a5240ab66acbd974a97ca9f8488b4403ca2639c9b6a64e479c10417e62b491  ./receipts/keld-host-arch.sha256
+81680c954f2b88cfa8fc69757d34488dd4740819379a9f389ce7e417ab756d53  ./receipts/rustc-version.txt
+26019a17c7d52334787f252f9c2e5582897ec9f6234c68707b41fbfd8b04df1a  ./receipts/webkitgtk-version.txt
