@@ -23,7 +23,11 @@ and keeps:
 - `sandbox: true`
 - DevTools disabled
 
-No `--no-sandbox` or equivalent weakening is part of this fixture.
+No `--no-sandbox` or equivalent weakening is part of this fixture. On Linux,
+Electron may use Chromium's unprivileged-user-namespace sandbox when the host
+permits it. Hosts that do not permit that path must configure the official
+`chrome-sandbox` helper as `root:root` mode `4755`; the hosted Linux GUI CI lane
+does exactly that and fails closed if the helper metadata is not exact.
 
 The runner owns the measured HTML and nonce-bound double-rAF paint beacon. The
 committed placeholder page is also black so every directly visible launch

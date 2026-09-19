@@ -198,6 +198,14 @@ jobs:
       - name: Build Electron fixture
         run: sh linux/electron/hello/build.sh "$RUNNER_TEMP/electron-fixture"
 
+      - name: Configure Electron SUID sandbox helper
+        run: |
+          helper="$RUNNER_TEMP/electron-fixture/electron-linux-hello/chrome-sandbox"
+          test -f "$helper"
+          sudo chown root:root "$helper"
+          sudo chmod 4755 "$helper"
+          test "$(stat -c '%U:%G:%a' "$helper")" = "root:root:4755"
+
       - name: Test GTK fixture on a real display server
         env:
           GTK4_FIXTURE_ARTIFACT: ${{ runner.temp }}/gtk4-fixture/gtk4-webkit-hello
