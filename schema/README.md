@@ -6,8 +6,9 @@ The shared, OS-agnostic half of the metric-runner contract
 | File | Owns |
 |---|---|
 | [`result.v1.schema.json`](./result.v1.schema.json) | Frozen historical result shape (JSON Schema draft 2020-12) |
-| [`result.v2.schema.json`](./result.v2.schema.json) | Current shape: normalized harness paths and interpreted-module provenance |
-| [`metrics.v1.json`](./metrics.v1.json) | Which metrics exist: id, unit, oracle, budget, cache states, sample policy, per-OS status |
+| [`result.v2.schema.json`](./result.v2.schema.json) | Frozen run-sample shape with normalized harness paths and interpreted-module provenance |
+| [`result.v3.schema.json`](./result.v3.schema.json) | Latest shape: v2-compatible run samples plus hash-bound independent block/session corpora |
+| [`metrics.v1.json`](./metrics.v1.json) | Which metrics exist: id, unit, oracle, budget, cache states, machine-readable sample policy, per-OS status |
 | [`result_contract.py`](./result_contract.py) | Cross-field semantic policy that JSON Schema cannot express |
 | [`check.py`](./check.py) | Falsifiable contract check — every schema version, registry invariants, examples, semantic checks, negative controls |
 | [`examples/`](./examples/) | Documents that MUST validate (currently: the real KEL-65 Windows session converted to v1) |
@@ -25,6 +26,12 @@ python3 schema/check.py   # from the repo root; requires jsonschema
   exact module entry matching the top-level harness path/hash before policy-v2
   results may set `publication.eligible: true`. Policy-v1/v1 documents remain
   unchanged.
+- Version 3 adds independent block/session corpora without changing v2. It binds
+  every valid block to a repo-relative raw sidecar path, SHA-256 and byte count,
+  records an ordered corpus digest chain and block-bootstrap metadata, supports
+  named percentile confidence intervals, and allows fixture-adjacent measurement
+  controllers in provenance. The validator additionally verifies promoted raw
+  sidecars on disk. Ordinary sample-mode documents do not need to be rewritten.
 - The **registry version** (`registry_version`) bumps when an existing
   metric's id, unit, oracle, or budget changes. *Adding* a metric entry is
   backward-compatible and does not bump the version.

@@ -17,11 +17,13 @@ Checks per document:
   3. metric.id is registered in schema/metrics.v1.json
   4. metric.unit equals the registry unit for that id
   5. cache_state is one the registry allows for that metric
-  6. statistics.valid_samples equals the number of samples with valid=true
-  7. statistics.median recomputes from the valid samples (numeric metrics)
+  6. sample-mode statistics.valid_samples/median reconcile to valid samples
+  7. block-corpus statistics reconcile to valid blocks/pooled observations
+  8. every v3 raw sidecar exists under the repo root and matches bytes + SHA-256
 
 Exit 0 = all pass. Exit 2 = at least one failed. Exit 3 = usage/setup error.
 """
+import hashlib
 import json
 import os
 import sys
@@ -125,7 +127,9 @@ def main(argv):
 
         for err in sorted(validator.iter_errors(doc), key=lambda e: list(e.path)):
             problems.append(f"schema: {list(err.path)}: {err.message}")
-        problems.extend(f"semantic: {problem}" for problem in semantic_problems(doc))
+        problems.extend(
+            f"semantic: {problem}" for problem in semantic_problems(doc, registry)
+        )
 
         metric_value = doc.get('metric', {})
         metric = metric_value if isinstance(metric_value, dict) else {}
@@ -144,22 +148,79 @@ def main(argv):
 
         arms_value = doc.get('arms', [])
         arms = arms_value if isinstance(arms_value, list) else []
+        root_real = os.path.realpath(root)
         for arm in arms:
             if not isinstance(arm, dict):
                 continue
             aid = arm.get('arm_id', '?')
-            samples = arm.get('samples', [])
             stats = arm.get('statistics', {})
-            samples = samples if isinstance(samples, list) else []
             stats = stats if isinstance(stats, dict) else {}
+            corpus = arm.get('corpus')
+            if isinstance(corpus, dict):
+                blocks = corpus.get('blocks', [])
+                blocks = [block for block in blocks if isinstance(block, dict)]
+                valid_blocks = [block for block in blocks if block.get('valid') is True]
+                if stats.get('valid_samples') != len(valid_blocks):
+                    problems.append(
+                        f"arm {aid}: statistics.valid_samples={stats.get('valid_samples')} "
+                        f"but {len(valid_blocks)} corpus blocks have valid=true")
+                observations = sum(
+                    block.get('observations', 0)
+                    for block in valid_blocks
+                    if isinstance(block.get('observations'), int)
+                    and not isinstance(block.get('observations'), bool)
+                )
+                if stats.get('observations') != observations:
+                    problems.append(
+                        f"arm {aid}: statistics.observations={stats.get('observations')} "
+                        f"but valid corpus blocks sum to {observations}")
+                for block in valid_blocks:
+                    raw_ref = block.get('raw_file')
+                    if not isinstance(raw_ref, dict):
+                        continue
+                    relative = raw_ref.get('path')
+                    if not isinstance(relative, str):
+                        continue
+                    absolute = os.path.realpath(os.path.join(root_real, relative))
+                    try:
+                        inside = os.path.commonpath([root_real, absolute]) == root_real
+                    except ValueError:
+                        inside = False
+                    if not inside:
+                        problems.append(
+                            f"arm {aid}: raw sidecar path escapes repo root: {relative!r}")
+                        continue
+                    if not os.path.isfile(absolute):
+                        problems.append(
+                            f"arm {aid}: raw sidecar does not exist: {relative}")
+                        continue
+                    actual_bytes = os.path.getsize(absolute)
+                    if raw_ref.get('bytes') != actual_bytes:
+                        problems.append(
+                            f"arm {aid}: raw sidecar bytes mismatch for {relative}: "
+                            f"document={raw_ref.get('bytes')} actual={actual_bytes}")
+                    digest = hashlib.sha256()
+                    with open(absolute, 'rb') as raw_file:
+                        for chunk in iter(lambda: raw_file.read(1024 * 1024), b''):
+                            digest.update(chunk)
+                    actual_sha = digest.hexdigest()
+                    if raw_ref.get('sha256', '').lower() != actual_sha:
+                        problems.append(
+                            f"arm {aid}: raw sidecar sha256 mismatch for {relative}: "
+                            f"document={raw_ref.get('sha256')} actual={actual_sha}")
+                continue
+
+            samples = arm.get('samples', [])
+            samples = samples if isinstance(samples, list) else []
             samples = [sample for sample in samples if isinstance(sample, dict)]
-            valid = [s for s in samples if s.get('valid')]
+            valid = [sample for sample in samples if sample.get('valid')]
             if stats.get('valid_samples') != len(valid):
                 problems.append(
                     f"arm {aid}: statistics.valid_samples={stats.get('valid_samples')} "
                     f"but {len(valid)} samples have valid=true")
-            nums = [s['value'] for s in valid
-                    if isinstance(s.get('value'), (int, float)) and not isinstance(s.get('value'), bool)]
+            nums = [sample['value'] for sample in valid
+                    if isinstance(sample.get('value'), (int, float))
+                    and not isinstance(sample.get('value'), bool)]
             median_value = stats.get('median')
             numeric_median = (
                 isinstance(median_value, (int, float))

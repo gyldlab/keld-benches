@@ -36,6 +36,7 @@ class RouteTests(unittest.TestCase):
     def test_contract_exact_routes(self) -> None:
         for path in (
             "schema/result.v2.schema.json",
+            "schema/result.v3.schema.json",
             "windows/bench/validate_result_v1.py",
             "windows/bench/test_validate_result_v1.py",
         ):
@@ -46,6 +47,8 @@ class RouteTests(unittest.TestCase):
         for path in (
             "linux/bench/run.py",
             "linux/bench/thermal.py",
+            "linux/bench/block_result.py",
+            "linux/bench/test_block_result.py",
             "linux/bench/test_harness.py",
             "linux/keld/kipc-bun-echo/campaign.py",
             "linux/keld/kipc-bun-echo/paired_campaign.py",

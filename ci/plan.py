@@ -180,6 +180,8 @@ def routes_for_path(path: str) -> set[str] | None:
         "linux/bench/harness.py",
         "linux/bench/run.py",
         "linux/bench/thermal.py",
+        "linux/bench/block_result.py",
+        "linux/bench/test_block_result.py",
         "linux/bench/test_harness.py",
         "linux/keld/kipc-bun-echo/campaign.py",
         "linux/keld/kipc-bun-echo/paired_campaign.py",

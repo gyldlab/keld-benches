@@ -85,9 +85,11 @@ Raw documents are intentionally emitted as compact JSON. This retains every
 individual timing sample while avoiding one Git diff line per call. Compact
 format does not change the data or the statistical unit.
 
-The existing result-v2 schema does not model this independent-session
-library-arm corpus. These raw documents therefore remain diagnostic sidecars;
-they do not become publication-eligible product results.
+The historical standalone Rust corpus predates result v3 and remains immutable
+raw sidecars plus its manifest. Result v3 now models independent-session block
+corpora, so any new standalone campaign can emit a hash-bound v3 summary instead
+of carrying a schema-gap blocker. That does not make this library-floor arm a
+Bun product result or an end-to-end application result.
 
 The historical standalone Rust campaign was operator-orchestrated; there is no
 second committed campaign controller in this fixture. Any future standalone

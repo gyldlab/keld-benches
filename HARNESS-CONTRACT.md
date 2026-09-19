@@ -47,7 +47,8 @@ publication blocker.
 ```
 schema/                          # OS-agnostic: result schema, metric registry, check
   result.v1.schema.json          #   frozen historical document shape
-  result.v2.schema.json          #   current shape with module provenance
+  result.v2.schema.json          #   run-sample shape + module provenance
+  result.v3.schema.json          #   v2 plus hash-bound block/session corpora
   metrics.v1.json                #   the one metric registry (versioned)
   check.py                       #   falsifiable contract check (run: python3 schema/check.py)
   examples/                      #   documents that MUST validate
@@ -150,8 +151,10 @@ least one OS harness; none may regress):
 ## 3. Result document
 
 Every `run` emits one JSON document conforming to the file selected by its
-integer `schema_version`. Current interpreted harnesses emit v2; immutable v1
-documents continue to validate against frozen `schema/result.v1.schema.json`:
+integer `schema_version`. Immutable v1/v2 documents keep their frozen shapes.
+Ordinary run-sample harnesses may continue to emit v2; high-volume metrics whose
+statistical unit is an independent session/block corpus MUST emit v3 rather than
+expanding every observation into `arms[].samples[]`:
 
 - **UTF-8 without BOM.** (Two of four committed pre-contract result files
   carry a PowerShell BOM and are rejected by strict JSON parsers.)
@@ -159,9 +162,21 @@ documents continue to validate against frozen `schema/result.v1.schema.json`:
   one session. Cross-session absolutes are not comparable — the KEL-65 tables
   in `MEASUREMENTS.md` demonstrate ~110 ms of cross-session drift on identical
   binaries.
-- `arms[].samples[]` carries every raw run including rejected ones;
-  `statistics` carries median / p90 / p99 (where sample count supports them)
-  and a bootstrap 95% CI of the median — no normal-distribution assumption.
+- `arms[].samples[]` carries every raw run including rejected ones for ordinary
+  run-sample metrics; `statistics` carries median / p90 / p99 (where sample
+  count supports them) and uncertainty — no normal-distribution assumption.
+- Result v3 adds `arms[].corpus` for metrics such as IPC-RTT whose resampling
+  unit is an independent session block. The result contains one record for every
+  requested block, exact observation counts, immutable raw-sidecar path/SHA-256/
+  byte count, an ordered digest chain, block-bootstrap metadata, pooled
+  statistics and named confidence intervals. The 100k per-call vectors remain
+  compact `*.raw.json` sidecars; they are never pretty-printed into millions of
+  Git diff lines. The shared validator verifies every promoted sidecar exists
+  under the repository and matches its recorded hash and size.
+- Registry block-corpus policy is machine enforced. IPC-RTT requires at least
+  20 valid blocks, at least 100,000 scored calls per block, block bootstrap, a
+  numeric p99 and a p99 confidence interval before a v3 document could become
+  publication-eligible. Handshake remains excluded from the scored interval.
 - `comparison` (optional) carries the paired candidate/baseline ratio CI and
   the `PASS | FAIL | INCONCLUSIVE` verdict against the registry's
   `regression_rule.threshold_ratio`. A harness MUST omit comparison when any
@@ -189,10 +204,10 @@ documents continue to validate against frozen `schema/result.v1.schema.json`:
   documents remain unchanged.
 - `provenance.harness` names and hashes the entry point; interpreted harnesses
   also list and hash every imported measurement module in `modules`.
-- Publication policy v2 makes that interpreted-module list mandatory before
-  `eligible: true`. Immutable policy-v1 documents remain schema-valid; new or
-  re-emitted interpreted-harness results use v2 and fail closed when module
-  provenance is incomplete.
+- Publication policy v2 makes interpreted-module provenance mandatory before
+  `eligible: true`. Policy v3 additionally requires v3 block-corpus/registry
+  consistency for block-sampled metrics. Existing policy-v1/v2 documents remain
+  immutable and schema-valid; a new v3 schema is used instead of editing them.
 
 Validate any document with:
 

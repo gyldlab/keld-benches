@@ -1,0 +1,172 @@
+{
+  "schema_version": 3,
+  "metric": {
+    "id": "IPC-RTT",
+    "unit": "us",
+    "registry_version": 1,
+    "parameters": {
+      "payload_tier": "small",
+      "payload_bytes": 6,
+      "handshake_included": false
+    }
+  },
+  "cache_state": "fresh-process",
+  "session": {
+    "started_utc": "2026-09-19T12:00:00Z",
+    "finished_utc": "2026-09-19T12:00:10Z",
+    "requested_samples": 2,
+    "interleaving": "none",
+    "label": "ipc-block-corpus-example",
+    "notes": "Synthetic two-block diagnostic demonstrating result.v3 corpus shape. It is intentionally below the IPC publication sample policy."
+  },
+  "environment": {
+    "os": {
+      "name": "linux",
+      "version": "Ubuntu 26.04.1 LTS",
+      "build": "7.0.0-30-generic"
+    },
+    "hardware": {
+      "cpu": "Example CPU",
+      "arch": "x86_64",
+      "ram_bytes": 34359738368,
+      "machine_label": "linux-example"
+    },
+    "power": {
+      "ac_power": true,
+      "low_power_mode": false,
+      "thermal_state": "nominal"
+    },
+    "toolchains": [
+      {
+        "name": "bun",
+        "version": "1.4.2"
+      }
+    ]
+  },
+  "provenance": {
+    "bench_sha": "0000000000000000000000000000000000000000",
+    "bench_tree_state": "clean",
+    "keld_sha": "1111111111111111111111111111111111111111",
+    "harness": {
+      "path": "linux/bench/run.py",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "version": "3.0.0",
+      "modules": [
+        {
+          "path": "linux/bench/run.py",
+          "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        {
+          "path": "linux/bench/harness.py",
+          "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+        },
+        {
+          "path": "linux/bench/thermal.py",
+          "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+        }
+      ]
+    },
+    "fixtures": [
+      {
+        "path": "linux/keld/kipc-bun-echo",
+        "sha": "0000000000000000000000000000000000000000"
+      }
+    ]
+  },
+  "arms": [
+    {
+      "arm_id": "bun-product-client",
+      "framework": {
+        "name": "Keld Bun AppLinkSession",
+        "version": "0ea0780"
+      },
+      "fixture_path": "linux/keld/kipc-bun-echo",
+      "lane": "kipc-authenticated",
+      "role": "diagnostic",
+      "corpus": {
+        "block_unit": "independent-session",
+        "blocks": [
+          {
+            "block": 1,
+            "valid": true,
+            "observations": 100000,
+            "raw_file": {
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.example-small.s01.raw.json",
+              "sha256": "89a1a98e709fa672374b463bbd8d5946ff4f530c5e65be07bf17ef8473ec96e9",
+              "bytes": 500000
+            },
+            "reject_reason": null
+          },
+          {
+            "block": 2,
+            "valid": true,
+            "observations": 100000,
+            "raw_file": {
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.example-small.s02.raw.json",
+              "sha256": "2453695514ac2ba4f06e40a20e20cbc76b7a6c6d9a438c4a30e2acea3be39f57",
+              "bytes": 500100
+            },
+            "reject_reason": null
+          }
+        ],
+        "digest_chain_sha256": "07a6e59e6d2aa8603fbe6f3549762200ba3748ae0f2bb25f4d4b422a908bfc63",
+        "bootstrap": {
+          "unit": "block",
+          "resamples": 2000,
+          "method": "whole-session block bootstrap",
+          "seed": 20260919,
+          "rng": "Python random.Random (MT19937)"
+        }
+      },
+      "statistics": {
+        "valid_samples": 2,
+        "observations": 200000,
+        "median": 14.2,
+        "p90": 19.0,
+        "p99": 27.5,
+        "max": 120.0,
+        "confidence_intervals": {
+          "median": {
+            "lower": 13.9,
+            "upper": 14.5,
+            "resamples": 2000,
+            "method": "whole-session block bootstrap"
+          },
+          "p99": {
+            "lower": 26.7,
+            "upper": 28.4,
+            "resamples": 2000,
+            "method": "whole-session block bootstrap"
+          }
+        }
+      },
+      "artifacts": [
+        {
+          "role": "runner",
+          "sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "basename": "kel90-linux-bun-kipc-runner",
+          "version": "0ea0780"
+        },
+        {
+          "role": "bun-runtime",
+          "sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+          "basename": "bun",
+          "version": "1.4.2+744846f84"
+        }
+      ]
+    }
+  ],
+  "publication": {
+    "policy_version": 3,
+    "requested": false,
+    "eligible": false,
+    "reasons": [
+      {
+        "code": "SAMPLES_BELOW_POLICY"
+      },
+      {
+        "code": "NO_SAME_SESSION_PAIRED_RUST_ARM"
+      }
+    ]
+  }
+}

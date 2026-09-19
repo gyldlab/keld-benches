@@ -81,9 +81,12 @@ sample is still a fresh process using the same fixture/project, and each warm
 Bun process performs 1,000 untimed authenticated echoes before the 100,000
 timed calls, matching the KEL-99 warm mode.
 
-The campaign writes raw documents and a manifest outside the repository first.
-Only a fully validated campaign is copied under `linux/bench/results/ipc-rtt/`
-as immutable evidence.
+The campaign writes raw documents, its legacy audit manifest, and two
+`schema_version: 3` result documents (small and representative payload tiers)
+outside the repository first. Result v3 keeps the 100k timing vectors in compact
+raw sidecars and records a complete 20-block hash/size ledger plus block-bootstrap
+p99 uncertainty. Only a fully validated campaign is copied under
+`linux/bench/results/ipc-rtt/` as immutable evidence.
 
 ### Thermal boundary
 
@@ -137,9 +140,13 @@ or, for the registered warm-cache treatment:
     python3 paired_campaign.py       --cache-state warm-cache       --out-dir /absolute/path/outside-the-repository
 
 The campaign executes both arms' fail-closed controls and pilots before the
-20-round campaign, then writes compact raw documents plus one manifest outside
-the repository. Only a fully validated corpus is eligible to be copied into
-linux/bench/results/ipc-rtt/ as immutable diagnostic evidence. The same shared
+20-round campaign, then writes compact raw documents, the legacy audit manifest,
+and one result-v3 document per payload tier outside the repository. Each v3 arm
+uses `paired-session-round` blocks; paired p50/p99 ratio and delta uncertainty is
+recorded as diagnostic comparisons with no scoreboard PASS/FAIL verdict because
+the Bun product-client slice and Rust library floor intentionally have different
+scopes. Only a fully validated corpus is eligible to be copied into
+`linux/bench/results/ipc-rtt/` as immutable diagnostic evidence. The same shared
 Linux thermal oracle wraps only the scored 20-round paired campaign; build,
 controls, priming, pilots, and paired bootstrap analysis remain outside the
 thermal session.

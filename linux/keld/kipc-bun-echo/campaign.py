@@ -34,8 +34,18 @@ from thermal import (  # noqa: E402
     thermal_publication_reason,
     thermal_state_from_boundaries,
 )
+from block_result import (  # noqa: E402
+    block_bootstrap_metadata,
+    ipc_arm,
+    ipc_result_document,
+    linux_ipc_environment,
+    ns_to_us,
+    validate_v3_shape,
+)
 
 THERMAL_MODULE = BENCH_DIR / "thermal.py"
+BLOCK_RESULT_MODULE = BENCH_DIR / "block_result.py"
+REGISTRY_PATH = REPO / "schema" / "metrics.v1.json"
 RUNNER = ROOT / "target/release/kel90-linux-bun-kipc-runner"
 PRODUCT_HASHES = {
     "src/kipc.ts": "fb979d377fadfd2a9058dadf087f837444f17adc59c09acbe2daf24db0596e32",
@@ -177,6 +187,7 @@ def tier_statistics(documents: list[dict]) -> dict:
         "max_ns": pooled[-1],
         "bootstrap_ci95_p50_ns": block_bootstrap_ci(sessions, 0.50),
         "bootstrap_ci95_p99_ns": block_bootstrap_ci(sessions, 0.99),
+        "bootstrap_resamples": BOOTSTRAP_RESAMPLES,
         "handshake_ns": {
             "min": handshakes[0],
             "median": (handshakes[9] + handshakes[10]) / 2,
@@ -201,7 +212,6 @@ def publication_reasons_for_thermal(thermal_state: str, *, paired: bool) -> list
     thermal_reason = thermal_publication_reason(thermal_state)
     if thermal_reason is not None:
         reasons.append(thermal_reason)
-    reasons.append("RESULT_V2_SESSION_BLOCK_SCHEMA_GAP")
     reasons.append(
         "PRODUCT_CLIENT_VS_LIBRARY_FLOOR_DIAGNOSTIC"
         if paired
@@ -250,6 +260,139 @@ def environment_metadata(
         "bun_version": checked(["bun", "--version"]),
         "bun_revision": checked(["bun", "--revision"]),
     }
+def registry_version() -> int:
+    registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    version = registry.get("registry_version")
+    if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+        raise RuntimeError("metrics registry has no valid registry_version")
+    return version
+
+
+def measured_bun_artifacts(environment: dict) -> list[dict]:
+    bun_command = shutil.which("bun")
+    if bun_command is None:
+        raise RuntimeError("bun not found while recording measured artifact provenance")
+    bun_path = Path(bun_command).resolve()
+    if not bun_path.is_file():
+        raise RuntimeError(f"bun executable is not a regular file: {bun_path}")
+    revision = str(environment.get("bun_revision", "unknown"))
+    version = str(environment.get("bun_version", "unknown"))
+    return [
+        {
+            "role": "host-runner",
+            "sha256": sha256(RUNNER),
+            "basename": RUNNER.name,
+            "version": KELD_SHA[:12],
+        },
+        {
+            "role": "bun-runtime",
+            "sha256": sha256(bun_path),
+            "basename": bun_path.name,
+            "version": f"{version}+{revision[:9]}",
+        },
+    ]
+
+
+def write_v3_results(
+    *,
+    out_dir: Path,
+    date: str,
+    cache_state: str,
+    bench_sha: str,
+    started_utc: str,
+    finished_utc: str,
+    environment_metadata_value: dict,
+    thermal_evidence: str,
+    raw_files: list[dict],
+    tiers: dict,
+) -> list[Path]:
+    environment = linux_ipc_environment(environment_metadata_value)
+    bootstrap_method = (
+        "sample 20 whole session blocks with replacement; pool selected blocks; "
+        "recompute nearest-rank percentile"
+    )
+    bootstrap = block_bootstrap_metadata(
+        resamples=BOOTSTRAP_RESAMPLES,
+        method=bootstrap_method,
+        seed=BOOTSTRAP_SEED,
+        rng="Python random.Random (MT19937)",
+    )
+    modules = [
+        {
+            "path": "linux/keld/kipc-bun-echo/campaign.py",
+            "sha256": sha256(Path(__file__)),
+        },
+        {
+            "path": "linux/bench/thermal.py",
+            "sha256": sha256(THERMAL_MODULE),
+        },
+        {
+            "path": "linux/bench/block_result.py",
+            "sha256": sha256(BLOCK_RESULT_MODULE),
+        },
+    ]
+    fixtures = [{"path": "linux/keld/kipc-bun-echo", "sha": bench_sha}]
+    artifacts = measured_bun_artifacts(environment_metadata_value)
+    publication_codes = publication_reasons_for_thermal(
+        str(environment_metadata_value.get("thermal_state", "unverified")), paired=False
+    )
+    result_paths: list[Path] = []
+    for tier in ("small", "representative"):
+        payload_bytes = 6 if tier == "small" else 1024
+        arm = ipc_arm(
+            arm_id="bun-product-client",
+            framework={
+                "name": "Keld shipping Bun AppLinkSession + HostOwnedHelloSession",
+                "version": KELD_SHA[:12],
+            },
+            fixture_path="linux/keld/kipc-bun-echo",
+            lane="kipc-authenticated",
+            role="diagnostic",
+            artifacts=artifacts,
+            raw_files=raw_files,
+            tier=tier,
+            block_unit="independent-session",
+            observations_per_block=CALLS,
+            bootstrap=bootstrap,
+            stats_ns=tiers[tier],
+            bootstrap_method=bootstrap_method,
+        )
+        document = ipc_result_document(
+            metric_registry_version=registry_version(),
+            cache_state=cache_state,
+            started_utc=started_utc,
+            finished_utc=finished_utc,
+            requested_blocks=SESSIONS,
+            interleaving="none",
+            label=f"kel90-linux-bun-product-client-{tier}",
+            notes=(
+                "Shipping Bun AppLinkSession + HostOwnedHelloSession persistent authenticated "
+                f"IPC-RTT for the {tier} payload tier ({payload_bytes} encoded bytes). "
+                "Handshake is excluded from scored deltas and remains separately recorded in "
+                "the hash-bound raw sidecars. This arm excludes window/renderer latency and "
+                f"full keld-dev startup. Thermal evidence: {thermal_evidence}."
+            ),
+            payload_tier=tier,
+            payload_bytes=payload_bytes,
+            environment=environment,
+            bench_sha=bench_sha,
+            keld_sha=KELD_SHA,
+            harness_path="linux/keld/kipc-bun-echo/campaign.py",
+            harness_sha256=sha256(Path(__file__)),
+            harness_modules=modules,
+            fixtures=fixtures,
+            arms=[arm],
+            publication_codes=publication_codes,
+        )
+        validate_v3_shape(document, REPO)
+        result_path = out_dir / (
+            f"{date}.kel90-linux-bun-product-client-{tier}.{cache_state}.json"
+        )
+        result_path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n")
+        result_paths.append(result_path)
+    return result_paths
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out-dir", required=True, type=Path)
@@ -336,6 +479,8 @@ def main() -> int:
                     "path": f"{RESULT_PREFIX}/{name}",
                     "sha256": sha256(path),
                     "bytes": path.stat().st_size,
+                    "block": session,
+                    "tier": tier,
                 }
             )
         print(f"completed Bun session pair {session:02d}", flush=True)
@@ -354,6 +499,20 @@ def main() -> int:
         stats = tier_statistics(documents[tier])
         stats["payload_bytes"] = 6 if tier == "small" else 1024
         tiers[tier] = stats
+
+    environment_receipt = environment_metadata(thermal_state, thermal_evidence)
+    result_paths = write_v3_results(
+        out_dir=out_dir,
+        date=date,
+        cache_state=args.cache_state,
+        bench_sha=bench_sha,
+        started_utc=started_utc,
+        finished_utc=finished_utc,
+        environment_metadata_value=environment_receipt,
+        thermal_evidence=thermal_evidence,
+        raw_files=raw_files,
+        tiers=tiers,
+    )
 
     manifest = {
         "format": "kel90-linux-bun-ipc-rtt-campaign/v1",
@@ -376,12 +535,13 @@ def main() -> int:
             "runner_artifact_sha256": sha256(RUNNER),
             "campaign_sha256": sha256(Path(__file__)),
             "thermal_probe_sha256": sha256(THERMAL_MODULE),
+            "block_result_sha256": sha256(BLOCK_RESULT_MODULE),
             "main_ts_sha256": sha256(ROOT / "src/main.ts"),
             "runner_rs_sha256": sha256(ROOT / "src/runner.rs"),
             "product_client_sources": PRODUCT_HASHES,
             "raw_corpus_digest_chain_sha256": digest_chain,
         },
-        "environment": environment_metadata(thermal_state, thermal_evidence),
+        "environment": environment_receipt,
         "statistics_method": {
             "percentile": "nearest-rank ceil(p*n), one-indexed",
             "bootstrap": "sample 20 whole session blocks with replacement; pool selected blocks; recompute nearest-rank percentile",
@@ -410,7 +570,16 @@ def main() -> int:
         f"{date}.kel90-linux-bun-product-client.{args.cache_state}.manifest.raw.json"
     )
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
-    print(json.dumps({"manifest": str(manifest_path), "tiers": tiers}, indent=2))
+    print(
+        json.dumps(
+            {
+                "manifest": str(manifest_path),
+                "results_v3": [str(path) for path in result_paths],
+                "tiers": tiers,
+            },
+            indent=2,
+        )
+    )
     return 0
 
 
