@@ -1,0 +1,701 @@
+{
+  "arms": [
+    {
+      "arm_id": "rust-library-floor",
+      "artifacts": [
+        {
+          "basename": "kel90-linux-echo-client",
+          "role": "rust-client",
+          "sha256": "f709d99c9a148c447ab2b9fae651679f86612b7313572f56c0f856602ce66f57",
+          "version": "0ea0780bb574"
+        },
+        {
+          "basename": "kel90-linux-echo-server",
+          "role": "rust-server",
+          "sha256": "f51f4c8293093a2b34eb6f55731f37a665b1442cff9c76521fcf3666aa075a18",
+          "version": "0ea0780bb574"
+        }
+      ],
+      "corpus": {
+        "block_unit": "paired-session-round",
+        "blocks": [
+          {
+            "block": 1,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 507211,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r01.raw.json",
+              "sha256": "66120d356c26c31bb2f342fd590cc490dbd3237f097b946cdb1b8a0704534d3f"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 2,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 503008,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r02.raw.json",
+              "sha256": "9a9272813084f740403b01923f714a3df7f3003d0f2f3d44217b2cd5abdb4a6f"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 3,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 504127,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r03.raw.json",
+              "sha256": "34ba899809865ec5d2bddfe2f19b10284a1fd3d1b9200780bb315e0ccf3c6897"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 4,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 504302,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r04.raw.json",
+              "sha256": "b560909555cec32a4fab5c63a7327ceee250875334389c2460c5e66ce0b0d4af"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 5,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 506960,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r05.raw.json",
+              "sha256": "0cb819685aef32fb12265e59e8f51106e1ee503887378c7cdbb5ce23414d6526"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 6,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 506737,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r06.raw.json",
+              "sha256": "d7898c9b236037243feca77b74f3ce2a0823300eafa8ae3cd252c1efa12072e8"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 7,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 504957,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r07.raw.json",
+              "sha256": "3a37e4e7d7d1ee6d6ab5e6ef569f4ad85f55d8c940aab2509109366ed93acacd"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 8,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 505578,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r08.raw.json",
+              "sha256": "bf4c5dfa00896462c2c44d4a1a9a67056e7bcc299ec1734d0384621a2bb23874"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 9,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 504892,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r09.raw.json",
+              "sha256": "307126d9ed2daa3de4cc10fb50b9f034df8086c92d1fc43372d2e378877b75fb"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 10,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 503091,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r10.raw.json",
+              "sha256": "25818f59ea31b74647fcf4d7151d9ce3b88054a70b08f07eb4ee1026cebeca55"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 11,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 502674,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r11.raw.json",
+              "sha256": "d5c51205f17f109e851deab5892e535390d13793a9a26c4337aea5b715a7deff"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 12,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 506166,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r12.raw.json",
+              "sha256": "6493e9ef93c487f919fd1b890c5366478f69384d4bfc3d9d6b313cdefd89878f"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 13,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 505382,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r13.raw.json",
+              "sha256": "ca8419b603a38466df1c4950e07fd436fcfe1fed9b5a644ee8d28b29120fd9ca"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 14,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 505118,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r14.raw.json",
+              "sha256": "6b3e0d687bbf0f7aa1d3137705a001a3e25e94419e2f38f64dab0088e4dcfdcf"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 15,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 505822,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r15.raw.json",
+              "sha256": "e931ac8929e6503aebe7a8f6626f685924f6c68d5dde53cc68287bf5afb9b8d8"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 16,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 506410,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r16.raw.json",
+              "sha256": "e19d9ed02192837c1df0d3a45e2131153b25ae71066bccdeb381b9d5a0f4a8b3"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 17,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 503659,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r17.raw.json",
+              "sha256": "ec455c77b8d97b15067ea37918f2fc5b9823f856ae42428ed0d5833277a68e3d"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 18,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 503890,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r18.raw.json",
+              "sha256": "5ede6e620581cafbb4d8558200f63eb07d7870b77482a3f8fa92359fc5c09cbe"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 19,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 503206,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r19.raw.json",
+              "sha256": "ae5c856c6a59138b52c30772e611f604c4f9310541aa1f044e1214293e8d38c0"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 20,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 504251,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-rust-100k-representative.fresh-process.r20.raw.json",
+              "sha256": "c6fe14af6136db98233e1dd70c04e715b7cbf271896390ee82674f92be6851c4"
+            },
+            "reject_reason": null,
+            "valid": true
+          }
+        ],
+        "bootstrap": {
+          "method": "sample 20 whole session blocks with replacement; pool selected blocks; recompute nearest-rank percentile",
+          "resamples": 2000,
+          "rng": "Python random.Random (MT19937)",
+          "seed": 20260919,
+          "unit": "block"
+        },
+        "digest_chain_sha256": "2726195d5948eba43000acbbaeea8fffd45b00269c3629bf57ebf8aeb0d86237"
+      },
+      "fixture_path": "linux/keld/kipc-rust-echo",
+      "framework": {
+        "name": "Keld keld-ipc Rust library floor",
+        "version": "0ea0780bb574"
+      },
+      "lane": "kipc-authenticated",
+      "role": "diagnostic",
+      "statistics": {
+        "confidence_intervals": {
+          "median": {
+            "lower": 8.032,
+            "method": "sample 20 whole session blocks with replacement; pool selected blocks; recompute nearest-rank percentile",
+            "resamples": 2000,
+            "upper": 8.118
+          },
+          "p99": {
+            "lower": 12.539,
+            "method": "sample 20 whole session blocks with replacement; pool selected blocks; recompute nearest-rank percentile",
+            "resamples": 2000,
+            "upper": 13.06
+          }
+        },
+        "max": 1006.077,
+        "median": 8.073,
+        "observations": 2000000,
+        "p90": 9.592,
+        "p99": 12.842,
+        "valid_samples": 20
+      }
+    },
+    {
+      "arm_id": "bun-product-client",
+      "artifacts": [
+        {
+          "basename": "kel90-linux-bun-kipc-runner",
+          "role": "host-runner",
+          "sha256": "7fe5ec545498d465cdbec30400593d263806619c70953579fee6c48f197cc8dd",
+          "version": "0ea0780bb574"
+        },
+        {
+          "basename": "bun",
+          "role": "bun-runtime",
+          "sha256": "a83d263767d839e4d2649ca8e35d07159c7afc99afdc96d731ced29e056dda0c",
+          "version": "1.4.2+1.4.2+744"
+        }
+      ],
+      "corpus": {
+        "block_unit": "paired-session-round",
+        "blocks": [
+          {
+            "block": 1,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600826,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r01.raw.json",
+              "sha256": "ed2295e2649c946791ffd40e8bf14257b57074a497da797b62f690074b189971"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 2,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600841,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r02.raw.json",
+              "sha256": "520ee4cf0fcd259b2ad2cab18236e2051c7d5786d530f1c53dc5896e3a249dbf"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 3,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600816,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r03.raw.json",
+              "sha256": "3e17d97fed8588fde517f8fc13c82e2956656b8630db249c6e2f92f2bfee8938"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 4,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600820,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r04.raw.json",
+              "sha256": "4a007f38f61ad6cfe2fb4ca32a739257f201059056aa25dc791a7572527ad86a"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 5,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600831,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r05.raw.json",
+              "sha256": "c12ecb34aa35b1257a7a04872d52ddff7e74cbf7a992109b21dc31a936bf5e0e"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 6,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600833,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r06.raw.json",
+              "sha256": "da2b0b65e466eb9b7c88aa88aab901b47aae77cd484ff5a2bf559fce646be08f"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 7,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600810,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r07.raw.json",
+              "sha256": "20f021a5af0aaf5f347dc8249ede1ac07fdd729f02f05a891f42965afdc28551"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 8,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600839,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r08.raw.json",
+              "sha256": "f972ad4827a4aad508de0646a6e3d6947959669d864cfc49766a3ff2f51f0eeb"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 9,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600810,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r09.raw.json",
+              "sha256": "0d56eeaaac215525f2d991ae0c6796851d8671369e247a237a3cf3fe6b924bb1"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 10,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600814,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r10.raw.json",
+              "sha256": "c8643098a3dffe184a148ff927d32500061c488d9cad9804cfbcef85f940afef"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 11,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600812,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r11.raw.json",
+              "sha256": "26a0c85d2110d50d12bebcd0cd83f4b738006e47f23332ba2bf861ef5b9a1a1c"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 12,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600816,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r12.raw.json",
+              "sha256": "0f4a921036dd08f4017e22038afcf1cba3fa47f68953f123e9efcd3a440a0068"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 13,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600817,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r13.raw.json",
+              "sha256": "8de945ebebadd16c5237bed52d7a11845000add58682e5577465d1421b3ab8b5"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 14,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600821,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r14.raw.json",
+              "sha256": "149c397cea42894bb596a56f82cc419f9e16672ab22ac2a77c1a275356be9a36"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 15,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600819,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r15.raw.json",
+              "sha256": "e0282bde596c9629b2fa8f34a015ff2cfd7922f8962810ab50758c892ba998a6"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 16,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600809,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r16.raw.json",
+              "sha256": "e5e8273fe39d16f3624b4744893e71e892f65ef44f2f8bc144c4cad28b12205b"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 17,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600829,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r17.raw.json",
+              "sha256": "4d0cf2da9a8ccd3ade6019f1d1c4bdbacb697d2c889ac51beba9a0ec1fd16228"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 18,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600824,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r18.raw.json",
+              "sha256": "7301a4a62f44447575339352f9157fee481ca2bd8dcd6d3715bc8c26989f3c54"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 19,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600827,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r19.raw.json",
+              "sha256": "87fccd1327c1aa4bb217ce5eaafb717faa84311397c583bb8425daf832a5fdfc"
+            },
+            "reject_reason": null,
+            "valid": true
+          },
+          {
+            "block": 20,
+            "observations": 100000,
+            "raw_file": {
+              "bytes": 600826,
+              "path": "linux/bench/results/ipc-rtt/2026-09-19.kel90-linux-paired-bun-100k-representative.fresh-process.r20.raw.json",
+              "sha256": "1e96cef44801b48f0b5d3c5e7286efbb7578b6a8dab5b4bdf28071fda6e6d7a0"
+            },
+            "reject_reason": null,
+            "valid": true
+          }
+        ],
+        "bootstrap": {
+          "method": "sample 20 whole session blocks with replacement; pool selected blocks; recompute nearest-rank percentile",
+          "resamples": 2000,
+          "rng": "Python random.Random (MT19937)",
+          "seed": 20260919,
+          "unit": "block"
+        },
+        "digest_chain_sha256": "6585d0e6a2d36aceed1f86670e7460c3e0a1360d7be81f7f340290aa2fd0fb50"
+      },
+      "fixture_path": "linux/keld/kipc-bun-echo",
+      "framework": {
+        "name": "Keld shipping Bun AppLinkSession + HostOwnedHelloSession",
+        "version": "0ea0780bb574"
+      },
+      "lane": "kipc-authenticated",
+      "role": "diagnostic",
+      "statistics": {
+        "confidence_intervals": {
+          "median": {
+            "lower": 18.88,
+            "method": "sample 20 whole session blocks with replacement; pool selected blocks; recompute nearest-rank percentile",
+            "resamples": 2000,
+            "upper": 19.293
+          },
+          "p99": {
+            "lower": 35.232,
+            "method": "sample 20 whole session blocks with replacement; pool selected blocks; recompute nearest-rank percentile",
+            "resamples": 2000,
+            "upper": 36.579
+          }
+        },
+        "max": 3045.407,
+        "median": 19.09,
+        "observations": 2000000,
+        "p90": 25.744,
+        "p99": 35.9,
+        "valid_samples": 20
+      }
+    }
+  ],
+  "cache_state": "fresh-process",
+  "diagnostic_comparisons": [
+    {
+      "baseline_arm": "rust-library-floor",
+      "candidate_arm": "bun-product-client",
+      "central_delta": 11.017,
+      "central_ratio": 2.364672,
+      "delta_ci95": {
+        "lower": 10.79,
+        "upper": 11.231
+      },
+      "method": "paired session-block bootstrap; resample identical round indices for Rust and Bun before recomputing the percentile ratio/delta",
+      "notes": "Diagnostic product-client-versus-library-floor estimate; not a pure Bun language/runtime tax and not a scoreboard regression verdict.",
+      "ratio_ci95": {
+        "lower": 2.332348,
+        "upper": 2.393544
+      },
+      "statistic": "median"
+    },
+    {
+      "baseline_arm": "rust-library-floor",
+      "candidate_arm": "bun-product-client",
+      "central_delta": 23.058,
+      "central_ratio": 2.795515,
+      "delta_ci95": {
+        "lower": 22.313,
+        "upper": 23.842
+      },
+      "method": "paired session-block bootstrap; resample identical round indices for Rust and Bun before recomputing the percentile ratio/delta",
+      "notes": "Diagnostic product-client-versus-library-floor estimate; not a pure Bun language/runtime tax and not a scoreboard regression verdict.",
+      "ratio_ci95": {
+        "lower": 2.717539,
+        "upper": 2.88539
+      },
+      "statistic": "p99"
+    }
+  ],
+  "environment": {
+    "hardware": {
+      "arch": "x86_64",
+      "cpu": "Intel(R) Core(TM) i5-10500H CPU @ 2.50GHz",
+      "ram_bytes": 24558964736
+    },
+    "os": {
+      "build": "7.0.0-31-generic",
+      "name": "linux",
+      "version": "Ubuntu 26.04.1 LTS"
+    },
+    "power": {
+      "ac_power": true,
+      "low_power_mode": false,
+      "thermal_state": "nominal"
+    },
+    "toolchains": [
+      {
+        "name": "rustc",
+        "version": "rustc 1.97.1 (8bab26f4f 2026-07-14)"
+      },
+      {
+        "name": "cargo",
+        "version": "cargo 1.97.1 (c980f4866 2026-06-30)"
+      },
+      {
+        "name": "bun",
+        "version": "1.4.2"
+      },
+      {
+        "name": "bun-revision",
+        "version": "1.4.2+744846f84"
+      }
+    ]
+  },
+  "metric": {
+    "id": "IPC-RTT",
+    "parameters": {
+      "handshake_included": false,
+      "payload_bytes": 1024,
+      "payload_tier": "representative"
+    },
+    "registry_version": 1,
+    "unit": "us"
+  },
+  "provenance": {
+    "bench_sha": "cedca63fafb67d59596d4afacf853e242e5afe19",
+    "bench_tree_state": "clean",
+    "fixtures": [
+      {
+        "path": "linux/keld/kipc-bun-echo",
+        "sha": "cedca63fafb67d59596d4afacf853e242e5afe19"
+      },
+      {
+        "path": "linux/keld/kipc-rust-echo",
+        "sha": "cedca63fafb67d59596d4afacf853e242e5afe19"
+      }
+    ],
+    "harness": {
+      "modules": [
+        {
+          "path": "linux/keld/kipc-bun-echo/paired_campaign.py",
+          "sha256": "d53b2930acec563d41c9183a7dd9a0b5216a22bf3e6a24153b4c35f8f2801140"
+        },
+        {
+          "path": "linux/keld/kipc-bun-echo/campaign.py",
+          "sha256": "947cd7059e16527d6947217607cbfcc1d1cf7af747f57e48a88df2b9e70ca0b7"
+        },
+        {
+          "path": "linux/bench/thermal.py",
+          "sha256": "3f73c84e3663fbf08b31661dadde79489095ce8b50aca1fd8a66882b1e9a423f"
+        },
+        {
+          "path": "linux/bench/block_result.py",
+          "sha256": "c2637c961ec8ea7ce2c4ebe170d78dfa7f99bb4a99995c574634093699ff775c"
+        }
+      ],
+      "path": "linux/keld/kipc-bun-echo/paired_campaign.py",
+      "sha256": "d53b2930acec563d41c9183a7dd9a0b5216a22bf3e6a24153b4c35f8f2801140",
+      "version": "3.0.0"
+    },
+    "keld_sha": "0ea0780bb574ad242e9f1105fa4af5842872bad3"
+  },
+  "publication": {
+    "eligible": false,
+    "policy_version": 3,
+    "reasons": [
+      {
+        "code": "PRODUCT_CLIENT_VS_LIBRARY_FLOOR_DIAGNOSTIC"
+      }
+    ],
+    "requested": false
+  },
+  "schema_version": 3,
+  "session": {
+    "finished_utc": "2026-09-19T15:06:44.520244Z",
+    "interleaving": "round-robin-randomized",
+    "label": "kel90-linux-bun-rust-paired-representative",
+    "notes": "Balanced paired fresh-process IPC-RTT campaign for the representative payload tier (1024 encoded bytes), 20 paired session rounds x 100000 scored calls per arm. Handshake is excluded and retained in each raw sidecar. The ratio compares the shipping Bun product-client slice with the direct Rust library floor; it is not pure Bun runtime overhead. Thermal evidence: thermal-boundary-v1;state=nominal;cpu_counter_advances=0;cpu_start=Package id 0:80000/100000;cpu_end=Package id 0:71000/100000;nvidia_start=gpu0:47C:sw=0:hw=0;nvidia_end=gpu0:47C:sw=0:hw=0.",
+    "requested_samples": 20,
+    "started_utc": "2026-09-19T15:04:43.597492Z"
+  }
+}
