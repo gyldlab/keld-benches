@@ -64,3 +64,36 @@ attempts, and the negative control. Full-desktop ScreenCast frames are never
 retained; only the 320×240 marked-window crop enters the artifact.
 Copy a completed bundle into the private research repository as a new immutable
 artifact; never overwrite an existing run.
+
+## Optional dynamic-compositing / resize stress
+
+The default matrix remains `--stress-mode static` and preserves the historical
+KEL-171 cell semantics. A separate opt-in lane adds bounded compositor churn:
+
+```sh
+python3 linux/webkitgtk/dmabuf-matrix/run_matrix.py \
+  --artifact /absolute/artifact-directory/kel171-webkitgtk-probe \
+  --provenance /absolute/artifact-directory/provenance.json \
+  --keld-artifact-dir /absolute/keld-artifact \
+  --expected-keld-sha KELD_FULL_SHA \
+  --out /absolute/new-stress-evidence-directory \
+  --samples 5 --seed 171 --stress-mode dynamic-resize
+```
+
+For each native cell, the page runs 48 animation frames that continuously
+change transform and opacity while the GTK top-level receives four bounded
+resize requests (360x260, 400x300, 280x210, then 320x240). The receipt fails
+closed unless the final window is 320x240 and the resize/configure evidence is
+present before the snapshot and external compositor oracle are accepted.
+
+For the Keld opaque product cells, the separately committed
+`keld-stress.html` runs the same 48-frame compositor workload before the normal
+focused/visible nonce-bound double-rAF beacon. The controller does **not**
+externally resize the Keld product window, so the manifest labels that arm
+`dynamic-compositing`, not `dynamic-resize`.
+
+The stress launch surface is black. The native transparent cell still becomes
+transparent over the green oracle backdrop by design; that is the
+transparency-correctness control rather than an ordinary launch page. Stress
+evidence is a research correctness artifact only: it does not change Keld's
+production NVIDIA safe-mode predicate and does not create a benchmark score.

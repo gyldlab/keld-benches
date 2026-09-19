@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="keld-bench-origin" content="http://127.0.0.1:__KELD_BENCH_PORT__" />
+    <meta name="keld-bench-nonce" content="__KELD_BENCH_NONCE__" />
+    <title>Keld Linux dynamic compositor stress</title>
+    <style>
+      html,
+      body {
+        width: 100%;
+        min-height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #000;
+        color: #e8eef5;
+        font-family: system-ui, sans-serif;
+      }
+      #marker {
+        position: absolute;
+        left: 16px;
+        top: 16px;
+        width: 64px;
+        height: 64px;
+        background: #ff00aa;
+        will-change: transform, opacity;
+      }
+      #layer {
+        position: absolute;
+        left: 120px;
+        top: 96px;
+        width: 240px;
+        height: 180px;
+        border-radius: 24px;
+        background: linear-gradient(135deg, #00d4ff, #7c3aed);
+        will-change: transform, opacity;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="marker"></div>
+    <div id="layer"></div>
+    <script>
+      "use strict";
+      const origin = "http://127.0.0.1:__KELD_BENCH_PORT__";
+      const nonce = "__KELD_BENCH_NONCE__";
+      const marker = document.getElementById("marker");
+      const layer = document.getElementById("layer");
+      let frame = 0;
+
+      function finish() {
+        marker.style.transform = "none";
+        marker.style.opacity = "1";
+        layer.remove();
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const query = new URLSearchParams({
+              nonce,
+              phase: "double-raf",
+              visibility: document.visibilityState,
+              focus: document.hasFocus() ? "1" : "0",
+            });
+            const beacon = new Image(1, 1);
+            beacon.alt = "";
+            beacon.src = `${origin}/run/${nonce}/paint.gif?${query}`;
+            document.body.appendChild(beacon);
+          });
+        });
+      }
+
+      function stress() {
+        frame += 1;
+        marker.style.transform =
+          `translate3d(${frame % 23}px, ${frame % 17}px, 0) rotate(${frame * 7}deg)`;
+        marker.style.opacity = String(0.55 + (frame % 5) * 0.1);
+        layer.style.transform =
+          `translate3d(${(frame % 19) - 9}px, ${(frame % 13) - 6}px, 0) scale(${
+            1 + (frame % 7) * 0.015
+          })`;
+        layer.style.opacity = String(0.35 + (frame % 6) * 0.08);
+        if (frame < 48) {
+          requestAnimationFrame(stress);
+          return;
+        }
+        finish();
+      }
+
+      requestAnimationFrame(stress);
+    </script>
+  </body>
+</html>
