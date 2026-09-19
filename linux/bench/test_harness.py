@@ -26,6 +26,7 @@ from harness import (
     _verify_tauri_trusted_build,
     KELD_DEV_BEACON_PATH,
     KELD_DEV_PROJECT_PATH,
+    LinuxThermalSnapshot,
     MemorySnapshot,
     MemoryStability,
     OwnedProcess,
@@ -34,6 +35,10 @@ from harness import (
     ROOT,
     _prepare_product_workspace,
     _proc_identity,
+    _cpu_package_temperatures,
+    _cpu_thermal_throttle_counters,
+    _finalize_thermal_environment,
+    _thermal_state_from_boundaries,
     _process_environment_value,
     _product_atspi_bus_address,
     _product_backend_pair_preflight,
@@ -953,6 +958,189 @@ class ProductRunnerTests(unittest.TestCase):
         self.assertNotIn("DIAGNOSTIC_HELLO_ONLY", product)
         self.assertNotIn("BENCHMARK_ADAPTER_ARTIFACT", product)
 
+
+
+class LinuxThermalTests(unittest.TestCase):
+    @staticmethod
+    def snapshot(
+        *,
+        counters: tuple[tuple[str, int], ...] = (
+            ("cpu0/core_throttle_count", 1),
+            ("cpu0/core_throttle_total_time_ms", 5),
+            ("cpu0/package_throttle_count", 68),
+            ("cpu0/package_throttle_total_time_ms", 381),
+        ),
+        packages: tuple[tuple[str, int, int], ...] = (("Package id 0", 70_000, 100_000),),
+        nvidia_detected: bool = True,
+        nvidia_gpus: tuple[tuple[int, int, bool, bool], ...] = ((0, 46, False, False),),
+        errors: tuple[str, ...] = (),
+        sampled_utc: str = "2026-09-19T10:00:00Z",
+    ) -> LinuxThermalSnapshot:
+        return LinuxThermalSnapshot(
+            sampled_utc=sampled_utc,
+            cpu_counters=counters,
+            cpu_packages=packages,
+            nvidia_detected=nvidia_detected,
+            nvidia_gpus=nvidia_gpus,
+            errors=errors,
+        )
+
+    def test_unchanged_throttle_evidence_is_nominal(self) -> None:
+        start = self.snapshot()
+        end = self.snapshot(
+            packages=(("Package id 0", 72_000, 100_000),),
+            nvidia_gpus=((0, 47, False, False),),
+            sampled_utc="2026-09-19T10:01:00Z",
+        )
+        state, evidence = _thermal_state_from_boundaries(start, end)
+        self.assertEqual(state, "nominal")
+        self.assertIn("cpu_counter_advances=0", evidence)
+        self.assertIn("cpu_start=Package id 0:70000/100000", evidence)
+        self.assertIn("nvidia_end=gpu0:47C:sw=0:hw=0", evidence)
+
+    def test_cpu_throttle_counter_advance_is_throttled(self) -> None:
+        start = self.snapshot()
+        end = self.snapshot(
+            counters=(
+                ("cpu0/core_throttle_count", 2),
+                ("cpu0/core_throttle_total_time_ms", 10),
+                ("cpu0/package_throttle_count", 68),
+                ("cpu0/package_throttle_total_time_ms", 381),
+            ),
+            sampled_utc="2026-09-19T10:01:00Z",
+        )
+        state, evidence = _thermal_state_from_boundaries(start, end)
+        self.assertEqual(state, "throttled")
+        self.assertIn("cpu_counter_advances=2", evidence)
+        self.assertIn("cpu0/core_throttle_count:+1", evidence)
+        self.assertIn("cpu0/core_throttle_total_time_ms:+5", evidence)
+
+    def test_critical_temperature_or_nvidia_thermal_slowdown_is_throttled(self) -> None:
+        critical, critical_evidence = _thermal_state_from_boundaries(
+            self.snapshot(),
+            self.snapshot(packages=(("Package id 0", 100_000, 100_000),)),
+        )
+        self.assertEqual(critical, "throttled")
+        self.assertIn("cpu_package_at_or_above_critical:Package id 0", critical_evidence)
+
+        gpu, gpu_evidence = _thermal_state_from_boundaries(
+            self.snapshot(),
+            self.snapshot(nvidia_gpus=((0, 75, True, False),)),
+        )
+        self.assertEqual(gpu, "throttled")
+        self.assertIn("nvidia_sw_thermal_slowdown_active", gpu_evidence)
+
+    def test_missing_reset_or_changed_sensor_topology_is_unverified(self) -> None:
+        missing, missing_evidence = _thermal_state_from_boundaries(
+            self.snapshot(errors=("cpu_package_temperature_unavailable",)),
+            self.snapshot(errors=("cpu_package_temperature_unavailable",)),
+        )
+        self.assertEqual(missing, "unverified")
+        self.assertIn("cpu_package_temperature_unavailable", missing_evidence)
+
+        reset, reset_evidence = _thermal_state_from_boundaries(
+            self.snapshot(),
+            self.snapshot(
+                counters=(
+                    ("cpu0/core_throttle_count", 0),
+                    ("cpu0/core_throttle_total_time_ms", 0),
+                    ("cpu0/package_throttle_count", 68),
+                    ("cpu0/package_throttle_total_time_ms", 381),
+                )
+            ),
+        )
+        self.assertEqual(reset, "unverified")
+        self.assertIn("cpu_thermal_counter_reset:cpu0/core_throttle_count", reset_evidence)
+
+        changed, changed_evidence = _thermal_state_from_boundaries(
+            self.snapshot(),
+            self.snapshot(counters=(("cpu1/core_throttle_count", 1),)),
+        )
+        self.assertEqual(changed, "unverified")
+        self.assertIn("cpu_thermal_counter_set_changed", changed_evidence)
+
+        critical_changed, critical_changed_evidence = _thermal_state_from_boundaries(
+            self.snapshot(),
+            self.snapshot(packages=(("Package id 0", 70_000, 95_000),)),
+        )
+        self.assertEqual(critical_changed, "unverified")
+        self.assertIn("cpu_package_critical_changed:Package id 0", critical_changed_evidence)
+
+    def test_finalize_updates_environment_and_uses_closing_timestamp(self) -> None:
+        start = self.snapshot()
+        end = self.snapshot(sampled_utc="2026-09-19T10:02:00Z")
+        environment = {
+            "power": {
+                "ac_power": True,
+                "low_power_mode": False,
+                "thermal_state": "unverified",
+            }
+        }
+        with mock.patch("harness._linux_thermal_snapshot", return_value=end):
+            evidence, finished = _finalize_thermal_environment(
+                environment, "sysfs-power-supply", start
+            )
+        self.assertEqual(environment["power"]["thermal_state"], "nominal")
+        self.assertEqual(finished, end.sampled_utc)
+        self.assertIn("thermal-boundary-v1;state=nominal", evidence)
+
+    def test_sysfs_parsers_bind_throttle_and_package_critical_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            cpu = root / "cpu" / "cpu0" / "thermal_throttle"
+            cpu.mkdir(parents=True)
+            (cpu / "core_throttle_count").write_text("3\n")
+            (cpu / "core_throttle_total_time_ms").write_text("12\n")
+            (cpu / "package_throttle_count").write_text("4\n")
+            (cpu / "package_throttle_total_time_ms").write_text("20\n")
+            counters = dict(_cpu_thermal_throttle_counters(root / "cpu"))
+            self.assertEqual(counters["cpu0/core_throttle_count"], 3)
+            self.assertEqual(counters["cpu0/package_throttle_total_time_ms"], 20)
+
+            hw = root / "hwmon" / "hwmon0"
+            hw.mkdir(parents=True)
+            (hw / "name").write_text("coretemp\n")
+            (hw / "temp1_label").write_text("Package id 0\n")
+            (hw / "temp1_input").write_text("71000\n")
+            (hw / "temp1_crit").write_text("100000\n")
+            self.assertEqual(
+                _cpu_package_temperatures(root / "hwmon"),
+                (("Package id 0", 71_000, 100_000),),
+            )
+
+    def test_publication_reasons_distinguish_throttled_from_unverified(self) -> None:
+        def codes(state: str) -> set[str]:
+            environment = {
+                "power": {
+                    "ac_power": True,
+                    "low_power_mode": False,
+                    "thermal_state": state,
+                }
+            }
+            return {
+                item["code"]
+                for item in _publication_reasons(
+                    metric_id="PAINT-OPPORTUNITY",
+                    requested_samples=30,
+                    valid_samples=30,
+                    tree_state="clean",
+                    advertised=True,
+                    environment=environment,
+                    recipe_commits=("a" * 40,),
+                    bench_sha="a" * 40,
+                    paired=True,
+                )
+            }
+
+        nominal = codes("nominal")
+        self.assertNotIn("THERMAL_STATE_UNVERIFIED", nominal)
+        self.assertNotIn("THERMAL_THROTTLED", nominal)
+        throttled = codes("throttled")
+        self.assertIn("THERMAL_THROTTLED", throttled)
+        self.assertNotIn("THERMAL_STATE_UNVERIFIED", throttled)
+        unverified = codes("unverified")
+        self.assertIn("THERMAL_STATE_UNVERIFIED", unverified)
+        self.assertNotIn("THERMAL_THROTTLED", unverified)
 
 
 class MemoryStabilityTests(unittest.TestCase):

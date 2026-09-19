@@ -173,6 +173,20 @@ documents continue to validate against frozen `schema/result.v1.schema.json`:
   SHA-256, complete environment block, AC power / Low Power Mode off / nominal
   thermal state, and byte-identical canonical payload across arms
   (`provenance.payload_sha256`).
+- Linux `thermal_state: nominal` is a measured boundary claim, never a guessed
+  temperature band. New Linux sessions snapshot hardware evidence immediately
+  before and after the measured session. When Intel-style sysfs thermal-throttle
+  counters are available, the exact counter set must remain stable and no
+  counter may advance or reset. CPU package-temperature sensors must remain
+  below their hardware-reported critical limits. When the NVIDIA proprietary
+  driver is present, `nvidia-smi` must report both software and hardware thermal
+  slowdown inactive at both boundaries. Any counter advance, critical CPU
+  boundary, or NVIDIA thermal slowdown makes the session `throttled`; missing,
+  unreadable, reset, or changing sensor topology makes it `unverified`. The
+  absolute CPU/GPU temperatures are recorded as context but no arbitrary
+  Celsius cutoff is used. The opening/closing thermal samples own the session
+  timestamps for Linux results using this policy. Historical immutable Linux
+  documents remain unchanged.
 - `provenance.harness` names and hashes the entry point; interpreted harnesses
   also list and hash every imported measurement module in `modules`.
 - Publication policy v2 makes that interpreted-module list mandatory before
