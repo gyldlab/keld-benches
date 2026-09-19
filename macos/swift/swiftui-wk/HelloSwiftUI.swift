@@ -10,7 +10,7 @@ private let helloHTML = """
   <title>Keld</title>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; display: grid;
-           place-items: center; min-height: 100vh; background: #0b0f14; color: #e8eef5; }
+           place-items: center; min-height: 100vh; background: #000; color: #e8eef5; }
     h1 { font-weight: 600; letter-spacing: -0.02em; }
     p { opacity: 0.75; max-width: 32rem; text-align: center; line-height: 1.5; }
   </style>

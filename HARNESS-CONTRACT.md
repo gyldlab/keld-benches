@@ -144,6 +144,8 @@ least one OS harness; none may regress):
   unchanged; the harness applies the black presentation rule only to its
   temporary launch copy and binds that derived renderer in provenance. Historical
   result payloads are immutable and are not rewritten solely for this rule.
+  `python ci/check_launch_theme.py` enforces active launch templates plus the
+  Linux/Windows staged-copy theming paths.
 
 ## 3. Result document
 
