@@ -43,12 +43,14 @@ KELD_DEV_PROJECT_PATH = ROOT / "linux" / "keld" / "dev-hello" / "project"
 KELD_DEV_BEACON_PATH = ROOT / "linux" / "keld" / "dev-hello" / "paint-beacon.js"
 GTK4_FIXTURE_PATH = "linux/gtk4/hello"
 TAURI_FIXTURE_PATH = "linux/tauri/hello"
+ELECTRON_FIXTURE_PATH = "linux/electron/hello"
 FIXTURE_PATH = KELD_FIXTURE_PATH
 SUPPORTED_FIXTURES = (
     KELD_FIXTURE_PATH,
     KELD_DEV_FIXTURE_PATH,
     GTK4_FIXTURE_PATH,
     TAURI_FIXTURE_PATH,
+    ELECTRON_FIXTURE_PATH,
 )
 IMPLEMENTED_METRICS = ("PAINT-OPPORTUNITY", "MEM-IDLE", "DISK")
 SUPPORTED_GUI_STATES = ("fresh-process", "warm-cache")
@@ -2481,6 +2483,160 @@ def _read_tauri_artifact(artifact_dir: pathlib.Path) -> tuple[dict[str, Any], pa
     return provenance, artifact
 
 
+
+def _electron_tree_digest(root: pathlib.Path) -> tuple[str, int, int]:
+    """Digest every byte/name/link in one packaged Electron runtime tree."""
+    if root.is_symlink() or not root.is_dir():
+        raise HarnessError("Electron artifact tree is missing, symlinked, or non-directory")
+    records: list[tuple[str, str, str, int]] = []
+    total_bytes = 0
+    for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            records.append(("L", relative, os.readlink(path), 0))
+        elif path.is_file():
+            size = path.stat().st_size
+            records.append(("F", relative, sha256_file(path), size))
+            total_bytes += size
+        elif path.is_dir():
+            continue
+        else:
+            raise HarnessError(f"Electron artifact has unsupported entry: {relative}")
+    digest = hashlib.sha256()
+    for kind, relative, value, size in records:
+        digest.update(kind.encode())
+        digest.update(b"\0")
+        digest.update(relative.encode())
+        digest.update(b"\0")
+        digest.update(value.encode())
+        digest.update(b"\0")
+        digest.update(str(size).encode())
+        digest.update(b"\n")
+    return digest.hexdigest(), len(records), total_bytes
+
+
+def _trusted_electron_rebuild_tree_sha256(fixture_commit: str) -> str:
+    """Independently rebuild the committed Electron fixture and hash its full tree."""
+    git_environment = {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "LC_ALL": "C",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_NO_REPLACE_OBJECTS": "1",
+        "GIT_OPTIONAL_LOCKS": "0",
+    }
+    with tempfile.TemporaryDirectory(prefix="keld-electron-trusted-rebuild.") as temporary:
+        root = pathlib.Path(temporary)
+        worktree = root / "repo"
+        output = root / "artifact"
+        added = False
+        try:
+            subprocess.run(
+                ["/usr/bin/git", "worktree", "add", "--detach", str(worktree), fixture_commit],
+                cwd=ROOT,
+                env=git_environment,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=60,
+            )
+            added = True
+            build = worktree / ELECTRON_FIXTURE_PATH / "build.sh"
+            subprocess.run(
+                [str(build), str(output)],
+                cwd=worktree / ELECTRON_FIXTURE_PATH,
+                env=os.environ.copy(),
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=900,
+            )
+            runtime = output / "electron-linux-hello"
+            digest, _entries, _bytes = _electron_tree_digest(runtime)
+            return digest
+        except subprocess.TimeoutExpired as error:
+            raise HarnessError("trusted Electron rebuild timed out") from error
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise HarnessError(f"trusted Electron rebuild failed: {error}") from error
+        finally:
+            if added:
+                subprocess.run(
+                    ["/usr/bin/git", "worktree", "remove", "--force", str(worktree)],
+                    cwd=ROOT,
+                    env=git_environment,
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=60,
+                )
+
+
+def _read_electron_artifact(artifact_dir: pathlib.Path) -> tuple[dict[str, Any], pathlib.Path]:
+    provenance_path = artifact_dir / "provenance.json"
+    try:
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise HarnessError(f"could not read Electron artifact provenance: {error}") from error
+    if provenance.get("schema_version") != 1:
+        raise HarnessError("unsupported Electron artifact provenance schema")
+    if provenance.get("fixture_repository") != "github.com/gyldlab/keld-benches":
+        raise HarnessError("Electron artifact provenance names a non-canonical fixture repository")
+    fixture_commit = provenance.get("fixture_commit")
+    if not isinstance(fixture_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", fixture_commit):
+        raise HarnessError("Electron artifact provenance has an invalid fixture_commit")
+    expected_files = {
+        "linux/electron/hello/build.sh",
+        "linux/electron/hello/package.json",
+        "linux/electron/hello/package-lock.json",
+        "linux/electron/hello/src/main.js",
+        "linux/electron/hello/src/index.html",
+    }
+    _verify_committed_file_digests(
+        fixture_commit,
+        provenance.get("fixture_files"),
+        expected_files,
+        "Electron artifact",
+    )
+    runtime = artifact_dir / "electron-linux-hello"
+    artifact = runtime / "electron"
+    record = provenance.get("artifact")
+    if not isinstance(record, dict):
+        raise HarnessError("Electron artifact provenance is missing its artifact record")
+    if artifact.is_symlink() or not artifact.is_file() or not os.access(artifact, os.X_OK):
+        raise HarnessError("Electron executable is missing, non-regular, symlinked, or non-executable")
+    if record.get("basename") != artifact.name or record.get("sha256") != sha256_file(artifact):
+        raise HarnessError("Electron executable provenance mismatch")
+    if record.get("bytes") != artifact.stat().st_size:
+        raise HarnessError("Electron executable size provenance mismatch")
+    tree_sha, tree_entries, tree_bytes = _electron_tree_digest(runtime)
+    if (
+        record.get("tree_sha256") != tree_sha
+        or record.get("tree_entries") != tree_entries
+        or record.get("tree_bytes") != tree_bytes
+    ):
+        raise HarnessError("Electron packaged tree provenance mismatch")
+    trusted_sha = _trusted_electron_rebuild_tree_sha256(fixture_commit)
+    if trusted_sha != tree_sha:
+        raise HarnessError(
+            "Electron artifact does not match an independent rebuild of the committed fixture"
+        )
+    if provenance.get("framework") != {"name": "Electron", "version": "43.4.0"}:
+        raise HarnessError("Electron artifact does not pin framework version 43.4.0")
+    runtime_versions = provenance.get("runtime_versions")
+    if not isinstance(runtime_versions, dict) or any(
+        not isinstance(runtime_versions.get(name), str) or not runtime_versions[name]
+        for name in ("electron", "chrome", "node", "v8")
+    ):
+        raise HarnessError("Electron artifact provenance has incomplete runtime versions")
+    toolchains = provenance.get("toolchains")
+    if not isinstance(toolchains, dict) or any(
+        not isinstance(toolchains.get(name), str) or not toolchains[name]
+        for name in ("node", "npm")
+    ):
+        raise HarnessError("Electron artifact provenance has incomplete build toolchains")
+    return provenance, artifact
+
+
 def _power_state() -> tuple[bool, bool, str]:
     supplies = pathlib.Path("/sys/class/power_supply")
     online: list[bool] = []
@@ -3194,17 +3350,19 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
     product_mode = args.fixture == [KELD_DEV_FIXTURE_PATH]
     paired_gtk4 = fixture_set == {KELD_FIXTURE_PATH, GTK4_FIXTURE_PATH}
     paired_tauri = fixture_set == {KELD_FIXTURE_PATH, TAURI_FIXTURE_PATH}
-    paired = paired_gtk4 or paired_tauri
+    paired_electron = fixture_set == {KELD_FIXTURE_PATH, ELECTRON_FIXTURE_PATH}
+    paired = paired_gtk4 or paired_tauri or paired_electron
     if args.metric == "PAINT-OPPORTUNITY":
         if fixture_set not in (
             {KELD_FIXTURE_PATH},
             {KELD_DEV_FIXTURE_PATH},
             {KELD_FIXTURE_PATH, GTK4_FIXTURE_PATH},
             {KELD_FIXTURE_PATH, TAURI_FIXTURE_PATH},
+            {KELD_FIXTURE_PATH, ELECTRON_FIXTURE_PATH},
         ):
             raise HarnessError(
                 "Linux PAINT-OPPORTUNITY requires the host adapter, product dev fixture, "
-                "or exactly one host-adapter+GTK4/host-adapter+Tauri pair"
+                "or exactly one host-adapter+GTK4/host-adapter+Tauri/host-adapter+Electron pair"
             )
     elif args.metric == "MEM-IDLE":
         if args.fixture not in ([KELD_FIXTURE_PATH], [KELD_DEV_FIXTURE_PATH]):
@@ -3302,6 +3460,7 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
                 "artifact_version": provenance["source_git_sha"][:12],
                 "arguments": ("--hello", "--title", "Keld Linux benchmark"),
                 "role": "diagnostic",
+                "lane": "webkitgtk",
             }
         ]
         if paired_gtk4:
@@ -3337,6 +3496,7 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
                     "artifact_version": gtk_provenance["fixture_commit"][:12],
                     "arguments": (),
                     "role": "score",
+                    "lane": "webkitgtk",
                 }
             )
             recipe_commits.append(gtk_provenance["fixture_commit"])
@@ -3371,11 +3531,48 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
                     "artifact_version": tauri_provenance["framework"]["version"],
                     "arguments": (),
                     "role": "diagnostic",
+                    "lane": "webkitgtk",
                 }
             )
             recipe_commits.append(tauri_provenance["fixture_commit"])
             fixtures.append(
                 {"path": TAURI_FIXTURE_PATH, "sha": tauri_provenance["fixture_commit"]}
+            )
+
+        if paired_electron:
+            electron_provenance, electron_artifact = _read_electron_artifact(
+                artifact_by_fixture[ELECTRON_FIXTURE_PATH]
+            )
+            runtime_versions = electron_provenance["runtime_versions"]
+            keld_engine = environment["engine"]["version"]
+            environment["engine"] = {
+                "name": "Mixed: WebKitGTK (Keld) / Chromium (Electron)",
+                "version": f"webkitgtk={keld_engine};chromium={runtime_versions['chrome']}",
+            }
+            environment["toolchains"].extend(
+                (
+                    {"name": "electron", "version": electron_provenance["framework"]["version"]},
+                    {"name": "electron-node", "version": runtime_versions["node"]},
+                    {"name": "electron-chromium", "version": runtime_versions["chrome"]},
+                )
+            )
+            paint_configs.append(
+                {
+                    "arm_id": "electron-linux-host",
+                    "framework": electron_provenance["framework"],
+                    "fixture_path": ELECTRON_FIXTURE_PATH,
+                    "fixture_sha": electron_provenance["fixture_commit"],
+                    "artifact": electron_artifact,
+                    "artifact_record": electron_provenance["artifact"],
+                    "artifact_version": electron_provenance["framework"]["version"],
+                    "arguments": (),
+                    "role": "diagnostic",
+                    "lane": "chromium",
+                }
+            )
+            recipe_commits.append(electron_provenance["fixture_commit"])
+            fixtures.append(
+                {"path": ELECTRON_FIXTURE_PATH, "sha": electron_provenance["fixture_commit"]}
             )
 
         if args.cache_state == "warm-cache":
@@ -3438,7 +3635,7 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
                         "basename": config["artifact"].name,
                         "version": config["artifact_version"],
                     },
-                    "lane": "webkitgtk",
+                    "lane": config["lane"],
                     "role": config["role"],
                     "samples": samples,
                     "statistics": summarize(samples),
@@ -3446,7 +3643,13 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
             )
         if paired:
             by_id = {arm["arm_id"]: arm for arm in arms}
-            baseline_arm = "gtk4-native" if paired_gtk4 else "tauri-linux-host"
+            baseline_arm = (
+                "gtk4-native"
+                if paired_gtk4
+                else "tauri-linux-host"
+                if paired_tauri
+                else "electron-linux-host"
+            )
             baseline = by_id[baseline_arm]["samples"]
             candidate = by_id["keld-linux-host"]["samples"]
             if all(
@@ -3467,6 +3670,8 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
                     "Every round runs Keld and GTK4 once with balanced randomized within-round order. "
                     if paired_gtk4
                     else "Every round runs Keld and Tauri once with balanced randomized within-round order. "
+                    if paired_tauri
+                    else "Every round runs Keld/WebKitGTK and Electron/Chromium once with balanced randomized within-round order; this is cross-engine diagnostic evidence only. "
                 )
                 if paired
                 else "This is a single-arm diagnostic. "
@@ -3552,6 +3757,13 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
         bench_sha=bench_sha,
         paired=paired,
     )
+    if paired_electron:
+        reasons.append(
+            {
+                "code": "CROSS_ENGINE_COMPARATOR",
+                "label": "Keld uses system WebKitGTK while Electron uses embedded Chromium; this diagnostic cannot feed a same-engine scoreboard cell",
+            }
+        )
     finished_utc = utc_now()
     document = {
         "schema_version": SCHEMA_VERSION,

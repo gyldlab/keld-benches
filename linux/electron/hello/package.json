@@ -1,0 +1,12 @@
+{
+  "name": "electron-linux-hello",
+  "productName": "Electron Linux Benchmark",
+  "version": "1.0.0",
+  "description": "keld-benches Linux Electron 43.4.0 paint comparator",
+  "main": "src/main.js",
+  "private": true,
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "43.4.0"
+  }
+}
