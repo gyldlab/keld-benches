@@ -23,6 +23,11 @@ typedef enum {
   STYLE_TRANSPARENT,
 } Style;
 
+typedef enum {
+  STRESS_STATIC,
+  STRESS_DYNAMIC_RESIZE,
+} StressMode;
+
 typedef struct {
   GtkWidget *window;
   GtkWidget *backdrop;
@@ -30,10 +35,16 @@ typedef struct {
   const char *output_path;
   const char *nonce;
   Style style;
+  StressMode stress_mode;
   gboolean fault_black_compositor;
   gboolean terminal;
   guint timeout_source;
   guint release_source;
+  guint resize_source;
+  guint resize_step;
+  guint configure_events;
+  int final_width;
+  int final_height;
   int result;
 } Probe;
 
@@ -82,6 +93,43 @@ static gboolean draw_backdrop(GtkWidget *widget, cairo_t *context, void *data) {
 
 static const char *style_name(Style style) {
   return style == STYLE_OPAQUE ? "opaque" : "transparent";
+}
+
+static const char *stress_name(StressMode stress_mode) {
+  return stress_mode == STRESS_DYNAMIC_RESIZE ? "dynamic-resize" : "static";
+}
+
+static gboolean configure_probe_window(GtkWidget *widget, GdkEventConfigure *event,
+                                       void *data) {
+  (void)widget;
+  Probe *probe = data;
+  probe->configure_events += 1;
+  probe->final_width = event->width;
+  probe->final_height = event->height;
+  return FALSE;
+}
+
+static gboolean advance_resize_stress(void *data) {
+  Probe *probe = data;
+  static const int sizes[][2] = {
+      {360, 260},
+      {400, 300},
+      {280, 210},
+      {VIEW_WIDTH, VIEW_HEIGHT},
+  };
+  const guint count = (guint)(sizeof(sizes) / sizeof(sizes[0]));
+  if (probe->resize_step >= count) {
+    probe->resize_source = 0;
+    return G_SOURCE_REMOVE;
+  }
+  gtk_window_resize(GTK_WINDOW(probe->window), sizes[probe->resize_step][0],
+                    sizes[probe->resize_step][1]);
+  probe->resize_step += 1;
+  if (probe->resize_step == count) {
+    probe->resize_source = 0;
+    return G_SOURCE_REMOVE;
+  }
+  return G_SOURCE_CONTINUE;
 }
 
 static gboolean is_lower_hex_nonce(const char *value) {
@@ -181,11 +229,20 @@ static void snapshot_ready(GObject *source, GAsyncResult *result, void *data) {
 
   const uint32_t expected_marker = UINT32_C(0xffff00aa);
   const uint32_t expected_background =
-      probe->style == STYLE_OPAQUE ? UINT32_C(0xff203040) : UINT32_C(0x00000000);
+      probe->style == STYLE_TRANSPARENT
+          ? UINT32_C(0x00000000)
+          : (probe->stress_mode == STRESS_DYNAMIC_RESIZE ? UINT32_C(0xff000000)
+                                                          : UINT32_C(0xff203040));
+  gtk_window_get_size(GTK_WINDOW(probe->window), &probe->final_width,
+                      &probe->final_height);
+  const gboolean stress_oracle_pass =
+      probe->stress_mode == STRESS_STATIC ||
+      (probe->resize_step == 4 && probe->configure_events >= 3 &&
+       probe->final_width == VIEW_WIDTH && probe->final_height == VIEW_HEIGHT);
   const gboolean oracle_pass = type == CAIRO_SURFACE_TYPE_IMAGE &&
                                format == CAIRO_FORMAT_ARGB32 && width >= VIEW_WIDTH &&
                                height >= VIEW_HEIGHT && marker == expected_marker &&
-                               background == expected_background;
+                               background == expected_background && stress_oracle_pass;
 
   cairo_status_t png_status = cairo_surface_write_to_png(surface, probe->output_path);
   GdkDisplay *display = gdk_display_get_default();
@@ -194,6 +251,8 @@ static void snapshot_ready(GObject *source, GAsyncResult *result, void *data) {
   print_json_string(probe->nonce);
   printf(",\"style\":");
   print_json_string(style_name(probe->style));
+  printf(",\"stress_mode\":");
+  print_json_string(stress_name(probe->stress_mode));
   printf(",\"gdk_display_type\":");
   print_json_string(display != NULL ? G_OBJECT_TYPE_NAME(display) : "");
   printf(",\"gdk_display_name\":");
@@ -212,6 +271,10 @@ static void snapshot_ready(GObject *source, GAsyncResult *result, void *data) {
   }
   printf(",\"fault_black_compositor\":%s",
          probe->fault_black_compositor ? "true" : "false");
+  printf(",\"stress\":{\"resize_steps\":%u,\"configure_events\":%u,"
+         "\"final_width\":%d,\"final_height\":%d,\"oracle_pass\":%s}",
+         probe->resize_step, probe->configure_events, probe->final_width,
+         probe->final_height, stress_oracle_pass ? "true" : "false");
   printf(",\"surface\":{\"type\":%d,\"format\":%d,\"width\":%d,\"height\":%d,"
          "\"marker_argb\":\"%08x\",\"background_argb\":\"%08x\"},"
          "\"oracle_pass\":%s,\"png_status\":%d}\n",
@@ -259,7 +322,7 @@ static void title_changed(WebKitWebView *web_view, GParamSpec *parameter, void *
 }
 
 static gboolean parse_arguments(int argc, char **argv, Probe *probe) {
-  if (argc != 5 || strcmp(argv[1], "--style") != 0 ||
+  if ((argc != 5 && argc != 7) || strcmp(argv[1], "--style") != 0 ||
       strcmp(argv[3], "--output") != 0) {
     return FALSE;
   }
@@ -269,6 +332,19 @@ static gboolean parse_arguments(int argc, char **argv, Probe *probe) {
     probe->style = STYLE_TRANSPARENT;
   } else {
     return FALSE;
+  }
+  probe->stress_mode = STRESS_STATIC;
+  if (argc == 7) {
+    if (strcmp(argv[5], "--stress") != 0) {
+      return FALSE;
+    }
+    if (strcmp(argv[6], "static") == 0) {
+      probe->stress_mode = STRESS_STATIC;
+    } else if (strcmp(argv[6], "dynamic-resize") == 0) {
+      probe->stress_mode = STRESS_DYNAMIC_RESIZE;
+    } else {
+      return FALSE;
+    }
   }
   probe->output_path = argv[4];
   probe->nonce = g_getenv("KEL171_NONCE");
@@ -280,8 +356,10 @@ static gboolean parse_arguments(int argc, char **argv, Probe *probe) {
 int main(int argc, char **argv) {
   Probe probe = {.result = EXIT_ORACLE};
   if (!parse_arguments(argc, argv, &probe)) {
-    g_printerr("usage: KEL171_NONCE=<32-ascii> %s --style opaque|transparent --output FILE\n",
-               argv[0]);
+    g_printerr(
+        "usage: KEL171_NONCE=<32-ascii> %s --style opaque|transparent --output FILE "
+        "[--stress static|dynamic-resize]\n",
+        argv[0]);
     return EXIT_CONFIG;
   }
   if (!gtk_init_check(NULL, NULL)) {
@@ -306,19 +384,25 @@ int main(int argc, char **argv) {
   probe.web_view = WEBKIT_WEB_VIEW(webkit_web_view_new());
   gtk_window_set_title(GTK_WINDOW(probe.window), probe.nonce);
   gtk_window_set_default_size(GTK_WINDOW(probe.window), VIEW_WIDTH, VIEW_HEIGHT);
-  gtk_window_set_resizable(GTK_WINDOW(probe.window), FALSE);
+  gtk_window_set_resizable(GTK_WINDOW(probe.window),
+                           probe.stress_mode == STRESS_DYNAMIC_RESIZE);
   gtk_window_set_decorated(GTK_WINDOW(probe.window), FALSE);
+  g_signal_connect(probe.window, "configure-event",
+                   G_CALLBACK(configure_probe_window), &probe);
   if (probe.backdrop != NULL) {
     gtk_window_set_transient_for(GTK_WINDOW(probe.window), GTK_WINDOW(probe.backdrop));
     gtk_window_set_destroy_with_parent(GTK_WINDOW(probe.window), TRUE);
   }
   gtk_container_add(GTK_CONTAINER(probe.window), GTK_WIDGET(probe.web_view));
-  GdkRGBA web_view_background = probe.style == STYLE_OPAQUE
-                                    ? (GdkRGBA){.red = 32.0 / 255.0,
-                                                .green = 48.0 / 255.0,
-                                                .blue = 64.0 / 255.0,
-                                                .alpha = 1.0}
-                                : (probe.fault_black_compositor
+  GdkRGBA web_view_background =
+      probe.style == STYLE_OPAQUE
+          ? (probe.stress_mode == STRESS_DYNAMIC_RESIZE
+                 ? (GdkRGBA){.red = 0, .green = 0, .blue = 0, .alpha = 1.0}
+                 : (GdkRGBA){.red = 32.0 / 255.0,
+                             .green = 48.0 / 255.0,
+                             .blue = 64.0 / 255.0,
+                             .alpha = 1.0})
+          : (probe.fault_black_compositor
                                        ? (GdkRGBA){.red = 0,
                                                    .green = 0,
                                                    .blue = 0,
@@ -341,20 +425,51 @@ int main(int argc, char **argv) {
   g_signal_connect(probe.web_view, "notify::title", G_CALLBACK(title_changed), &probe);
   gtk_widget_show_all(probe.window);
   gtk_window_present(GTK_WINDOW(probe.window));
+  if (probe.stress_mode == STRESS_DYNAMIC_RESIZE) {
+    probe.resize_source = g_timeout_add(80, advance_resize_stress, &probe);
+  }
   if (g_strcmp0(g_getenv("KEL171_TEST_AUDIT"), "1") == 0) {
     webkit_web_view_load_uri(probe.web_view, "https://keld.invalid/audit");
   }
 
-  const char *background = probe.style == STYLE_OPAQUE ? "#203040" : "transparent";
   const gboolean suppress_ready =
       g_strcmp0(g_getenv("KEL171_TEST_SUPPRESS_READY"), "1") == 0;
-  char *html = g_strdup_printf(
-      "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
-      "<style>html,body{margin:0;width:100%%;height:100%%;background:%s;overflow:hidden}"
-      "#marker{width:64px;height:64px;background:#ff00aa}</style><div id=marker></div>"
-      "<script>%srequestAnimationFrame(()=>requestAnimationFrame(()=>document.title="
-      "'KEL171-READY:%s'))</script>",
-      background, suppress_ready ? "false&&" : "", probe.nonce);
+  char *html = NULL;
+  if (probe.stress_mode == STRESS_DYNAMIC_RESIZE) {
+    const char *final_background =
+        probe.style == STYLE_OPAQUE ? "#000" : "transparent";
+    html = g_strdup_printf(
+        "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+        "<style>html,body{margin:0;width:100%%;height:100%%;background:#000;overflow:hidden}"
+        "#marker{width:64px;height:64px;background:#ff00aa;will-change:transform,opacity}"
+        "#layer{position:absolute;left:80px;top:72px;width:160px;height:120px;"
+        "background:linear-gradient(135deg,#00d4ff,#7c3aed);"
+        "will-change:transform,opacity}</style>"
+        "<div id=marker></div><div id=layer></div>"
+        "<script>"
+        "document.documentElement.style.background='%s';document.body.style.background='%s';"
+        "const m=document.getElementById('marker'),l=document.getElementById('layer');"
+        "let f=0;function tick(){f++;m.style.transform='translate3d('+(f%%17)+'px,'+"
+        "(f%%11)+'px,0) rotate('+(f*7)+'deg)';m.style.opacity=String(0.55+(f%%5)*0.1);"
+        "l.style.transform='translate3d('+((f%%13)-6)+'px,'+((f%%9)-4)+'px,0) "
+        "scale('+(1+(f%%7)*0.015)+')';l.style.opacity=String(0.35+(f%%6)*0.08);"
+        "if(f<48){requestAnimationFrame(tick);return;}"
+        "m.style.transform='none';m.style.opacity='1';l.remove();"
+        "%srequestAnimationFrame(()=>requestAnimationFrame(()=>document.title="
+        "'KEL171-READY:%s'));}requestAnimationFrame(tick)</script>",
+        final_background, final_background, suppress_ready ? "false&&" : "",
+        probe.nonce);
+  } else {
+    const char *background =
+        probe.style == STYLE_OPAQUE ? "#203040" : "transparent";
+    html = g_strdup_printf(
+        "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+        "<style>html,body{margin:0;width:100%%;height:100%%;background:%s;overflow:hidden}"
+        "#marker{width:64px;height:64px;background:#ff00aa}</style><div id=marker></div>"
+        "<script>%srequestAnimationFrame(()=>requestAnimationFrame(()=>document.title="
+        "'KEL171-READY:%s'))</script>",
+        background, suppress_ready ? "false&&" : "", probe.nonce);
+  }
   webkit_web_view_load_html(probe.web_view, html, "https://keld.invalid/");
   g_free(html);
   guint timeout_milliseconds = 15 * 1000;
@@ -368,6 +483,9 @@ int main(int argc, char **argv) {
   }
   if (probe.release_source != 0) {
     g_source_remove(probe.release_source);
+  }
+  if (probe.resize_source != 0) {
+    g_source_remove(probe.resize_source);
   }
   gtk_widget_destroy(probe.window);
   if (probe.backdrop != NULL) {

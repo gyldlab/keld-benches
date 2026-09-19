@@ -22,7 +22,9 @@ import zlib
 BACKENDS = ("x11", "wayland")
 STYLES = ("opaque", "transparent")
 MITIGATIONS = ("off", "on")
+STRESS_MODES = ("static", "dynamic-resize")
 FIXTURE = Path(__file__).resolve().parent
+KELD_STRESS_PAYLOAD = FIXTURE / "keld-stress.html"
 REPOSITORY = FIXTURE.parents[2]
 sys.path.insert(0, str(REPOSITORY / "linux" / "bench"))
 
@@ -138,7 +140,9 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def decode_png_oracle(path: Path, style: str) -> dict[str, object]:
+def decode_png_oracle(
+    path: Path, style: str, stress_mode: str = "static"
+) -> dict[str, object]:
     raw = path.read_bytes()
     if not raw.startswith(b"\x89PNG\r\n\x1a\n"):
         raise ValueError("invalid PNG signature")
@@ -223,7 +227,11 @@ def decode_png_oracle(path: Path, style: str) -> dict[str, object]:
 
     marker = pixel(16, 16)
     background = pixel(200, 120)
-    expected_background = (32, 48, 64, 255) if style == "opaque" else (0, 0, 0, 0)
+    expected_background = (
+        (0, 0, 0, 0)
+        if style == "transparent"
+        else ((0, 0, 0, 255) if stress_mode == "dynamic-resize" else (32, 48, 64, 255))
+    )
     return {
         "width": width,
         "height": height,
@@ -466,7 +474,10 @@ def capture_mutter_compositor(destination: Path) -> dict[str, object]:
 
 
 def compositor_oracle(
-    full_frame: Path, cropped_frame: Path, style: str
+    full_frame: Path,
+    cropped_frame: Path,
+    style: str,
+    stress_mode: str = "static",
 ) -> dict[str, object]:
     try:
         import gi
@@ -514,7 +525,11 @@ def compositor_oracle(
     sample_start = 120 * crop_stride + 200 * crop_channels
     sample = tuple(crop_pixels[sample_start : sample_start + crop_channels])
     sample_rgba = sample if crop_channels == 4 else (*sample, 255)
-    expected = (32, 48, 64, 255) if style == "opaque" else (0, 204, 68, 255)
+    expected = (
+        (0, 204, 68, 255)
+        if style == "transparent"
+        else ((0, 0, 0, 255) if stress_mode == "dynamic-resize" else (32, 48, 64, 255))
+    )
     matching_background = 0
     for y in range(112, 128):
         for x in range(192, 208):
@@ -741,6 +756,7 @@ def committed_runner_provenance(expected_commit: str) -> dict[str, object]:
         "linux/webkitgtk/dmabuf-matrix/build.sh",
         "linux/webkitgtk/dmabuf-matrix/probe.c",
         "linux/webkitgtk/dmabuf-matrix/run_matrix.py",
+        "linux/webkitgtk/dmabuf-matrix/keld-stress.html",
         "linux/bench/harness.py",
         "linux/keld/hello/index.html",
     )
@@ -823,6 +839,7 @@ def run_row(
     repetition: int,
     fault_black_compositor: bool = False,
     attempt: int = 1,
+    stress_mode: str = "static",
     receipt_timeout_seconds: float = 20,
     exit_timeout_seconds: float = 5,
 ) -> dict[str, object]:
@@ -853,7 +870,15 @@ def run_row(
 
     started = time.monotonic_ns()
     process = subprocess.Popen(
-        [str(artifact), "--style", style, "--output", str(png_path)],
+        [
+            str(artifact),
+            "--style",
+            style,
+            "--output",
+            str(png_path),
+            "--stress",
+            stress_mode,
+        ],
         env=environment,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
@@ -887,7 +912,7 @@ def run_row(
             compositor_captures.append(compositor_capture)
             if compositor_capture.get("valid") is True:
                 compositor_pixels = compositor_oracle(
-                    full_compositor_path, compositor_path, style
+                    full_compositor_path, compositor_path, style, stress_mode
                 )
             full_compositor_path.unlink(missing_ok=True)
             if compositor_path.is_file():
@@ -944,7 +969,7 @@ def run_row(
     png_error: str | None = None
     if png_digest is not None:
         try:
-            png_oracle = decode_png_oracle(png_path, style)
+            png_oracle = decode_png_oracle(png_path, style, stress_mode)
         except (OSError, ValueError, zlib.error) as error:
             png_error = str(error)
     expected_display = {"x11": "GdkX11Display", "wayland": "GdkWaylandDisplay"}[backend]
@@ -963,7 +988,11 @@ def run_row(
     else:
         expected_surface = {
             "marker_argb": "ffff00aa",
-            "background_argb": "ff203040" if style == "opaque" else "00000000",
+            "background_argb": (
+                "00000000"
+                if style == "transparent"
+                else ("ff000000" if stress_mode == "dynamic-resize" else "ff203040")
+            ),
             "type": 0,
             "format": 0,
             "width": 320,
@@ -973,6 +1002,22 @@ def run_row(
             reject_reasons.append("nonce_mismatch")
         if receipt.get("style") != style:
             reject_reasons.append("style_mismatch")
+        if receipt.get("stress_mode") != stress_mode:
+            reject_reasons.append("stress_mode_mismatch")
+        stress = receipt.get("stress")
+        if not isinstance(stress, dict) or stress.get("oracle_pass") is not True:
+            reject_reasons.append("stress_oracle_failed")
+        elif stress_mode == "dynamic-resize":
+            if (
+                stress.get("resize_steps") != 4
+                or not isinstance(stress.get("configure_events"), int)
+                or stress["configure_events"] < 3
+                or stress.get("final_width") != 320
+                or stress.get("final_height") != 240
+            ):
+                reject_reasons.append("stress_receipt_mismatch")
+        elif stress.get("resize_steps") != 0:
+            reject_reasons.append("static_stress_receipt_mismatch")
         if receipt.get("gdk_display_type") != expected_display:
             reject_reasons.append("backend_mismatch")
         if receipt.get("disable_dmabuf_renderer") != expected_flag:
@@ -1023,6 +1068,7 @@ def run_row(
         "backend": backend,
         "style": style,
         "mitigation": mitigation,
+        "stress_mode": stress_mode,
         "repetition": repetition,
         "attempt": attempt,
         "nonce": nonce,
@@ -1032,6 +1078,8 @@ def run_row(
             style,
             "--output",
             png_path.relative_to(output).as_posix(),
+            "--stress",
+            stress_mode,
         ],
         "started_monotonic_ns": started,
         "ended_monotonic_ns": ended,
@@ -1101,8 +1149,14 @@ def run_keld_row(
     mitigation: str,
     repetition: int,
     attempt: int = 1,
+    stress_mode: str = "static",
 ) -> dict[str, object]:
-    server = BeaconServer((REPOSITORY / "linux" / "keld" / "hello" / "index.html").read_bytes())
+    template = (
+        KELD_STRESS_PAYLOAD.read_bytes()
+        if stress_mode == "dynamic-resize"
+        else (REPOSITORY / "linux" / "keld" / "hello" / "index.html").read_bytes()
+    )
+    server = BeaconServer(template)
     server.start()
     row_directory = output / "keld" / backend / "opaque" / mitigation
     row_directory.mkdir(parents=True, exist_ok=True)
@@ -1205,6 +1259,9 @@ def run_keld_row(
         "backend": backend,
         "style": "opaque",
         "mitigation": mitigation,
+        "stress_mode": (
+            "dynamic-compositing" if stress_mode == "dynamic-resize" else "static"
+        ),
         "repetition": repetition,
         "attempt": attempt,
         "nonce": server.nonce,
@@ -1246,6 +1303,7 @@ def main() -> int:
     parser.add_argument("--samples", type=int, default=5)
     parser.add_argument("--seed", type=int, default=171)
     parser.add_argument("--backend", action="append", choices=BACKENDS)
+    parser.add_argument("--stress-mode", choices=STRESS_MODES, default="static")
     args = parser.parse_args()
     if args.samples < 1 or args.samples > 30:
         parser.error("--samples must be between 1 and 30")
@@ -1332,6 +1390,7 @@ def main() -> int:
                 mitigation,
                 repetition,
                 attempt=attempt,
+                stress_mode=args.stress_mode,
             )
             rows.append(row)
             if row["valid"]:
@@ -1347,6 +1406,7 @@ def main() -> int:
         "off",
         0,
         True,
+        stress_mode="static",
     )
     keld_rows: list[dict[str, object]] = []
     for backend, style, mitigation, repetition in matrix_schedule(
@@ -1362,6 +1422,7 @@ def main() -> int:
                     mitigation,
                     repetition,
                     attempt,
+                    stress_mode=args.stress_mode,
                 )
                 keld_rows.append(row)
                 if row["valid"]:
@@ -1416,6 +1477,18 @@ def main() -> int:
         "backends": selected_backends,
         "styles": STYLES,
         "mitigations": MITIGATIONS,
+        "stress_mode": args.stress_mode,
+        "native_stress_scope": (
+            "48 animation frames plus four GTK top-level resize requests, ending at 320x240"
+            if args.stress_mode == "dynamic-resize"
+            else "static"
+        ),
+        "keld_stress_scope": (
+            "48 animation frames before the normal focused/visible double-rAF beacon; "
+            "no external product-window resize"
+            if args.stress_mode == "dynamic-resize"
+            else "static"
+        ),
         "artifact": {
             "path_basename": executed_artifact.name,
             "sha256": artifact_digest,

@@ -18,6 +18,7 @@ SOURCE = FIXTURE / "probe.c"
 AUDIT = FIXTURE / "audit.c"
 BUILD = FIXTURE / "build.sh"
 RUNNER = FIXTURE / "run_matrix.py"
+KELD_STRESS = FIXTURE / "keld-stress.html"
 sys.path.insert(0, str(FIXTURE))
 
 import run_matrix as matrix  # noqa: E402
@@ -34,9 +35,23 @@ class FixtureTests(unittest.TestCase):
             "gdk_display_get_default()",
             "G_OBJECT_TYPE_NAME(display)",
             "WEBKIT_DISABLE_DMABUF_RENDERER",
+            "STRESS_DYNAMIC_RESIZE",
+            "gtk_window_resize(",
+            "\"configure-event\"",
+            "stress_mode",
         ):
             self.assertIn(required, source)
         self.assertNotIn("sleep(", source)
+
+    def test_dynamic_stress_contract_is_opt_in_and_black(self) -> None:
+        runner = RUNNER.read_text(encoding="utf-8")
+        payload = KELD_STRESS.read_text(encoding="utf-8")
+        self.assertEqual(matrix.STRESS_MODES, ("static", "dynamic-resize"))
+        self.assertIn('"--stress-mode"', runner)
+        self.assertIn('background: #000', payload)
+        self.assertIn('frame < 48', payload)
+        self.assertIn('__KELD_BENCH_NONCE__', payload)
+        self.assertIn('__KELD_BENCH_PORT__', payload)
 
     def test_build_binds_committed_recipe_and_native_lane(self) -> None:
         build = BUILD.read_text(encoding="utf-8")
@@ -344,8 +359,9 @@ Path(sys.argv[4]).write_bytes(b'fake-png')
 backend = 'GdkWaylandDisplay' if os.environ.get('GDK_BACKEND') == 'wayland' else 'GdkX11Display'
 if os.environ.get('FAKE_WRONG_BACKEND') == '1':
     backend = 'GdkWaylandDisplay' if backend == 'GdkX11Display' else 'GdkX11Display'
+stress = sys.argv[6] if len(sys.argv) >= 7 else 'static'
 background = 'ff203040' if style == 'opaque' else '00000000'
-print(json.dumps({'schema_version':1,'nonce':os.environ['KEL171_NONCE'],'style':style,'gdk_display_type':backend,'gdk_display_name':'test','gtk_runtime':'3.24.0','gtk_headers':'3.24.0','webkit_runtime':'2.52.0','webkit_headers':'2.52.0','disable_dmabuf_renderer':os.environ.get('WEBKIT_DISABLE_DMABUF_RENDERER'),'fault_black_compositor':os.environ.get('KEL171_FAULT_BLACK_COMPOSITOR') == '1','surface':{'type':0,'format':0,'width':320,'height':240,'marker_argb':'ffff00aa','background_argb':background},'oracle_pass':True,'png_status':0}), flush=True)
+print(json.dumps({'schema_version':1,'nonce':os.environ['KEL171_NONCE'],'style':style,'stress_mode':stress,'gdk_display_type':backend,'gdk_display_name':'test','gtk_runtime':'3.24.0','gtk_headers':'3.24.0','webkit_runtime':'2.52.0','webkit_headers':'2.52.0','disable_dmabuf_renderer':os.environ.get('WEBKIT_DISABLE_DMABUF_RENDERER'),'fault_black_compositor':os.environ.get('KEL171_FAULT_BLACK_COMPOSITOR') == '1','stress':{'resize_steps':0,'configure_events':1,'final_width':320,'final_height':240,'oracle_pass':True},'surface':{'type':0,'format':0,'width':320,'height':240,'marker_argb':'ffff00aa','background_argb':background},'oracle_pass':True,'png_status':0}), flush=True)
 sys.stdin.buffer.read(1)
 """
         with tempfile.TemporaryDirectory() as temporary:
@@ -358,7 +374,13 @@ sys.stdin.buffer.read(1)
                 path.write_bytes(b"frame")
                 return {"valid": True}
 
-            def compositor(_full: Path, crop: Path, style: str) -> dict[str, object]:
+            def compositor(
+                _full: Path,
+                crop: Path,
+                style: str,
+                stress_mode: str = "static",
+            ) -> dict[str, object]:
+                self.assertEqual(stress_mode, "static")
                 crop.write_bytes(b"crop")
                 return {"oracle_pass": True, "sample_rgba": (32, 48, 64, 255)}
 
