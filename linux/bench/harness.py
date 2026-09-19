@@ -55,6 +55,8 @@ SUPPORTED_GUI_STATES = ("fresh-process", "warm-cache")
 MEMORY_STABLE_SNAPSHOTS = 4
 MEMORY_MAX_DRIFT_RATIO = 0.01
 MEMORY_SAMPLE_INTERVAL_SECONDS = 0.1
+DMABUF_RENDERER_ENV = "WEBKIT_DISABLE_DMABUF_RENDERER"
+PROCESS_ENV_ABSENT = "<absent>"
 NONCE_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 LABEL_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ONE_PIXEL_GIF = bytes.fromhex(
@@ -488,6 +490,40 @@ def _read_proc_text(path: pathlib.Path) -> str | None:
         return None
 
 
+def _process_environment_value(identity: ProcessIdentity, key: str) -> str | None:
+    """Read one generation-bound /proc environment value and mark proven absence."""
+    if not key or "=" in key or "\0" in key:
+        raise HarnessError("invalid process environment key")
+    try:
+        descriptor = os.pidfd_open(identity.pid)
+    except ProcessLookupError:
+        return None
+    try:
+        before = _proc_identity(identity.pid)
+        if before is None:
+            return None
+        if before.start_ticks != identity.start_ticks:
+            raise HarnessError("PID was reused before process environment read")
+        try:
+            raw = pathlib.Path(f"/proc/{identity.pid}/environ").read_bytes()
+        except (FileNotFoundError, ProcessLookupError, PermissionError):
+            return None
+        after = _proc_identity(identity.pid)
+        if after is None:
+            return None
+        if after.start_ticks != identity.start_ticks:
+            raise HarnessError("PID was reused during process environment read")
+        prefix = key.encode("utf-8") + b"="
+        values = [entry[len(prefix):] for entry in raw.split(b"\0") if entry.startswith(prefix)]
+        if len(values) > 1:
+            raise HarnessError(f"process environment contains duplicate {key} entries")
+        if not values:
+            return PROCESS_ENV_ABSENT
+        return values[0].decode("utf-8", "replace")
+    finally:
+        os.close(descriptor)
+
+
 def _process_class(pid: int, leader_pid: int) -> str | None:
     if pid == leader_pid:
         return "keld-host"
@@ -883,7 +919,7 @@ def _product_backend_pair_preflight() -> tuple[str, str, str]:
 @contextmanager
 def _product_dmabuf_scope(disabled: bool):
     """Select one DMA-BUF mitigation state and restore the caller environment."""
-    key = "WEBKIT_DISABLE_DMABUF_RENDERER"
+    key = DMABUF_RENDERER_ENV
     original = os.environ.get(key)
     try:
         if disabled:
@@ -1697,6 +1733,7 @@ def _product_paint_attempt(
     }
     process_classes: str | None = None
     process_count: int | None = None
+    host_dmabuf_renderer_env: str | None = None
     census_complete = False
     stdout_ready = False
     exited_before_beacon = False
@@ -1741,6 +1778,15 @@ def _product_paint_attempt(
                         f"{name}:{classes[name]}" for name in sorted(classes)
                     )
                     process_count = len(records)
+                    hosts = [
+                        record
+                        for record in records
+                        if _product_process_class(record, root.pid) == "keld-host"
+                    ]
+                    if len(hosts) == 1:
+                        host_dmabuf_renderer_env = _process_environment_value(
+                            hosts[0].identity, DMABUF_RENDERER_ENV
+                        )
                     census_complete = (
                         classes["keld-cli"] == 1
                         and classes["keld-host"] == 1
@@ -1797,6 +1843,7 @@ def _product_paint_attempt(
             "process_exit_before_beacon": exited_before_beacon,
             "processes": process_count,
             "process_classes": process_classes,
+            "host_dmabuf_renderer_env": host_dmabuf_renderer_env,
             "product_bun_ready": stdout_ready,
             "derived_renderer_sha256": hashlib.sha256(renderer).hexdigest(),
             **lifecycle,
@@ -1824,6 +1871,7 @@ def _product_memory_attempt(
     stable: ProductMemoryObservation | None = None
     drift_percent: float | None = None
     paint_ms: float | None = None
+    host_dmabuf_renderer_env: str | None = None
     exited_before_ready = False
     stdout_ready = False
     lifecycle: dict[str, int | str | bool | None] = {
@@ -1891,6 +1939,15 @@ def _product_memory_attempt(
                             if stability.observe(observation.snapshot):
                                 stable = observation
                                 drift_percent = stability.drift_percent()
+                                hosts = [
+                                    record
+                                    for record in observation.records
+                                    if _product_process_class(record, root.pid) == "keld-host"
+                                ]
+                                if len(hosts) == 1:
+                                    host_dmabuf_renderer_env = _process_environment_value(
+                                        hosts[0].identity, DMABUF_RENDERER_ENV
+                                    )
                                 value = observation.snapshot.main_rss_kib
                                 break
                         remaining = deadline - time.monotonic()
@@ -1941,6 +1998,7 @@ def _product_memory_attempt(
         "processes": snapshot.process_count if snapshot is not None else None,
         "engine_processes": snapshot.engine_processes if snapshot is not None else None,
         "process_classes": snapshot.process_classes if snapshot is not None else None,
+        "host_dmabuf_renderer_env": host_dmabuf_renderer_env,
         "cli_rss_kib": stable.cli_rss_kib if stable is not None else None,
         "bun_rss_kib": stable.bun_rss_kib if stable is not None else None,
         "keld_owned_rss_kib": stable.keld_owned_rss_kib if stable is not None else None,
@@ -2710,13 +2768,27 @@ def _run_product_backend_pair_metric(
         paired=True,
         keld_mode="dev-product",
     )
+    def stable_dmabuf_state(backend: str) -> str:
+        states = {
+            sample["diagnostics"].get("host_dmabuf_renderer_env")
+            for sample in samples_by_backend[backend]
+            if sample["valid"]
+        }
+        if len(states) == 1:
+            state = next(iter(states))
+            return str(state) if state is not None else "<unobserved>"
+        return "<mixed-or-unobserved>"
+
+    wayland_dmabuf_state = stable_dmabuf_state("wayland")
+    x11_dmabuf_state = stable_dmabuf_state("x11")
     notes = (
         "Same-session shipping Linux keld dev backend pair. Every matched round runs the "
         "same provenance-bound product artifact once with GDK_BACKEND=wayland and once "
         "with GDK_BACKEND=x11 in balanced randomized order. Both arms require the stock "
         "authenticated Bun echo, nonce-bound double-rAF, complete product process census, "
         "backend-native close, exit 0 and generation-bound cleanup. Ratio = X11/Wayland. "
-        f"Power evidence: {power_evidence}."
+        f"Effective host {DMABUF_RENDERER_ENV}: wayland={wayland_dmabuf_state}; "
+        f"x11={x11_dmabuf_state}. Power evidence: {power_evidence}."
     )
     document: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,

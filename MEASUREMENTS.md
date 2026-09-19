@@ -1300,9 +1300,10 @@ balanced and randomized: exactly 15 Wayland-first and 15 X11-first rounds per
 
 Both arms require the stock authenticated Bun echo, nonce-bound double-rAF
 paint, complete product process census, backend-native close, exit 0, stage
-cleanup and generation-bound descendant cleanup. This removes the
-cross-session attribution problem in the earlier separate Wayland and
-X11/Xwayland campaigns.
+cleanup and generation-bound descendant cleanup. This removes cross-session
+drift, but it does **not** isolate display backend on proprietary NVIDIA:
+Keld's shipping Wayland path may activate its DMA-BUF safe mode while the X11
+path does not.
 
 The benchmark recipe is `c17bdad8547794b23814acb13a4590a9d9f30b3c` and Keld
 remains pinned to `0ea0780bb574ad242e9f1105fa4af5842872bad3`.
@@ -1316,9 +1317,18 @@ remains pinned to `0ea0780bb574ad242e9f1105fa4af5842872bad3`.
 
 Both campaigns completed 30/30 valid samples per arm. The paired diagnostic
 verdict is `FAIL` against the registry's 1.05 regression threshold in both
-cache states. The result supports a backend-specific attribution on this
-machine/session: the shipping X11/Xwayland developer-flow paint path is
-materially slower than the matched native Wayland path.
+cache states. The ratio is a valid same-session comparison of the two
+**shipping policies**, but it must not be attributed to display backend alone.
+
+**Correction (2026-09-19):** a post-merge runtime probe of the same pinned
+shipping artifact observed `WEBKIT_DISABLE_DMABUF_RENDERER=1` in the Wayland
+`keld-host` and the variable absent in the X11 `keld-host`. The Keld product
+predicate intentionally applies that safe mode on proprietary NVIDIA +
+Wayland. Therefore PR #37 jointly varied display backend and effective
+DMA-BUF policy. The later X11 DMA-BUF isolation below shows that this policy
+itself has a large paint effect on this machine. The immutable PR #37 result
+documents are retained as measured shipping-policy evidence; only the earlier
+pure-backend interpretation is withdrawn.
 
 #### Memory
 
@@ -1331,9 +1341,9 @@ The scored MEM-IDLE value remains the staged `keld-host` RSS.
 
 The full owned-tree medians are 494,206 KiB Wayland vs 468,552 KiB X11 in the
 fresh-process campaign, and 494,268 KiB Wayland vs 468,290 KiB X11 in the
-warm-cache campaign. The backend with lower paint latency therefore uses more
-resident memory in this workload; the two observables must not be collapsed
-into one score.
+warm-cache campaign. Because effective DMA-BUF policy also differed, neither
+the paint nor memory delta may be assigned to backend alone; the two
+observables also must not be collapsed into one score.
 
 All four documents remain diagnostic-only because Linux thermal state is not
 independently verified and the measured observable is the shipping `keld dev`
