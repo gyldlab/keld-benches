@@ -35,11 +35,13 @@ from harness import (
     _product_atspi_bus_address,
     _product_backend_pair_preflight,
     _product_backend_scope,
+    _product_dmabuf_scope,
     _product_memory_observation,
     _product_native_close,
     _product_process_class,
     _product_runtime_preflight,
     _product_wayland_close,
+    _product_x11_dmabuf_pair_preflight,
     WAYLAND_ATSPI_CLOSE_SCRIPT,
     _publication_reasons,
     _paint_attempt,
@@ -586,6 +588,62 @@ class ProductRunnerTests(unittest.TestCase):
                 self.assertEqual(os.environ["DISPLAY"], ":77")
                 self.assertNotIn("WAYLAND_DISPLAY", os.environ)
             self.assertEqual({key: os.environ.get(key) for key in original}, original)
+
+    def test_product_x11_dmabuf_scope_and_preflight_are_isolated(self) -> None:
+        original = {
+            "DISPLAY": ":99",
+            "WAYLAND_DISPLAY": "wayland-9",
+            "WEBKIT_DISABLE_DMABUF_RENDERER": "caller",
+        }
+        with mock.patch.dict(os.environ, original, clear=True):
+            with _product_dmabuf_scope(False):
+                self.assertNotIn("WEBKIT_DISABLE_DMABUF_RENDERER", os.environ)
+            self.assertEqual(os.environ["WEBKIT_DISABLE_DMABUF_RENDERER"], "caller")
+            with _product_dmabuf_scope(True):
+                self.assertEqual(os.environ["WEBKIT_DISABLE_DMABUF_RENDERER"], "1")
+            self.assertEqual(os.environ["WEBKIT_DISABLE_DMABUF_RENDERER"], "caller")
+
+        seen: list[tuple[str | None, str | None, str | None, str | None]] = []
+
+        def preflight() -> str:
+            seen.append(
+                (
+                    os.environ.get("GDK_BACKEND"),
+                    os.environ.get("WAYLAND_DISPLAY"),
+                    os.environ.get("DISPLAY"),
+                    os.environ.get("WEBKIT_DISABLE_DMABUF_RENDERER"),
+                )
+            )
+            return "1.4.2+dmabuf"
+
+        with mock.patch.dict(
+            os.environ,
+            {"DISPLAY": ":99", "WAYLAND_DISPLAY": "wayland-9"},
+            clear=True,
+        ), mock.patch(
+            "harness.pathlib.Path.is_file", return_value=True
+        ), mock.patch(
+            "harness._product_runtime_preflight", side_effect=preflight
+        ):
+            self.assertEqual(
+                _product_x11_dmabuf_pair_preflight(),
+                ("1.4.2+dmabuf", ":99"),
+            )
+            self.assertEqual(
+                seen,
+                [
+                    ("x11", None, ":99", None),
+                    ("x11", None, ":99", "1"),
+                ],
+            )
+            self.assertEqual(os.environ["DISPLAY"], ":99")
+            self.assertEqual(os.environ["WAYLAND_DISPLAY"], "wayland-9")
+            self.assertNotIn("GDK_BACKEND", os.environ)
+            self.assertNotIn("WEBKIT_DISABLE_DMABUF_RENDERER", os.environ)
+
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(HarnessError, "requires DISPLAY"):
+                _product_x11_dmabuf_pair_preflight()
 
     def test_product_backend_pair_preflight_checks_both_isolated_arms(self) -> None:
         seen: list[tuple[str | None, str | None, str | None]] = []
