@@ -1,0 +1,10 @@
+wm=Fluxbox readiness=PASS
+hello_pid=1637
+window_id=6291459
+title_pid_bound=PASS
+resize=PASS 800x600
+minimize=PASS
+restore=PASS
+host_exit=0
+native_close_reap=PASS
+FEDORA_FLUXBOX_X11_SMOKE=PASS

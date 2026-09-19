@@ -1,0 +1,76 @@
+{
+  "acceptance": {
+    "dynamic_link_unresolved": 0,
+    "fedora_owned_x11_host_exit_code": 0,
+    "fedora_owned_x11_minimize": true,
+    "fedora_owned_x11_native_close": true,
+    "fedora_owned_x11_resize_800x600": true,
+    "fedora_owned_x11_restore": true,
+    "fedora_owned_x11_title_pid_bound": true,
+    "locked_release_build": true,
+    "physical_xwayland_transport_probe": true
+  },
+  "artifact": {
+    "bytes": 1693384,
+    "path": "output/keld-host-fedora43",
+    "sha256": "046c2ace7ea29bbc11637d6f31b2416a7327a981ebdd9690307d907ab1b818d8"
+  },
+  "fedora_image": {
+    "digest": "fedora@sha256:a651ddf48ea28a06ed4e1e6519f51c9f47e7a5a138722ade87369b8fbb7e5b42",
+    "id": "sha256:1852c90cb07fb32334fb24982de36525ff012cc4ec2ef00a9f7be78326866493",
+    "tag": "fedora:43"
+  },
+  "files": {
+    "build_packages": {
+      "bytes": 400,
+      "relative": "output/fedora-packages.txt",
+      "sha256": "553cb6e60aeb853ab34c98e1326629a180903c33e0cf886deb34c8562e21b40b"
+    },
+    "fedora_host": {
+      "bytes": 1693384,
+      "relative": "output/keld-host-fedora43",
+      "sha256": "046c2ace7ea29bbc11637d6f31b2416a7327a981ebdd9690307d907ab1b818d8"
+    },
+    "native_x11_receipt": {
+      "bytes": 192,
+      "relative": "output/fedora-fluxbox-smoke.log",
+      "sha256": "fee00a8285b62e36a875fa462b64baea860265e2144b6f9f918de976853c821a"
+    },
+    "physical_x11_probe": {
+      "bytes": 248,
+      "relative": "output/fedora-x11-probe.txt",
+      "sha256": "a7833fa6c1a42cc1836ad4fd21466fb6147a8af60bec278dbb931c56d33017f9"
+    },
+    "runtime_packages": {
+      "bytes": 159,
+      "relative": "output/fedora-runtime-packages.txt",
+      "sha256": "5643458a3947b46c5c009eb8273df343343be3f71ef84251037e13a9d587e941"
+    },
+    "source_tar": {
+      "bytes": 6451200,
+      "relative": "input/keld-0ea0780.tar",
+      "sha256": "4da59cfb59605f8b3e05e433d85a962843d89cc9f6b579e02545c8e8e963ed02"
+    },
+    "window_controls_physical": {
+      "bytes": 358,
+      "relative": "output/fedora-keld-window-controls.txt",
+      "sha256": "a5d0bf1f4fcde7f17a1226bdb4c93e6f3e58ebb5661e4690e8e44c69baef492d"
+    }
+  },
+  "keld_sha": "0ea0780bb574ad242e9f1105fa4af5842872bad3",
+  "limitations": [
+    "Fedora is a pinned container/userland under Docker Desktop, not a bare-metal Fedora login.",
+    "Physical-display forwarding used an authenticated temporary TCP relay to host Xwayland; native close there was focus/WM-policy-distorted and is not the acceptance oracle.",
+    "The admitted lifecycle oracle is Fedora-owned Xvfb + Fluxbox, matching the repository headless X11 control contract.",
+    "No native Ubuntu Xorg login is configured on the physical machine."
+  ],
+  "schema": "kel28-fedora43-nondebian-acceptance/v1",
+  "toolchain": {
+    "cargo": "1.98.1",
+    "fluxbox": "1.3.7-28.fc43",
+    "gtk3": "3.24.52",
+    "rustc": "1.98.1 Fedora",
+    "webkit2gtk_4_1": "2.52.5",
+    "xvfb": "21.1.24-1.fc43"
+  }
+}
