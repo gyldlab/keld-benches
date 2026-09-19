@@ -14,7 +14,6 @@ import subprocess
 import sys
 import tempfile
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 import campaign as bun_campaign
@@ -451,8 +450,9 @@ def main() -> int:
 
     campaign_dir = out_dir / "campaign"
     campaign_dir.mkdir()
-    started = datetime.now(timezone.utc)
-    date = started.date().isoformat()
+    thermal_start = bun_campaign.linux_thermal_snapshot()
+    started_utc = thermal_start.sampled_utc
+    date = started_utc[:10]
 
     documents: dict[str, dict[str, list[dict]]] = {
         "small": {"rust": [], "bun": []},
@@ -508,7 +508,11 @@ def main() -> int:
                 )
         print(f"completed paired round {round_number:02d}", flush=True)
 
-    finished = datetime.now(timezone.utc)
+    thermal_end = bun_campaign.linux_thermal_snapshot()
+    thermal_state, thermal_evidence = bun_campaign.thermal_state_from_boundaries(
+        thermal_start, thermal_end
+    )
+    finished_utc = thermal_end.sampled_utc
     raw_files.sort(key=lambda item: item["path"])
     digest_chain = hashlib.sha256(
         b"".join(bytes.fromhex(item["sha256"]) for item in raw_files)
@@ -549,6 +553,7 @@ def main() -> int:
     provenance_files = [
         BUN_ROOT / "campaign.py",
         Path(__file__),
+        bun_campaign.THERMAL_MODULE,
         BUN_ROOT / "src/main.ts",
         BUN_ROOT / "src/runner.rs",
         BUN_ROOT / "src/kipc.ts",
@@ -574,8 +579,8 @@ def main() -> int:
                 f"requesting {rust_requested_calls(cache_state)} yields exactly "
                 "100000 scored post-handshake echo_invoke calls"
             ),
-            "started_utc": started.isoformat().replace("+00:00", "Z"),
-            "finished_utc": finished.isoformat().replace("+00:00", "Z"),
+            "started_utc": started_utc,
+            "finished_utc": finished_utc,
             "order_policy": (
                 "tier order alternates by round; arm order alternates within tier/round "
                 "so each arm runs first equally often"
@@ -599,7 +604,9 @@ def main() -> int:
             },
             "raw_corpus_digest_chain_sha256": digest_chain,
         },
-        "environment": bun_campaign.environment_metadata(),
+        "environment": bun_campaign.environment_metadata(
+            thermal_state, thermal_evidence
+        ),
         "statistics_method": {
             "percentile": "nearest-rank ceil(p*n), one-indexed",
             "per_arm_bootstrap": (
@@ -618,11 +625,9 @@ def main() -> int:
         "raw_files": raw_files,
         "publication": {
             "eligible": False,
-            "reasons": [
-                "THERMAL_STATE_UNVERIFIED",
-                "RESULT_V2_SESSION_BLOCK_SCHEMA_GAP",
-                "PRODUCT_CLIENT_VS_LIBRARY_FLOOR_DIAGNOSTIC",
-            ],
+            "reasons": bun_campaign.publication_reasons_for_thermal(
+                thermal_state, paired=True
+            ),
         },
         "claim_boundary": {
             "proves": (

@@ -89,6 +89,13 @@ The existing result-v2 schema does not model this independent-session
 library-arm corpus. These raw documents therefore remain diagnostic sidecars;
 they do not become publication-eligible product results.
 
+The historical standalone Rust campaign was operator-orchestrated; there is no
+second committed campaign controller in this fixture. Any future standalone
+Rust campaign that makes a thermal-state claim MUST wrap only its scored session
+block with the shared `linux/bench/thermal.py` boundary oracle and bind that
+module in its manifest provenance. The committed `paired_campaign.py` already
+does so for reproducible Rust/Bun comparisons.
+
 
 ## Optional warmup before scored calls
 

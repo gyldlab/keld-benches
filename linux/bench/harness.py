@@ -29,6 +29,20 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
+_BENCH_DIR = pathlib.Path(__file__).resolve().parent
+if str(_BENCH_DIR) not in sys.path:
+    sys.path.insert(0, str(_BENCH_DIR))
+
+from thermal import (  # noqa: E402
+    LinuxThermalSnapshot,
+    cpu_package_temperatures as _cpu_package_temperatures,
+    cpu_thermal_throttle_counters as _cpu_thermal_throttle_counters,
+    finalize_thermal_environment as _finalize_thermal_environment,
+    linux_thermal_snapshot as _linux_thermal_snapshot,
+    thermal_publication_reason as _thermal_publication_reason,
+    thermal_state_from_boundaries as _thermal_state_from_boundaries,
+)
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 REGISTRY_PATH = ROOT / "schema" / "metrics.v1.json"
@@ -36,6 +50,7 @@ SCHEMA_VERSION = 2
 SCHEMA_PATH = ROOT / "schema" / f"result.v{SCHEMA_VERSION}.schema.json"
 HARNESS_PATH = ROOT / "linux" / "bench" / "run.py"
 MODULE_PATH = ROOT / "linux" / "bench" / "harness.py"
+THERMAL_MODULE_PATH = ROOT / "linux" / "bench" / "thermal.py"
 TEMPLATE_PATH = ROOT / "linux" / "keld" / "hello" / "index.html"
 KELD_FIXTURE_PATH = "linux/keld/hello"
 KELD_DEV_FIXTURE_PATH = "linux/keld/dev-hello"
@@ -2637,6 +2652,7 @@ def _read_electron_artifact(artifact_dir: pathlib.Path) -> tuple[dict[str, Any],
     return provenance, artifact
 
 
+
 def _power_state() -> tuple[bool, bool, str]:
     supplies = pathlib.Path("/sys/class/power_supply")
     online: list[bool] = []
@@ -2779,8 +2795,11 @@ def _publication_reasons(
         add("AC_POWER_REQUIRED", "measurement did not run on AC power")
     if power["low_power_mode"]:
         add("LOW_POWER_MODE_ENABLED", "Linux low-power mode was enabled")
-    if power.get("thermal_state") != "nominal":
-        add("THERMAL_STATE_UNVERIFIED", "Linux thermal state was not independently verified")
+    thermal_reason = _thermal_publication_reason(str(power.get("thermal_state", "unverified")))
+    if thermal_reason == "THERMAL_THROTTLED":
+        add(thermal_reason, "Linux thermal/throttle evidence changed during the benchmark session")
+    elif thermal_reason is not None:
+        add(thermal_reason, "Linux thermal state was not independently verified")
     if metric_id in {"PAINT-OPPORTUNITY", "MEM-IDLE"}:
         if not paired:
             add("NO_PAIRED_ARM", f"Linux {metric_id} session currently contains only the Keld arm")
@@ -2832,7 +2851,6 @@ def _run_product_backend_pair_metric(
             "gdk_backend_pair=wayland,x11",
         )
     )
-    started_utc = utc_now()
     stock_renderer = (KELD_DEV_PROJECT_PATH / "index.html").read_bytes()
     beacon_script = KELD_DEV_BEACON_PATH.read_bytes()
     payload_sha = hashlib.sha256(stock_renderer + b"\0" + beacon_script).hexdigest()
@@ -2844,6 +2862,8 @@ def _run_product_backend_pair_metric(
             "paired product backend mode implements only PAINT-OPPORTUNITY and MEM-IDLE"
         )
 
+    thermal_start = _linux_thermal_snapshot()
+    started_utc = thermal_start.sampled_utc
     if args.cache_state == "warm-cache":
         for backend in ("wayland", "x11"):
             with _product_backend_scope(
@@ -2875,6 +2895,9 @@ def _run_product_backend_pair_metric(
             sample["diagnostics"]["round_position"] = position
             samples_by_backend[backend].append(sample)
 
+    power_evidence, finished_utc = _finalize_thermal_environment(
+        environment, power_evidence, thermal_start
+    )
     artifact = cli if args.metric == "PAINT-OPPORTUNITY" else host
     artifact_key = "cli" if args.metric == "PAINT-OPPORTUNITY" else "host"
     artifact_record = provenance["artifacts"][artifact_key]
@@ -2956,7 +2979,7 @@ def _run_product_backend_pair_metric(
         "cache_state": args.cache_state,
         "session": {
             "started_utc": started_utc,
-            "finished_utc": utc_now(),
+            "finished_utc": finished_utc,
             "requested_samples": args.samples,
             "interleaving": "round-robin-randomized",
             "label": args.label,
@@ -2974,6 +2997,7 @@ def _run_product_backend_pair_metric(
                 "modules": [
                     {"path": "linux/bench/run.py", "sha256": sha256_file(HARNESS_PATH)},
                     {"path": "linux/bench/harness.py", "sha256": sha256_file(MODULE_PATH)},
+                    {"path": "linux/bench/thermal.py", "sha256": sha256_file(THERMAL_MODULE_PATH)},
                 ],
             },
             "fixtures": [
@@ -3025,7 +3049,6 @@ def _run_product_x11_dmabuf_pair_metric(
             "nvidia_driver=loaded",
         )
     )
-    started_utc = utc_now()
     stock_renderer = (KELD_DEV_PROJECT_PATH / "index.html").read_bytes()
     beacon_script = KELD_DEV_BEACON_PATH.read_bytes()
     payload_sha = hashlib.sha256(stock_renderer + b"\0" + beacon_script).hexdigest()
@@ -3037,6 +3060,8 @@ def _run_product_x11_dmabuf_pair_metric(
             "paired X11 DMA-BUF mode implements only PAINT-OPPORTUNITY and MEM-IDLE"
         )
 
+    thermal_start = _linux_thermal_snapshot()
+    started_utc = thermal_start.sampled_utc
     conditions = ("normal", "disabled")
     if args.cache_state == "warm-cache":
         for condition in conditions:
@@ -3070,6 +3095,9 @@ def _run_product_x11_dmabuf_pair_metric(
             sample["diagnostics"]["round_position"] = position
             samples_by_condition[condition].append(sample)
 
+    power_evidence, finished_utc = _finalize_thermal_environment(
+        environment, power_evidence, thermal_start
+    )
     artifact = cli if args.metric == "PAINT-OPPORTUNITY" else host
     artifact_key = "cli" if args.metric == "PAINT-OPPORTUNITY" else "host"
     artifact_record = provenance["artifacts"][artifact_key]
@@ -3139,7 +3167,7 @@ def _run_product_x11_dmabuf_pair_metric(
         "cache_state": args.cache_state,
         "session": {
             "started_utc": started_utc,
-            "finished_utc": utc_now(),
+            "finished_utc": finished_utc,
             "requested_samples": args.samples,
             "interleaving": "round-robin-randomized",
             "label": args.label,
@@ -3157,6 +3185,7 @@ def _run_product_x11_dmabuf_pair_metric(
                 "modules": [
                     {"path": "linux/bench/run.py", "sha256": sha256_file(HARNESS_PATH)},
                     {"path": "linux/bench/harness.py", "sha256": sha256_file(MODULE_PATH)},
+                    {"path": "linux/bench/thermal.py", "sha256": sha256_file(THERMAL_MODULE_PATH)},
                 ],
             },
             "fixtures": [
@@ -3195,11 +3224,12 @@ def _run_product_metric(
     bench_sha, tree_state, advertised = _git_state()
     environment, power_evidence = _environment(provenance, args.metric)
     environment["toolchains"].append({"name": "bun", "version": bun_revision})
-    started_utc = utc_now()
     stock_renderer = (KELD_DEV_PROJECT_PATH / "index.html").read_bytes()
     beacon_script = KELD_DEV_BEACON_PATH.read_bytes()
     payload_sha = hashlib.sha256(stock_renderer + b"\0" + beacon_script).hexdigest()
 
+    thermal_start = _linux_thermal_snapshot()
+    started_utc = thermal_start.sampled_utc
     if args.cache_state == "warm-cache":
         if args.metric == "PAINT-OPPORTUNITY":
             priming = _product_paint_attempt(artifact_dir, 0, args.timeout_seconds)
@@ -3221,8 +3251,7 @@ def _run_product_metric(
             "Shipping Linux keld dev spawn-to-double-rAF product developer flow: CLI doctor, "
             "owner-private stage, no-flag host, strict-profile Bun, authenticated stock echo, "
             f"real WebKitGTK window, and native {os.environ.get('GDK_BACKEND', 'unknown')} close. "
-            "This is developer-flow startup, not "
-            f"packaged-app startup. Power evidence: {power_evidence}."
+            "This is developer-flow startup, not packaged-app startup."
         )
     elif args.metric == "MEM-IDLE":
         samples = [
@@ -3237,11 +3266,15 @@ def _run_product_metric(
             "stable generation-identical censuses. CLI, Bun, engine-helper, Keld-owned "
             "CLI+host and total-tree RSS remain named diagnostics. Native "
             f"{os.environ.get('GDK_BACKEND', 'unknown')} close and normal lifecycle cleanup "
-            f"are required for every valid sample. Power evidence: {power_evidence}."
+            "are required for every valid sample."
         )
     else:
         raise HarnessError("linux/keld/dev-hello implements only PAINT-OPPORTUNITY and MEM-IDLE")
 
+    power_evidence, finished_utc = _finalize_thermal_environment(
+        environment, power_evidence, thermal_start
+    )
+    notes += f" Power/thermal evidence: {power_evidence}."
     arm = {
         "arm_id": "keld-linux-dev",
         "framework": {"name": "Keld", "version": provenance["source_git_sha"][:12]},
@@ -3279,7 +3312,7 @@ def _run_product_metric(
         "cache_state": args.cache_state,
         "session": {
             "started_utc": started_utc,
-            "finished_utc": utc_now(),
+            "finished_utc": finished_utc,
             "requested_samples": args.samples,
             "interleaving": "none",
             "label": args.label,
@@ -3297,6 +3330,7 @@ def _run_product_metric(
                 "modules": [
                     {"path": "linux/bench/run.py", "sha256": sha256_file(HARNESS_PATH)},
                     {"path": "linux/bench/harness.py", "sha256": sha256_file(MODULE_PATH)},
+                    {"path": "linux/bench/thermal.py", "sha256": sha256_file(THERMAL_MODULE_PATH)},
                 ],
             },
             "fixtures": [{"path": KELD_DEV_FIXTURE_PATH, "sha": provenance["recipe_commit"]}],
@@ -3435,7 +3469,6 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
     )
     bench_sha, tree_state, advertised = _git_state()
     environment, power_evidence = _environment(provenance, args.metric)
-    started_utc = utc_now()
     template = TEMPLATE_PATH.read_bytes()
     payload_sha = hashlib.sha256(template).hexdigest()
     expected_payload_sha = provenance.get("recipe_files", {}).get(
@@ -3575,6 +3608,8 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
                 {"path": ELECTRON_FIXTURE_PATH, "sha": electron_provenance["fixture_commit"]}
             )
 
+        thermal_start = _linux_thermal_snapshot()
+        started_utc = thermal_start.sampled_utc
         if args.cache_state == "warm-cache":
             for config in paint_configs:
                 priming = _paint_attempt(
@@ -3623,6 +3658,9 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
                 for run in range(1, args.samples + 1)
             ]
 
+        power_evidence, finished_utc = _finalize_thermal_environment(
+            environment, power_evidence, thermal_start
+        )
         for config in paint_configs:
             samples = samples_by_arm[config["arm_id"]]
             arms.append(
@@ -3679,6 +3717,8 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
             + f"Power evidence: {power_evidence}."
         )
     elif args.metric == "MEM-IDLE":
+        thermal_start = _linux_thermal_snapshot()
+        started_utc = thermal_start.sampled_utc
         if args.cache_state == "warm-cache":
             priming = _memory_attempt(bench_artifact, template, 0, args.timeout_seconds)
             if not priming["valid"]:
@@ -3687,6 +3727,9 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
             _memory_attempt(bench_artifact, template, run, args.timeout_seconds)
             for run in range(1, args.samples + 1)
         ]
+        power_evidence, finished_utc = _finalize_thermal_environment(
+            environment, power_evidence, thermal_start
+        )
         artifact = bench_artifact
         artifact_record = provenance["artifacts"]["benchmark_adapter"]
         notes = (
@@ -3715,6 +3758,8 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
     else:
         artifact = product_artifact
         artifact_record = provenance["artifacts"]["product"]
+        thermal_start = _linux_thermal_snapshot()
+        started_utc = thermal_start.sampled_utc
         samples = [
             {
                 "run": 1,
@@ -3724,6 +3769,9 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
                 "diagnostics": {"artifact_lane": "raw-host-binary"},
             }
         ]
+        power_evidence, finished_utc = _finalize_thermal_environment(
+            environment, power_evidence, thermal_start
+        )
         notes = (
             "Byte count of the unpatched Release keld-host binary. This is a raw host lane, "
             f"not an installer or package. Power evidence: {power_evidence}."
@@ -3764,7 +3812,7 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
                 "label": "Keld uses system WebKitGTK while Electron uses embedded Chromium; this diagnostic cannot feed a same-engine scoreboard cell",
             }
         )
-    finished_utc = utc_now()
+    # finished_utc is the closing thermal boundary timestamp
     document = {
         "schema_version": SCHEMA_VERSION,
         "metric": {
@@ -3798,6 +3846,10 @@ def run_metric(args: Any) -> tuple[dict[str, Any], bool]:
                     {
                         "path": "linux/bench/harness.py",
                         "sha256": sha256_file(MODULE_PATH),
+                    },
+                    {
+                        "path": "linux/bench/thermal.py",
+                        "sha256": sha256_file(THERMAL_MODULE_PATH),
                     },
                 ],
             },

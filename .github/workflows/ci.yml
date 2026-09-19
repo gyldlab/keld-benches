@@ -129,6 +129,18 @@ jobs:
           sh -n linux/keld/hello/build.sh
           sh -n linux/keld/dev-hello/build.sh
 
+      - name: Check Linux benchmark controller imports
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python -m py_compile \
+            linux/bench/thermal.py \
+            linux/keld/kipc-bun-echo/campaign.py \
+            linux/keld/kipc-bun-echo/paired_campaign.py
+          python linux/keld/kipc-bun-echo/campaign.py --help >/dev/null
+          python linux/keld/kipc-bun-echo/paired_campaign.py --help >/dev/null
+          python linux/keld/kipc-bun-echo/test_campaign.py
+
       - name: List Linux metrics
         env:
           PYTHONDONTWRITEBYTECODE: "1"

@@ -85,6 +85,19 @@ The campaign writes raw documents and a manifest outside the repository first.
 Only a fully validated campaign is copied under `linux/bench/results/ipc-rtt/`
 as immutable evidence.
 
+### Thermal boundary
+
+The controller uses the shared `linux/bench/thermal.py` fail-closed oracle. The
+opening boundary is captured immediately before the 20 scored session pairs and
+the closing boundary immediately after the last scored pair. Compilation,
+negative controls, warm-cache priming, pilots, and bootstrap/statistics are
+outside that thermal window. A future manifest may omit
+`THERMAL_STATE_UNVERIFIED` only when CPU throttle counters do not advance, CPU
+package sensors stay below their hardware critical limits, and any present
+NVIDIA thermal-slowdown flags remain inactive at both boundaries. Sensor loss,
+reset, or topology changes remain `unverified`; observed throttle evidence is
+`THERMAL_THROTTLED`. Historical manifests are immutable.
+
 
 ## Paired Rust-floor comparison
 
@@ -126,4 +139,7 @@ or, for the registered warm-cache treatment:
 The campaign executes both arms' fail-closed controls and pilots before the
 20-round campaign, then writes compact raw documents plus one manifest outside
 the repository. Only a fully validated corpus is eligible to be copied into
-linux/bench/results/ipc-rtt/ as immutable diagnostic evidence.
+linux/bench/results/ipc-rtt/ as immutable diagnostic evidence. The same shared
+Linux thermal oracle wraps only the scored 20-round paired campaign; build,
+controls, priming, pilots, and paired bootstrap analysis remain outside the
+thermal session.

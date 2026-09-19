@@ -179,7 +179,11 @@ def routes_for_path(path: str) -> set[str] | None:
     if path in {
         "linux/bench/harness.py",
         "linux/bench/run.py",
+        "linux/bench/thermal.py",
         "linux/bench/test_harness.py",
+        "linux/keld/kipc-bun-echo/campaign.py",
+        "linux/keld/kipc-bun-echo/paired_campaign.py",
+        "linux/keld/kipc-bun-echo/test_campaign.py",
         "linux/keld/hello/build.sh",
         "linux/keld/hello/index.html",
         "linux/keld/hello/keld-bench-url.patch",
