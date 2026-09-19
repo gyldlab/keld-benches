@@ -39,7 +39,7 @@ app.whenReady().then(async () => {
   const window = new BrowserWindow({
     width: 960,
     height: 640,
-    show: false,
+    show: true,
     title: WINDOW_TITLE,
     backgroundColor: "#000000",
     autoHideMenuBar: true,
@@ -51,10 +51,6 @@ app.whenReady().then(async () => {
     },
   });
   window.setMenu(null);
-  window.once("ready-to-show", () => {
-    window.show();
-    window.focus();
-  });
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event, target) => {

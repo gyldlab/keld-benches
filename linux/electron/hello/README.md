@@ -14,13 +14,9 @@ The packaged main process requires `KELD_BENCH_URL` to be exactly:
 
 `http://127.0.0.1:<port>/run/<32 lowercase hex>/index.html`
 
-It creates one 960x640 black-backed BrowserWindow. The window is constructed
-hidden and, on Electron's normal `ready-to-show` lifecycle event, the app calls
-`show()` and `focus()` so the single benchmark window explicitly requests the
-foreground before the unchanged focused/visible paint oracle can pass. This is
-fixture-owned window lifecycle, not external focus automation. The app also
-denies popup creation, rejects top-level navigation away from the approved
-loopback URL, and keeps:
+It creates one visible 960x640 black-backed BrowserWindow, denies popup
+creation, rejects top-level navigation away from the approved loopback URL,
+and keeps:
 
 - `contextIsolation: true`
 - `nodeIntegration: false`
@@ -74,3 +70,26 @@ publication-ineligible for same-engine scoreboard use.
 Memory, installer/download size, loaded responsiveness, multiwindow, and
 renderer IPC remain separate future observables rather than being inferred
 from this paint fixture.
+
+## Physical-desktop admission status — 2026-09-19
+
+The committed fixture itself passes a standalone real-display smoke on the
+Ubuntu 26.04.1 GNOME machine's live Mutter Xwayland display under the unchanged
+visible/focused double-rAF oracle.
+
+A same-session 4-round Keld/Electron paired falsifier was then attempted with
+both artifacts built from the same benchmark recipe. Keld was 4/4 valid;
+Electron requested the page and emitted one beacon in every round, but all four
+Electron beacons were rejected as `document_not_focused`. No comparison was
+admitted.
+
+A separate diagnostic tried explicit fixture-owned `focus()` at window creation;
+it reproduced the same 0/4 focus failure. A hidden `ready-to-show` experiment
+could suppress the rAF beacon entirely. Both experiments were discarded from
+the committed fixture instead of weakening the oracle or introducing external
+focus automation.
+
+Therefore this PR adds the trusted comparator fixture and runner admission
+surface, **not** an Electron performance row. A future physical-desktop timing
+campaign must first make the committed, independently rebuilt fixture satisfy
+the unchanged focus/visibility oracle reproducibly under a matched session.
