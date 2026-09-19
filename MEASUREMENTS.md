@@ -1492,3 +1492,54 @@ Both documents remain publication-ineligible because Linux thermal state is
 not independently verified and the Keld arm is the committed
 `keld-host --hello` benchmark adapter rather than the shipping no-flag or
 `keld dev` product startup path. X11 here is Xwayland, not native Xorg.
+
+
+### Controlled product backend pair: matched DMA-BUF-disabled policy (2026-09-19)
+
+The earlier shipping-policy Wayland/X11 pair did not isolate display backend on
+this proprietary-NVIDIA host because Keld's Wayland safe-mode path set
+`WEBKIT_DISABLE_DMABUF_RENDERER=1` while the X11 path left it absent. This
+follow-up holds that rendering-policy variable equal.
+
+Both arms use the same Keld `0ea0780bb574ad242e9f1105fa4af5842872bad3`
+product artifacts rebuilt from benchmark recipe
+`ad3486d5e071b076d5873131e8cac717c726f902`. The benchmark parent sets
+`WEBKIT_DISABLE_DMABUF_RENDERER=1`, and every accepted sample independently
+reads the generation-bound `keld-host` environment and records the effective
+value as exactly `1` for both Wayland and X11/Xwayland. Every 30-round
+campaign is balanced 15 Wayland-first / 15 X11-first.
+
+#### Paint with matched DMA-BUF policy
+
+| cache | Wayland median | X11/Xwayland median | paired X11/Wayland CI95 |
+|---|---:|---:|---:|
+| fresh-process | **567.2715 ms** | **421.8185 ms** | **[0.736418, 0.759332]** |
+| warm-cache | **566.4985 ms** | **427.926 ms** | **[0.747259, 0.777132]** |
+
+
+Both paint campaigns completed 30/30 valid samples per arm. Under this one
+matched DMA-BUF-disabled policy on this machine, X11/Xwayland has lower
+shipping-`keld dev` paint latency than native Wayland. This is a bounded
+backend comparison for the measured NVIDIA/WebKitGTK/GNOME cell, not a claim
+that X11 is generally faster.
+
+The direction reversal relative to the earlier shipping-policy pair confirms
+that the earlier 1.73–1.79x X11/Wayland ratio was materially confounded by
+effective DMA-BUF policy. It does not by itself quantify a standalone causal
+"safe-mode cost" across the two separately executed campaigns.
+
+#### Memory with matched DMA-BUF policy
+
+| cache | Wayland host RSS | X11/Xwayland host RSS | paired X11/Wayland CI95 |
+|---|---:|---:|---:|
+| fresh-process | **180,848 KiB** | **166,922 KiB** | **[0.922366, 0.923342]** |
+| warm-cache | **180,878 KiB** | **166,930 KiB** | **[0.922059, 0.923271]** |
+
+Full-tree RSS medians were 501,446 KiB Wayland vs 467,376 KiB X11 in the
+fresh-process campaign and 502,144 KiB Wayland vs 467,368 KiB X11 in the
+warm-cache campaign.
+
+All four results remain diagnostic-only because Linux thermal state is not
+independently verified and the measured observable is the shipping `keld dev`
+developer flow rather than packaged-app startup. X11 is still Mutter Xwayland,
+not a native Xorg login.
