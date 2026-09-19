@@ -1643,3 +1643,49 @@ The documents remain **diagnostic-only** for one explicit scope reason:
 session-block schema blockers are absent. The scored interval is still the
 shipping Bun `AppLinkSession.echo` / `HostOwnedHelloSession` slice; it does
 not include a renderer/window or full `keld dev` startup.
+
+
+### Thermally verified paired Bun client vs Rust library floor result.v3 (2026-09-19)
+
+A new fresh-process paired IPC campaign was run from keld-benches
+`cedca63fafb67d59596d4afacf853e242e5afe19` against Keld
+`0ea0780bb574ad242e9f1105fa4af5842872bad3`.
+
+The campaign completed 20 matched rounds per payload tier. Tier order
+alternated by round and each arm ran first exactly 10/20 rounds in each tier.
+Both arms scored exactly 100,000 post-handshake CALL/REPLY observations per
+round, yielding 2,000,000 observations per arm per tier and 8,000,000 scored
+RTT observations across the complete paired campaign.
+
+The measured thermal boundary was **nominal**: CPU package temperature moved
+from 80 C to 71 C against the hardware-reported 100 C critical threshold, no
+CPU thermal-throttle counter advanced, and the NVIDIA GPU remained at 47 C
+with both software and hardware thermal-slowdown flags inactive.
+
+| Tier | Rust floor p99 | Bun product-client p99 | Paired Bun/Rust p99 ratio CI95 | Paired Bun-Rust p99 delta CI95 |
+|---|---:|---:|---:|---:|
+| small, 6 B | **10.813 us** [10.487, 11.261] | **27.749 us** [27.065, 28.355] | **2.566x** [2.471, 2.645] | **16.936 us** [16.275, 17.502] |
+| representative, 1,024 B | **12.842 us** [12.539, 13.060] | **35.900 us** [35.232, 36.579] | **2.796x** [2.718, 2.885] | **23.058 us** [22.313, 23.842] |
+
+At p50, the paired Bun/Rust ratios are 1.994x
+[1.960, 2.029] for the 6-byte tier and 2.365x
+[2.332, 2.394] for the 1 KiB tier.
+
+The result-v3 documents bind 20 paired-session-round blocks for each arm and
+tier. The 80 scored raw documents remain compact one-line JSON sidecars and are
+bound by path, SHA-256, byte count, per-arm digest chains, and the campaign
+manifest. The per-call vectors are not expanded into the v3 summaries.
+
+These documents are intentionally **diagnostic-only** with one remaining
+publication blocker: `PRODUCT_CLIENT_VS_LIBRARY_FLOOR_DIAGNOSTIC`. The Bun arm
+contains the shipping TypeScript codec/client, async scheduling and
+`HostOwnedHelloSession` orchestration; the Rust arm is the direct
+`keld-ipc` client/server library floor. The ratio therefore measures the
+distance from that shipping Bun slice to the direct library floor. It is not a
+pure Bun language/runtime tax, does not isolate a single cause for the
+additional latency, and does not include renderer/window or full `keld dev`
+startup.
+
+The prior thermal-state and result-v2 block-corpus schema blockers are absent.
+Historical paired campaigns remain immutable separate sessions and must not be
+subtracted from this campaign into a causal improvement/regression claim.
