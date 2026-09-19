@@ -1543,3 +1543,19 @@ All four results remain diagnostic-only because Linux thermal state is not
 independently verified and the measured observable is the shipping `keld dev`
 developer flow rather than packaged-app startup. X11 is still Mutter Xwayland,
 not a native Xorg login.
+
+### Fedora 43 bounded non-Debian acceptance receipt (2026-09-19)
+
+KEL-28 now has a public receipt bundle at
+`linux/keld/fedora43-acceptance/` for the bounded Fedora 43 spot-check. The
+exact Keld pin is `0ea0780bb574ad242e9f1105fa4af5842872bad3`. A pinned Fedora
+43 userland produced a locked Fedora-built host, and a Fedora-owned Xvfb +
+Fluxbox X11 control passed title/PID binding, resize, minimize/restore, native
+close, exit 0, and process reap. Package, toolchain, runtime, dynamic-link and
+artifact-hash receipts are committed beside the capture manifest.
+
+This is correctness/portability evidence, not a result.v2 performance row. The
+Fedora environment ran under Docker Desktop rather than a bare-metal Fedora
+login, and the accepted lifecycle oracle is Fedora-owned Xvfb + Fluxbox. It
+does not qualify native Xorg on the physical Ubuntu machine, Fedora Wayland,
+end-to-end Fedora `keld dev`, packaged startup, or release support.

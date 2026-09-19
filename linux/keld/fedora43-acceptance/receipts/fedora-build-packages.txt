@@ -1,0 +1,13 @@
+bubblewrap-0.12.0-1.fc43.x86_64
+cargo-1.98.1-1.fc43.x86_64
+gcc-15.3.1-1.fc43.x86_64
+gcc-c++-15.3.1-1.fc43.x86_64
+git-2.55.0-1.fc43.x86_64
+gtk3-devel-3.24.52-1.fc43.x86_64
+make-4.4.1-11.fc43.x86_64
+pkgconf-pkg-config-2.3.0-3.fc43.x86_64
+rust-1.98.1-1.fc43.x86_64
+webkit2gtk4.1-2.52.5-1.fc43.x86_64
+webkit2gtk4.1-devel-2.52.5-1.fc43.x86_64
+wmctrl-1.07-40.fc43.x86_64
+xdotool-3.20211022.1-9.fc43.x86_64
