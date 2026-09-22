@@ -28,7 +28,7 @@ mixed story, and we show that too.
 
 | Question | KELD | Comparison | What the benchmark is telling you |
 |---|---:|---:|---|
-| **How much memory does the native host keep resident?** Windows MEM-IDLE, 30 matched rounds | **22,788 KiB** | Tauri **26,856 KiB** | **~15.2% lower host working set.** Paired median ratio **0.8484**, CI95 **[0.846864, 0.849548]**; the interval excludes 1.0. This is the strongest current KELD-vs-Tauri memory result. [Result JSON](./windows/bench/results/mem-idle/2026-08-25.kel25-windows-keld-vs-tauri-canonical-30.fresh-process.json). |
+| **How much memory does the native host keep resident?** Windows MEM-IDLE, 30 matched rounds | **22,788 KiB** | Tauri **26,856 KiB** | **~15.2% lower host working set.** Host scope only: this excludes KELD's supervised Bun child and is **not total application memory**. Paired median ratio **0.8484**, CI95 **[0.846864, 0.849548]**; the interval excludes 1.0. [Result JSON](./windows/bench/results/mem-idle/2026-08-25.kel25-windows-keld-vs-tauri-canonical-30.fresh-process.json). |
 | **How heavy is the framework's main native process?** Windows direct-COM session | **19,552 KB** | Electron **89,140 KB** | KELD used about **78% less main-process RSS**; Electron's main process used about **4.6× as much**. This describes the native/main process, **not total application memory**. |
 | **How much native host code is there to ship?** Windows host executable | **484,864 B** | Tauri **8,634,880 B** | KELD's direct-COM host is about **94.4% smaller by bytes**; Tauri's recorded host executable is about **17.8× as large**. This is **not installer-to-installer**; KELD does not ship an installer yet. |
 | **How quickly does the first frame appear?** Windows direct-COM session | **469 ms** | Tauri **479 ms** · Electron **275 ms** | KELD and Tauri were close in this session. The 10 ms KELD/Tauri margin is too small against run noise to call a speed win. Electron was faster here. |
@@ -41,7 +41,7 @@ mixed story, and we show that too.
 | **Host working set / main-process RSS** | Memory consumed by the framework's native shell itself. A leaner host can leave more RAM for the actual application. |
 | **Total process-tree RSS** | Memory used by all processes belonging to the app. This is broader than host memory and can produce a different winner. |
 | **Host executable size** | Size of the native framework binary. It tells you how much native host code is present, but it is not the same as download or installer size. |
-| **First paint** | Time from launch until the first rendered frame can be observed. Lower usually feels more immediate to the user. |
+| **First paint** | Time from launch until the harness observes a double-rAF paint opportunity. It is a proxy, not compositor completion or display scanout. Lower usually feels more immediate to the user. |
 | **IPC round-trip time** | Cost of sending a framework message to another KELD process and receiving the reply. It measures communication overhead, not app startup. |
 
 ### Broader initial Windows context
@@ -81,35 +81,44 @@ For the full evidence trail, see [MEASUREMENTS.md](./MEASUREMENTS.md), the
 machine-readable result documents under each OS's bench/results tree, and
 the measurement contract in [HARNESS-CONTRACT.md](./HARNESS-CONTRACT.md).
 
-## Layout (OS → framework → fixture)
+## Repository layout
 
-Fixtures are organized **by operating system first**, then framework:
+Fixtures are organized **by operating system first**, then framework. The
+directory shape is intentionally simple:
 
+```text
+macos/<framework>/<fixture>/
+windows/<framework>/<fixture>/
+linux/<framework>/<fixture>/
 ```
-{macos|windows|linux}/<framework>/...
-```
 
-| Path | Status | Fixture |
-|---|---|---|
-| [`macos/swift/appkit-wk/`](./macos/swift/appkit-wk/) | **sources** | AppKit `NSWindow` + `WKWebView` hello |
-| [`macos/swift/swiftui-wk/`](./macos/swift/swiftui-wk/) | **sources** | SwiftUI + `WKWebView` hello |
-| [`macos/electron/hello/`](./macos/electron/hello/) | **sources + measured** | Electron 43.4.0 darwin/arm64 `.app` (2026-08-14) |
-| [`macos/tauri/hello/`](./macos/tauri/hello/) | **sources + measured** | Tauri 2.11.5 Release `.app` / DMG (2026-08-14) |
-| [`macos/wails/hello/`](./macos/wails/hello/) | **sources + measured** | Wails v3.0.0-beta.8 `wails3 package` (2026-08-14) |
-| [`macos/neutralino/hello/`](./macos/neutralino/hello/) | **sources + measured** | Neutralino 6.9.0 embedded arm64 + wrapped `.app` (2026-08-14) |
-| [`macos/nwjs/hello/`](./macos/nwjs/hello/) | **app sources + measured** | NW.js 0.114.1 normal flavor; runtime zip not committed (2026-08-14) |
-| [`macos/electrobun/hello/`](./macos/electrobun/hello/) | **sources + measured** | Electrobun 1.18.1 stable zstd / extracted `.app` (2026-08-14) |
-| [`windows/*/hello/`](./windows/) | **sources + measured** (2026-08-13/15) | Six framework hellos; see `MEASUREMENTS.md` Windows section |
-| [`windows/bench/`](./windows/bench/) | **harness + results** | First-paint / RSS oracle (`Measure-FirstPaint.ps1`) + negative controls |
-| [`windows/winui/hello/`](./windows/winui/hello/) | contract only | Windows native floor (Win32/WinUI + WebView2) — app not implemented |
-| [`linux/keld/hello/`](./linux/keld/hello/) | **Release recipe** | Keld product host + loopback-navigation benchmark adapter |
-| [`linux/bench/`](./linux/bench/) | **harness** | Linux `PAINT-OPPORTUNITY`, `MEM-IDLE`, and raw-host `DISK`, with negative controls |
-| [`linux/{electron,electrobun,neutralino,nwjs,tauri,wails}/hello/`](./linux/) | stub READMEs | Linux competitor packs (AppImage / deb / etc.) |
-| [`linux/gtk4/hello/`](./linux/gtk4/hello/) | **sources + Release recipe + paint arm** | Linux native floor (GTK4 + WebKitGTK 6.0) |
-| [`linux/webkitgtk/dmabuf-matrix/`](./linux/webkitgtk/dmabuf-matrix/) | **research fixture** | GTK3 + WebKitGTK 4.1 opaque/transparent DMA-BUF correctness matrix (KEL-171) |
+### macOS
 
-Native floors are per-OS: Swift under `macos/` only, Win32/WinUI under
-`windows/` only, GTK4 under `linux/` only.
+- [`macos/swift/appkit-wk/`](./macos/swift/appkit-wk/) — **sources** · AppKit `NSWindow` + `WKWebView` hello.
+- [`macos/swift/swiftui-wk/`](./macos/swift/swiftui-wk/) — **sources** · SwiftUI + `WKWebView` hello.
+- [`macos/electron/hello/`](./macos/electron/hello/) — **sources + measured** · Electron 43.4.0 darwin/arm64 `.app` (2026-08-14).
+- [`macos/tauri/hello/`](./macos/tauri/hello/) — **sources + measured** · Tauri 2.11.5 Release `.app` / DMG (2026-08-14).
+- [`macos/wails/hello/`](./macos/wails/hello/) — **sources + measured** · Wails v3.0.0-beta.8 `wails3 package` (2026-08-14).
+- [`macos/neutralino/hello/`](./macos/neutralino/hello/) — **sources + measured** · Neutralino 6.9.0 (2026-08-14).
+- [`macos/nwjs/hello/`](./macos/nwjs/hello/) — **app sources + measured** · NW.js 0.114.1; runtime zip is not committed (2026-08-14).
+- [`macos/electrobun/hello/`](./macos/electrobun/hello/) — **sources + measured** · Electrobun 1.18.1 stable zstd / extracted `.app` (2026-08-14).
+
+### Windows
+
+- [`windows/*/hello/`](./windows/) — **sources + measured** · six framework hello fixtures measured on 2026-08-13/15; see [`MEASUREMENTS.md`](./MEASUREMENTS.md).
+- [`windows/bench/`](./windows/bench/) — **harness + results** · first-paint / RSS oracle and negative controls.
+- [`windows/winui/hello/`](./windows/winui/hello/) — **contract only** · Windows native floor (Win32/WinUI + WebView2); app not implemented.
+
+### Linux
+
+- [`linux/keld/hello/`](./linux/keld/hello/) — **Release recipe** · KELD product host + loopback-navigation benchmark adapter.
+- [`linux/bench/`](./linux/bench/) — **harness** · `PAINT-OPPORTUNITY`, `MEM-IDLE`, and raw-host `DISK`, with negative controls.
+- [`linux/{electron,electrobun,neutralino,nwjs,tauri,wails}/hello/`](./linux/) — **stub READMEs** · competitor pack recipes.
+- [`linux/gtk4/hello/`](./linux/gtk4/hello/) — **sources + Release recipe + paint arm** · Linux native floor (GTK4 + WebKitGTK 6.0).
+- [`linux/webkitgtk/dmabuf-matrix/`](./linux/webkitgtk/dmabuf-matrix/) — **research fixture** · GTK3 + WebKitGTK 4.1 opaque/transparent DMA-BUF correctness matrix (KEL-171).
+
+Native floors are OS-specific: Swift on macOS, Win32/WinUI on Windows, and
+GTK4 on Linux.
 
 ## Measurement standard
 
