@@ -13,6 +13,33 @@ Measured summaries are mirrored in Keld
 (private monorepo paths may differ by branch). Record raw disk / RSS / DMG here
 in [`MEASUREMENTS.md`](./MEASUREMENTS.md).
 
+## Current evidence-backed advantages
+
+These are deliberately **metric-specific** claims from committed benchmark
+evidence. They are not an overall framework ranking. Each row states the scope
+that is safe to repeat publicly.
+
+| Platform / metric | Keld | Comparator | Evidence-backed reading |
+|---|---:|---:|---|
+| Windows paired `MEM-IDLE`, host working set — 30 matched rounds (2026-08-25) | **22,788 KiB** | Tauri **26,856 KiB** | **Keld host is ~15.2% smaller.** Paired median ratio **0.8484**, CI95 **[0.846864, 0.849548]**; the interval excludes 1.0. [Result JSON](./windows/bench/results/mem-idle/2026-08-25.kel25-windows-keld-vs-tauri-canonical-30.fresh-process.json). Host scope only; Keld's supervised Bun child is intentionally outside this comparison. |
+| Windows first paint, direct-COM session (2026-08-15) | **469 ms** | Tauri **479 ms** | Keld was ahead in this session; the margin is small relative to run noise, so **do not advertise a fixed speedup**. The same-session wry baseline was **467 ms vs 490 ms**. See [MEASUREMENTS.md](./MEASUREMENTS.md#windows-first-paint--kel-65-direct-com-ab-2026-08-15-median-of-7). |
+| Windows main-process RSS, same direct-COM session | **19,552 KB** | Electron **89,140 KB** | Keld's main/host process used about **4.6× less RSS**. This is **not total application RSS**: Electron still had the lower total RSS in the broader Windows measurements because the WebView2 arms carry a larger helper-process tier. |
+| Windows host executable (2026-08-13 measurement) | **624,128 B** | Tauri **8,634,880 B** | Keld's host executable was **13.8× smaller** in the recorded Windows hello artifacts. This is host-exe vs host-exe, **not installer-to-installer**. See [MEASUREMENTS.md](./MEASUREMENTS.md#disk-1). |
+| Windows Keld host, direct-COM rewrite | **484,864 B** | prior Keld wry host **625,152 B** | The Windows host itself shrank **22.4%** during KEL-65. This is an internal Keld improvement, not a competitor result. |
+
+### What the current data does **not** support
+
+- Do **not** say "Keld beats Tauri and Electron overall." The repository measures
+  individual lanes, not a universal winner.
+- In the cited Windows sessions, Electron still leads Keld on first paint and
+  total RSS; Keld's clear Electron advantage is the **main/host-process RSS**
+  lane.
+- The current Linux Keld-vs-Tauri paired paint evidence is **not directional**:
+  the paired confidence intervals cross 1.0 on both Wayland and X11/Xwayland,
+  so a Linux startup-speed win over Tauri must not be claimed.
+- Never build a public ratio from different sessions or different engine /
+  packaging lanes. Use the exact committed result linked above.
+
 ## Layout (OS → framework → fixture)
 
 Fixtures are organized **by operating system first**, then framework:
