@@ -221,6 +221,9 @@ def routes_for_path(path: str) -> set[str] | None:
     ):
         routes.add("windows")
 
+    if path.startswith("macos/tinyjs/hello/"):
+        routes.update({"contract", "macos"})
+
     if path.startswith("macos/swift/appkit-wk/") or path.startswith(
         "macos/swift/swiftui-wk/"
     ):

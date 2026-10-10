@@ -1,0 +1,9 @@
+{
+  "name": "tinyjs-hello",
+  "title": "TinyJS Hello",
+  "id": "com.keld.benches.tinyjs.hello",
+  "version": "0.1.0",
+  "size": "960x640",
+  "debug": false,
+  "signIdentity": "-"
+}

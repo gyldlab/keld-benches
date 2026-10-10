@@ -309,6 +309,14 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      - name: Test TinyJS fixture provenance and rejection controls
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 macos/tinyjs/hello/test_fixture.py
+
+      - name: Package checksum-pinned TinyJS release (no measurements)
+        run: python3 macos/tinyjs/hello/build.py "$RUNNER_TEMP/tinyjs-fixture"
+
       - name: Lint native fixture property lists
         run: |
           plutil -lint macos/swift/appkit-wk/Info.plist
