@@ -108,6 +108,12 @@ class RouteTests(unittest.TestCase):
             ALL,
         )
 
+    def test_tinyjs_fixture_routes_contract_and_macos(self) -> None:
+        for path in ("macos/tinyjs/hello/build.py", "macos/tinyjs/hello/upstream.json",
+                     "macos/tinyjs/hello/src/main.js", "macos/tinyjs/hello/test_fixture.py"):
+            with self.subTest(path=path):
+                self.assert_routes([path], "contract", "macos")
+
     def test_multiple_known_paths_union_routes(self) -> None:
         self.assert_routes(
             [
