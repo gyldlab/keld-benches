@@ -1,0 +1,579 @@
+{
+ "rule": "D = max(10 s, 4 x max over both subsets)",
+ "idle": {
+  "n": 30,
+  "runs": 30,
+  "quit_wait_us": {
+   "min": 485,
+   "median": 624.0,
+   "p90": 1060,
+   "max": 1148
+  },
+  "ui_end_us": {
+   "min": 282228,
+   "median": 328057.0,
+   "max": 379754
+  }
+ },
+ "load": {
+  "n": 30,
+  "runs": 30,
+  "quit_wait_us": {
+   "min": 739,
+   "median": 1034.5,
+   "p90": 68985,
+   "max": 218510
+  },
+  "ui_end_us": {
+   "min": 11306437,
+   "median": 15326841.5,
+   "max": 29123545
+  }
+ },
+ "max_us": 218510,
+ "four_times_max_us": 874040,
+ "floor_us": 10000000,
+ "d_us": 10000000,
+ "samples": [
+  {
+   "subset": "idle",
+   "run": 1,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 570,
+   "ui_end_us": 327523,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 2,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 1060,
+   "ui_end_us": 372451,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 3,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 623,
+   "ui_end_us": 350384,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 4,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 531,
+   "ui_end_us": 361941,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 5,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 596,
+   "ui_end_us": 300759,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 6,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 492,
+   "ui_end_us": 313152,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 7,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 526,
+   "ui_end_us": 327033,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 8,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 1148,
+   "ui_end_us": 282228,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 9,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 567,
+   "ui_end_us": 293364,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 10,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 554,
+   "ui_end_us": 330765,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 11,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 593,
+   "ui_end_us": 304978,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 12,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 485,
+   "ui_end_us": 328591,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 13,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 582,
+   "ui_end_us": 322724,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 14,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 887,
+   "ui_end_us": 362659,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 15,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 523,
+   "ui_end_us": 347917,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 16,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 691,
+   "ui_end_us": 317207,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 17,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 625,
+   "ui_end_us": 326073,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 18,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 565,
+   "ui_end_us": 314535,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 19,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 561,
+   "ui_end_us": 342231,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 20,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 771,
+   "ui_end_us": 334485,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 21,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 1036,
+   "ui_end_us": 362922,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 22,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 643,
+   "ui_end_us": 323312,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 23,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 1101,
+   "ui_end_us": 314651,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 24,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 669,
+   "ui_end_us": 308908,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 25,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 978,
+   "ui_end_us": 379754,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 26,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 653,
+   "ui_end_us": 367532,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 27,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 670,
+   "ui_end_us": 311938,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 28,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 869,
+   "ui_end_us": 352251,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 29,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 709,
+   "ui_end_us": 342654,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "idle",
+   "run": 30,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 570,
+   "ui_end_us": 333887,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 1,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 14325,
+   "ui_end_us": 14352482,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 2,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 1152,
+   "ui_end_us": 13748300,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 3,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 739,
+   "ui_end_us": 11578202,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 4,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 218510,
+   "ui_end_us": 11306437,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 5,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 17614,
+   "ui_end_us": 29123545,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 6,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 967,
+   "ui_end_us": 14119980,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 7,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 1007,
+   "ui_end_us": 25329654,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 8,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 959,
+   "ui_end_us": 14186177,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 9,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 968,
+   "ui_end_us": 16278378,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 10,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 956,
+   "ui_end_us": 19157612,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 11,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 2126,
+   "ui_end_us": 15302770,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 12,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 64141,
+   "ui_end_us": 15634837,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 13,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 174693,
+   "ui_end_us": 12915319,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 14,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 909,
+   "ui_end_us": 14657243,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 15,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 68985,
+   "ui_end_us": 22997537,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 16,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 1152,
+   "ui_end_us": 14209925,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 17,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 965,
+   "ui_end_us": 14981699,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 18,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 874,
+   "ui_end_us": 19591751,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 19,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 1046,
+   "ui_end_us": 13786455,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 20,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 981,
+   "ui_end_us": 16606926,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 21,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 49494,
+   "ui_end_us": 22605770,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 22,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 984,
+   "ui_end_us": 22223920,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 23,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 7894,
+   "ui_end_us": 17447043,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 24,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 1038,
+   "ui_end_us": 15350913,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 25,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 893,
+   "ui_end_us": 15864477,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 26,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 929,
+   "ui_end_us": 17910742,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 27,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 1037,
+   "ui_end_us": 21701167,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 28,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 1032,
+   "ui_end_us": 14836828,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 29,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 942,
+   "ui_end_us": 12054643,
+   "deadline_us": 10000000
+  },
+  {
+   "subset": "load",
+   "run": 30,
+   "outcome": "PASS",
+   "cause": "lifecycle-quit",
+   "quit_wait_us": 11939,
+   "ui_end_us": 12941387,
+   "deadline_us": 10000000
+  }
+ ]
+}

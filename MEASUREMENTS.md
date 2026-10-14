@@ -1735,3 +1735,33 @@ Fresh-process and warm-cache are separate campaigns. Their central values must
 not be subtracted to claim that cache warming caused a percentage speedup or
 slowdown. What this campaign establishes is that the registered warm-cache
 treatment is reproducible under a thermally verified v3 block-corpus session.
+
+## Keld handover quit deadline D — windows (2026-10-14, diagnostic)
+
+KEL-270 T4d S6c2a (gyldlab/keld#722, merge commit `1b4365ac`) sets the deadline D
+a profile handover gives the reference application to request `Quit` after the host's
+`LastWindowClosed` write. The rule is D = max(10 s, 4 x the measured maximum). The raw
+evidence is at
+[`windows/keld/handover-quit-deadline-2026-10-14/`](./windows/keld/handover-quit-deadline-2026-10-14/)
+(verify with `sha256sum -c SHA256SUMS` there).
+
+One sample is the host-monotonic interval from the return of the `LastWindowClosed`
+write to the lifecycle-Quit handler's entry for the `Quit` that claims the session. 30
+idle runs and 30 runs under full-core load (16 busy-loop burners on 16 logical cores)
+all passed. The host was a debug build with the `kel135-profile-test-root` feature built
+from Keld `045b4a45` (the pull request's measured path is unchanged by its later
+commits), on Windows 11 10.0.26300, AMD Ryzen 7 5800H, WebView2 155.0.4283.45, Bun 1.4.2.
+
+| subset | n | min | median | p90 | max |
+|---|---:|---:|---:|---:|---:|
+| idle | 30 | 0.485 ms | 0.624 ms | 1.060 ms | 1.148 ms |
+| full-core load | 30 | 0.739 ms | 1.035 ms | 68.985 ms | 218.510 ms |
+
+The maximum over both subsets is 218.510 ms; four times it is 0.874 s, below the 10 s
+floor, so D = 10 s. p90 uses `sorted[int(0.9 * n)]`, not nearest-rank (stated in the
+bundle's README).
+
+This is a single-machine, single-session, debug-host diagnostic. It is not a
+`result.v*` document, not a release-build measurement, and says nothing about other
+machines, a loaded WebView2 content process, or the barrier wait before `LastWindowClosed`
+(`ui_end_us`, up to 29.1 s under load, which is not part of D).

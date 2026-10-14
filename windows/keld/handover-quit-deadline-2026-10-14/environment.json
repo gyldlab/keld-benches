@@ -1,0 +1,30 @@
+{
+    "machine":  "<redacted-hostname>",
+    "os":  "Windows Microsoft Windows 11 Home Single Language 10.0.26300 build 26300",
+    "cpu":  "AMD Ryzen 7 5800H with Radeon Graphics         ",
+    "logical_cores":  16,
+    "rustc":  "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "cargo":  "cargo 1.97.1 (c980f4866 2026-06-30)",
+    "bun":  "1.4.2",
+    "webview2_runtime":  "155.0.4283.45",
+    "host_label":  "new",
+    "host_record":  {
+                        "label":  "new",
+                        "source":  "<keld-worktree>\\target\\debug\\keld-host.exe",
+                        "unsigned_sha256":  "b957b5356d0bdb1c088c8350c5c18f64be9a27f76f5e15d75820ade5242e87a5",
+                        "embedded_sha256":  "a06ac09954b1c303dcb5bc1f94393e03e2d5e23e958ecb101a08a2e337981da8",
+                        "signed_path":  "<evidence-dir>\\hosts\\new\\keld-host.exe",
+                        "signed_sha256":  "83e9e60c5e891a9ba9f3b2b28bb38804e008bee2aa5b0be499a55a4be607ff40",
+                        "description":  "keld.app-id/v1:dev.keld.fixture",
+                        "description_observed":  null,
+                        "signer_thumbprint":  "1331A42B3FF2313123989EDA9027EC54A413263F",
+                        "authenticode_status":  "Valid",
+                        "sign_exit":  0,
+                        "verify_exit":  0,
+                        "embed_exit":  0,
+                        "signed_at":  "2026-10-14T04:51:01.4227544Z"
+                    },
+    "host_features":  "kel135-profile-test-root (debug)",
+    "commit":  "045b4a45fd1ea8d4d4d4a7f1fee70f3ed5d4b7b9",
+    "measured_at":  "2026-10-14T05:30:27.4877330Z"
+}

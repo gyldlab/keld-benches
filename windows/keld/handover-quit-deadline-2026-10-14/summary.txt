@@ -1,0 +1,1 @@
+D_SUMMARY idle_n=30 idle_max_us=1148 idle_median_us=624.0 load_n=30 load_max_us=218510 load_median_us=1034.5 max_us=218510 four_times_max_us=874040 d_us=10000000
