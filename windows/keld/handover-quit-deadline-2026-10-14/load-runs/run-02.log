@@ -1,0 +1,9 @@
+
+running 1 test
+test profiles::handover::kel270_s6c2a_h11_reference_app_quits_within_d_after_handover ... KELD_KEL135_TEST_PROFILE_ROOT {"os_temp":"%USERPROFILE%\\AppData\\Local\\Temp\\keld135-profile-kmjsZ2","root":"%USERPROFILE%\\AppData\\Local\\Temp\\keld135-profile-kmjsZ2\\profile-test-root"}
+KELD_KEL254_INSTALLED host=%USERPROFILE%\AppData\Local\keld-kel254-J0IhbU\install\KeldPerUserFixture\updates\versions\1.0.0\tree\keld-host.exe app_id=dev.keld.fixture publisher_scope="8646c05511bcc8fa93ede8f6429c150650ed8416b416b138a0a36d2d28410a56"
+KELD_KEL270_H11 {"bun_pids":[4016,22572],"control_ms_last_window_closed_to_link_eof":8,"host":{"cause":"lifecycle-quit","deadline_us":10000000,"forced_after_us":null,"quit_wait_us":1152,"ui_end_us":13748300},"host_pid":16024,"window_census_at_last_window_closed":null,"window_gap_ms":4413,"window_transitions_ms":[[3363,6424460],[7512,1640436],[17613,0],[22026,2885580],[28281,27592462],[56690,0]]}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 63 filtered out; finished in 66.03s
+

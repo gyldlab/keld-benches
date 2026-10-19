@@ -34,3 +34,8 @@ windows/bench/windows-first-paint*.json text eol=lf
 # Raw IPC timing corpora are evidence payloads, not reviewable line-oriented source.
 # Keep exact bytes in Git but suppress text diffs; producers emit compact JSON.
 */bench/results/ipc-rtt/*.raw.json -diff text eol=lf
+
+# KEL-270 handover quit deadline evidence. The captured logs, TSVs and JSON are
+# CRLF as the Windows runner wrote them and SHA256SUMS is over those exact
+# bytes; -text stops core.autocrlf from rewriting them on any checkout.
+windows/keld/handover-quit-deadline-2026-10-14/** -text

@@ -1,0 +1,10 @@
+== burners start 2026-10-14T05:19:27Z
+BURNERS_STARTED count=16 logical_cores=16 pids=21688,17888,18472,14124,19812,14504,11776,2896,7492,10744,21348,4388,2080,3712,22032,23184
+== status before
+BURNERS_STATUS alive=16 cpu_load_percent=100
+== status mid 2026-10-14T05:50:34Z
+BURNERS_STATUS alive=16 cpu_load_percent=100
+== status after 2026-10-14T06:01:50Z
+BURNERS_STATUS alive=16 cpu_load_percent=100
+== burners stop
+BURNERS_STOPPED stopped=16
