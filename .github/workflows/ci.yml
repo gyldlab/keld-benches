@@ -309,6 +309,11 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      - name: Test draw.io saved-file oracle (offline only)
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 macos/bench/workloads/drawio-32.6.1/test_check_saved.py
+
       - name: Lint native fixture property lists
         run: |
           plutil -lint macos/swift/appkit-wk/Info.plist

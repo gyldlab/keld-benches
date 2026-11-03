@@ -1,0 +1,13 @@
+{
+  "format": "drawio-file-oracle-v1",
+  "input": "input.drawio",
+  "input_sha256": "a70cf70c84aeb8542e5ec430c87bdb11c6aadad38e23144fb8249c7df09ee26c",
+  "expected": "expected.drawio",
+  "expected_sha256": "16fa1f3d82ca0dc9b4b8cad7e92065a09ae353c57aad9e645825f44b1ae41b8c",
+  "required_edit": {
+    "page_id": "main",
+    "cell_id": "node-b",
+    "before": "Beta",
+    "after": "Beta (edited)"
+  }
+}

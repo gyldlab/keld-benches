@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" version="32.6.1"><diagram id="main" name="Page-1"><mxGraphModel dx="1080" dy="640" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100"><root>
+<mxCell id="0"/>
+<mxCell id="1" parent="0"/>
+<mxCell id="node-a" value="Alpha" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="100" y="120" width="120" height="60" as="geometry"/></mxCell>
+<mxCell id="node-b" value="Beta (edited)" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="340" y="120" width="120" height="60" as="geometry"/></mxCell>
+<mxCell id="edge-a-b" value="" style="endArrow=block;html=1;" edge="1" parent="1" source="node-a" target="node-b"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram></mxfile>
