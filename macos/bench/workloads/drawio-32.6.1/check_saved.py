@@ -10,7 +10,6 @@ import hashlib
 import json
 from pathlib import Path
 import re
-import sys
 from urllib.parse import unquote_to_bytes
 import xml.etree.ElementTree as ET
 import zlib
@@ -20,12 +19,52 @@ MAX_FILE_BYTES = 4 * 1024 * 1024
 MAX_EXPANDED_BYTES = 16 * 1024 * 1024
 MAX_PAGES = 16
 MAX_CELLS = 10_000
+MAX_XML_DEPTH = 64
+MAX_XML_NODES = 50_000
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
-_FORBIDDEN_XML = re.compile(rb"<!\s*(?:DOCTYPE|ENTITY)\b", re.IGNORECASE)
+_BAD_URI_ESCAPE = re.compile(r"%(?![0-9a-fA-F]{2})")
+# Only transport/editor metadata is excluded. File variables, page attributes
+# and unknown attributes are data, not permission to ignore differences.
+_EDITOR_METADATA = frozenset({
+    "host", "modified", "agent", "etag", "version", "type", "userAgent", "editor",
+    "compressed", "pages",  # Actual diagram nodes/content select the representation.
+})
 
 
 class OracleError(Exception):
     """A named, non-sensitive reason not to admit the saved-file evidence."""
+
+
+class _XmlBudget:
+    """One budget for the outer document and all decoded pages together."""
+
+    def __init__(self) -> None:
+        self.nodes = 0
+        self.expanded_bytes = 0
+
+
+class _BoundedTreeBuilder(ET.TreeBuilder):
+    def __init__(self, budget: _XmlBudget) -> None:
+        super().__init__()
+        self.budget = budget
+        self.depth = 0
+
+    def start(self, tag: str, attrs: dict) -> ET.Element:
+        self.depth += 1
+        self.budget.nodes += 1
+        if self.depth > MAX_XML_DEPTH or self.budget.nodes > MAX_XML_NODES:
+            raise OracleError("XML_COMPLEXITY_LIMIT")
+        return super().start(tag, attrs)
+
+    def end(self, tag: str) -> ET.Element:
+        result = super().end(tag)
+        self.depth -= 1
+        return result
+
+    def doctype(self, name: str, pubid: str | None, system: str | None) -> None:
+        # The parser decodes the XML encoding before invoking this callback.
+        # A byte-pattern check alone can miss UTF-16 DTD/entity declarations.
+        raise OracleError("XML_DTD_FORBIDDEN")
 
 
 def _read(path: Path, limit: int = MAX_FILE_BYTES) -> bytes:
@@ -43,16 +82,15 @@ def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _xml(data: bytes) -> ET.Element:
-    if _FORBIDDEN_XML.search(data):
-        raise OracleError("XML_DTD_FORBIDDEN")
+def _xml(data: bytes | str, budget: _XmlBudget | None = None) -> ET.Element:
+    parser = ET.XMLParser(target=_BoundedTreeBuilder(budget or _XmlBudget()))
     try:
-        return ET.fromstring(data)
-    except (ET.ParseError, UnicodeError, ValueError) as exc:
+        return ET.fromstring(data, parser=parser)
+    except (ET.ParseError, UnicodeError, ValueError, LookupError) as exc:
         raise OracleError("INVALID_XML") from exc
 
 
-def _decode_diagram(diagram: ET.Element) -> ET.Element:
+def _decode_diagram(diagram: ET.Element, budget: _XmlBudget) -> ET.Element:
     children = list(diagram)
     if len(children) == 1 and children[0].tag == "mxGraphModel":
         if (diagram.text and diagram.text.strip()) or (children[0].tail and children[0].tail.strip()):
@@ -63,18 +101,25 @@ def _decode_diagram(diagram: ET.Element) -> ET.Element:
     try:
         compressed = base64.b64decode(diagram.text.strip(), validate=True)
         inflater = zlib.decompressobj(-zlib.MAX_WBITS)  # draw.io raw DEFLATE
-        expanded = inflater.decompress(compressed, MAX_EXPANDED_BYTES + 1)
+        remaining = MAX_EXPANDED_BYTES - budget.expanded_bytes
+        expanded = inflater.decompress(compressed, remaining + 1)
         if (
-            len(expanded) > MAX_EXPANDED_BYTES
+            len(expanded) > remaining
             or not inflater.eof
             or inflater.unconsumed_tail
             or inflater.unused_data
         ):
             raise OracleError("INVALID_COMPRESSION")
-        model_bytes = unquote_to_bytes(expanded.decode("ascii"))
+        budget.expanded_bytes += len(expanded)
+        encoded = expanded.decode("ascii")
+        if _BAD_URI_ESCAPE.search(encoded):
+            raise OracleError("INVALID_COMPRESSION")
+        # Match draw.io's decodeURIComponent: reject malformed escapes and
+        # invalid UTF-8, then parse the decoded Unicode XML, not a new encoding.
+        model_text = unquote_to_bytes(encoded).decode("utf-8")
     except (ValueError, UnicodeError, zlib.error) as exc:
         raise OracleError("INVALID_COMPRESSION") from exc
-    model = _xml(model_bytes)
+    model = _xml(model_text, budget)
     if model.tag != "mxGraphModel":
         raise OracleError("UNSUPPORTED_DIAGRAM")
     return model
@@ -93,7 +138,8 @@ def _canonical(node: ET.Element) -> dict:
 
 
 def _snapshot(data: bytes) -> dict:
-    root = _xml(data)
+    budget = _XmlBudget()
+    root = _xml(data, budget)
     if root.tag != "mxfile" or not (1 <= len(root) <= MAX_PAGES):
         raise OracleError("UNSUPPORTED_DOCUMENT")
     if root.text and root.text.strip():
@@ -109,7 +155,7 @@ def _snapshot(data: bytes) -> dict:
         if page_id in page_ids:
             raise OracleError("DUPLICATE_PAGE")
         page_ids.add(page_id)
-        model = _decode_diagram(diagram)
+        model = _decode_diagram(diagram, budget)
         if (len(model) != 1 or model[0].tag != "root"
                 or (model.text and model.text.strip())
                 or (model[0].tail and model[0].tail.strip())
@@ -138,12 +184,17 @@ def _snapshot(data: bytes) -> dict:
         page = {
             "id": page_id,
             "name": diagram.attrib["name"],
+            "page_attrs": dict(sorted(diagram.attrib.items())),
             # dx/dy describe editor viewport displacement, not diagram state.
             "model_attrs": {k: v for k, v in sorted(model.attrib.items()) if k not in {"dx", "dy"}},
+            "root_attrs": dict(sorted(model[0].attrib.items())),
             "cells": [_canonical(cell) for cell in cells],
         }
         pages.append(page)
-    return {"pages": pages}
+    return {
+        "file_attrs": {k: v for k, v in sorted(root.attrib.items()) if k not in _EDITOR_METADATA},
+        "pages": pages,
+    }
 
 
 def _manifest(path: Path) -> dict:
@@ -157,7 +208,7 @@ def _manifest(path: Path) -> dict:
 
     try:
         manifest = json.loads(_read(path).decode("utf-8"), object_pairs_hook=unique)
-    except (UnicodeError, ValueError, TypeError) as exc:
+    except (UnicodeError, ValueError, TypeError, RecursionError) as exc:
         raise OracleError("INVALID_MANIFEST") from exc
     if not isinstance(manifest, dict) or manifest.get("format") != "drawio-file-oracle-v1":
         raise OracleError("INVALID_MANIFEST")
@@ -165,7 +216,7 @@ def _manifest(path: Path) -> dict:
         name = manifest.get(field)
         digest = manifest.get(f"{field}_sha256")
         if (not isinstance(name, str) or name in {"", ".", ".."}
-                or Path(name).name != name or "\\" in name
+                or Path(name).name != name or "\\" in name or "\x00" in name
                 or not isinstance(digest, str) or not _SHA256.fullmatch(digest)):
             raise OracleError("INVALID_MANIFEST")
     edit = manifest.get("required_edit")
