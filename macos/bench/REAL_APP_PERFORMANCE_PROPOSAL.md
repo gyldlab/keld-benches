@@ -14,7 +14,7 @@ A normal KELD application must not acquire new OS observation, process-enumerati
 
 | Question | Owner and source of truth | Can it determine a published score? |
 |---|---|---|
-| When was the window painted? | External OS harness, one pre-spawn monotonic clock, nonce-bound paint oracle | Only under its registered metric |
+| When did the registered paint opportunity occur? | External OS harness, one pre-spawn monotonic clock, nonce-bound double-`requestAnimationFrame` proxy beacon (not confirmed display scanout) | Only under its registered metric |
 | How much memory was resident? | OS-owned process census + named RSS counter | Only the registered denominator; coalition diagnostic stays separate |
 | How much memory is charged on macOS? | OS footprint tool and independently attributed process/service coalition | Not until a separately approved metric and macOS admission rule exist |
 | How much CPU time elapsed? | OS monotonic per-process counters and matched sampling window | Not until its metric is registered and qualified |
@@ -57,13 +57,9 @@ Store original samples and checksums with session provenance. A report must dist
 
 ## Draw.io 32.6.1 motivating diagnostic (NOT a benchmark result)
 
-Prior **single-session** macOS M4 pilot, as described in the working-session report, observed:
+An earlier **single-session** macOS M4 exploratory pilot motivated collecting separate RSS, physical-footprint and process/service-census diagnostics. Its numeric readings are intentionally **omitted** here: the original working-session report is not accompanied by a publicly pinned, immutable evidence manifest from which an independent reviewer can reconstruct the samples and included processes. Those readings were not qualified comparative scores. Summed RSS may count shared pages more than once; macOS footprint uses different accounting; and observed WebKit services have not yet passed independent session-ownership attribution.
 
-| Counter / census | Electron | KELD | Status |
-|---|---:|---:|---|
-| Sum of sampled process RSS | 341.0 MiB | 283.1 MiB | Exploratory; shared pages may be counted repeatedly |
-| macOS reported footprint | 234.5 MiB | 406.2 MiB | Exploratory; full attribution and additive semantics not qualified |
-| Counted core/helper processes | 4 core | 3 core + 6 associated WebKit | Different census categories; do not compare as an equivalent total |
+Before adding *any* pilot values to this public proposal, provide a safely redacted immutable evidence reference with hashes, exact OS/hardware and cache state, Electron/KELD build identities and artifact hashes, fixture hash and workload, per-process association/census, named counter semantics and aggregation, sampling unit and independent run count, reported statistic, and publication eligibility. An independent reviewer must be able to reproduce each displayed rounded value from that source alone.
 
 Historical workflow receipts describe successful 32.6.1 native Open/Edit/Save/Reopen/Cancel/Discard/Quit, but they were not newly re-qualified for this proposal. The KELD arm was developer-staged; the Electron arm was an installed app; diagram effective zoom did not match. **No RAM saving, CPU win, startup win, release qualification or public performance verdict follows.** Earlier 31.7.0 evidence remains a separate version/cohort.
 
