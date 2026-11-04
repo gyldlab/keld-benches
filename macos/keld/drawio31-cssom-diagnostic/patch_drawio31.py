@@ -36,9 +36,8 @@ def open_new_output(webroot: Path, policy: Path, output: Path) -> int:
     """Create new output pinned to its parent descriptor, never inside source."""
     resolved_webroot = webroot.resolve(strict=True)
     resolved_policy = policy.resolve(strict=True)
-    protected = [resolved_webroot]
-    if resolved_webroot.is_relative_to(resolved_policy.parent):
-        protected.append(resolved_policy.parent)
+    # Both source inputs remain protected even for a relocated renderer tree.
+    protected = [resolved_webroot, resolved_policy.parent]
     if output.name in {"", ".", ".."} or output.parent.is_symlink():
         raise ValueError("Invalid or symlinked output directory parent")
     parent = output.parent.resolve(strict=True)

@@ -101,6 +101,10 @@ class PinTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, 'outside the pinned app'):
                         patch.open_new_output(webroot, policy, path)
                     self.assertFalse(path.exists())
+            relocated_webroot = home / 'relocated-webroot'
+            relocated_webroot.mkdir()
+            with self.assertRaisesRegex(ValueError, 'outside the pinned app'):
+                patch.open_new_output(relocated_webroot, policy, app / 'generated')
             (home / 'safe-parent').mkdir()
             alias = home / 'symlink-parent'
             alias.symlink_to(home / 'safe-parent', target_is_directory=True)
