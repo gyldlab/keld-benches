@@ -309,6 +309,13 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      - name: Verify unscored draw.io 31.7.0 CSSOM diagnostic guards
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python3 -B macos/keld/drawio31-cssom-diagnostic/test_patch_drawio31.py
+          node macos/keld/drawio31-cssom-diagnostic/test_cssom.cjs
+
       - name: Lint native fixture property lists
         run: |
           plutil -lint macos/swift/appkit-wk/Info.plist
