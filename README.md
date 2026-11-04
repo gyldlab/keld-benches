@@ -103,6 +103,8 @@ linux/<framework>/<fixture>/
 - [`macos/nwjs/hello/`](./macos/nwjs/hello/) — **app sources + measured** · NW.js 0.114.1; runtime zip is not committed (2026-08-14).
 - [`macos/electrobun/hello/`](./macos/electrobun/hello/) — **sources + measured** · Electrobun 1.18.1 stable zstd / extracted `.app` (2026-08-14).
 
+- [`macos/tinyjs/hello/`](./macos/tinyjs/hello/) — **fixture + pinned build recipe, unmeasured** · TinyJSApp v0.50.1 / txiki.js v26.6.0, native-architecture `.app`. macOS runner admission is pending; no score or KELD comparison is claimed. See [the systems assessment](./TINYJSAPP-ASSESSMENT.md).
+
 ### Windows
 
 - [`windows/*/hello/`](./windows/) — **sources + measured** · six framework hello fixtures measured on 2026-08-13/15; see [`MEASUREMENTS.md`](./MEASUREMENTS.md).

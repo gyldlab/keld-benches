@@ -1,0 +1,18 @@
+{
+  "repository": "tarwin/tinyjsapp",
+  "version": "v0.50.1",
+  "source_commit": "2ea9f0ef7e83a4962adaaa78d4590c412e9f87a9",
+  "runtime_version": "v26.6.0",
+  "assets": {
+    "arm64": {
+      "name": "tinyjs-macos-arm64.tar.gz",
+      "sha256": "6cb145798eee17d75ac4be947653d6e7a47ce98eb6b6516866a83e0994201042",
+      "bytes": 3932713
+    },
+    "x86_64": {
+      "name": "tinyjs-macos-x86_64.tar.gz",
+      "sha256": "31ad56c426f14f3e14dc12535418e2ce9be154860f1dc3bdbe2db2b0b2e41bd8",
+      "bytes": 4089151
+    }
+  }
+}
