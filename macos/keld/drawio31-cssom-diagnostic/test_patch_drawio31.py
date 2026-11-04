@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -63,14 +64,69 @@ class PinTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Invalid'):
                 patch.load(Path(folder) / 'missing.js', patch.digest(patch.OLD_MIN))
 
-    def test_write_once_refuses_overwrite_and_retains_bytes(self) -> None:
+    def test_private_dir_writer_refuses_overwrite_and_retains_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
-            target = Path(folder) / 'out' / 'original.js'
-            patch.write_once(target, b'first')
+            home = Path(folder)
+            app = home / 'source-app'
+            webroot = app / 'drawio/src/main/webapp'
+            webroot.mkdir(parents=True)
+            policy = app / 'keld.permissions.jsonc'
+            policy.write_text('{}')
+            out = home / 'out'
+            root_fd = patch.open_new_output(webroot, policy, out)
+            try:
+                patch.write_once_at(root_fd, 'js/original.js', b'first')
+                with self.assertRaises(FileExistsError):
+                    patch.write_once_at(root_fd, 'js/original.js', b'second')
+                for bad_path in ('../escape.js', '/absolute.js', 'js/../../escape.js'):
+                    with self.subTest(bad_path=bad_path):
+                        with self.assertRaises(ValueError):
+                            patch.write_once_at(root_fd, bad_path, b'second')
+            finally:
+                os.close(root_fd)
+            target = out / 'js/original.js'
             self.assertEqual(target.read_bytes(), b'first')
-            with self.assertRaises(FileExistsError):
-                patch.write_once(target, b'second')
-            self.assertEqual(target.read_bytes(), b'first')
+            self.assertFalse((home / 'escape.js').exists())
+
+    def test_refuse_output_inside_source_and_symlinked_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder)
+            app = home / 'source-app'
+            webroot = app / 'drawio/src/main/webapp'
+            webroot.mkdir(parents=True)
+            policy = app / 'keld.permissions.jsonc'
+            policy.write_text('{}')
+            for path in (webroot / 'generated', app / 'generated'):
+                with self.subTest(path=path):
+                    with self.assertRaisesRegex(ValueError, 'outside the pinned app'):
+                        patch.open_new_output(webroot, policy, path)
+                    self.assertFalse(path.exists())
+            (home / 'safe-parent').mkdir()
+            alias = home / 'symlink-parent'
+            alias.symlink_to(home / 'safe-parent', target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, 'symlinked output'):
+                patch.open_new_output(webroot, policy, alias / 'new')
+            self.assertFalse((home / 'safe-parent/new').exists())
+
+    def test_refuse_symlinked_child_directory_for_writer(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder)
+            app = home / 'source-app'
+            webroot = app / 'drawio/src/main/webapp'
+            webroot.mkdir(parents=True)
+            policy = app / 'keld.permissions.jsonc'
+            policy.write_text('{}')
+            outside = home / 'outside'
+            outside.mkdir()
+            out = home / 'out'
+            root_fd = patch.open_new_output(webroot, policy, out)
+            try:
+                (out / 'js').symlink_to(outside, target_is_directory=True)
+                with self.assertRaises(OSError):
+                    patch.write_once_at(root_fd, 'js/app.min.js', b'do-not-leak')
+                self.assertFalse((outside / 'app.min.js').exists())
+            finally:
+                os.close(root_fd)
 
     def test_cli_rejects_wrong_original_before_output(self) -> None:
         with tempfile.TemporaryDirectory() as folder:

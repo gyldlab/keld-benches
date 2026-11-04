@@ -22,7 +22,7 @@ node macos/keld/drawio31-cssom-diagnostic/test_cssom.cjs \
 node --check ../new-private-cssom-diagnostic/js/app.min.js
 ```
 
-The input must match pinned SHA-256 hashes. Only one occurrence of the targeted function is allowed. Output must be a new directory. Two bytes-bound replacements are generated, one in readable `mxSvgCanvas2D.js` and one in the minified bundle. The output includes `readable-source.patch` and `receipt.json`. Expected bundled output SHA-256 is `744455ebd2c9f63db3fb9443201577f6465d99507cdcf8f61fe1a34222f5c13d`.
+The input must match pinned SHA-256 hashes. Only one occurrence of the targeted function is allowed. Output must be a new directory **outside the original app/project source tree**. The generator refuses a symlinked output parent and uses verified parent and output directory descriptors for writes, including nested files, to avoid following replaced paths into the app. Two bytes-bound replacements are generated, one in readable `mxSvgCanvas2D.js` and one in the minified bundle. The output includes `readable-source.patch` and `receipt.json`. Expected bundled output SHA-256 is `744455ebd2c9f63db3fb9443201577f6465d99507cdcf8f61fe1a34222f5c13d`.
 
 Offline tests need no installed draw.io or native GUI:
 
