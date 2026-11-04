@@ -108,6 +108,21 @@ class RouteTests(unittest.TestCase):
             ALL,
         )
 
+    def test_macos_drawio31_diagnostic_routes_only_macos(self) -> None:
+        for path in (
+            "macos/keld/drawio31-cssom-diagnostic/patch_drawio31.py",
+            "macos/keld/drawio31-cssom-diagnostic/test_patch_drawio31.py",
+            "macos/keld/drawio31-cssom-diagnostic/test_cssom.cjs",
+        ):
+            with self.subTest(path=path):
+                self.assert_routes([path], "macos")
+        self.assertEqual(
+            plan.plan_changes(
+                [plan.Change("M", "macos/keld/drawio31-cssom-diagnostic-extra/unsafe.py")]
+            ),
+            ALL,
+        )
+
     def test_multiple_known_paths_union_routes(self) -> None:
         self.assert_routes(
             [

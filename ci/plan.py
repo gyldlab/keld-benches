@@ -226,6 +226,9 @@ def routes_for_path(path: str) -> set[str] | None:
     ):
         routes.add("macos")
 
+    if path.startswith("macos/keld/drawio31-cssom-diagnostic/"):
+        routes.add("macos")
+
     if routes:
         return routes
     if _is_prose_document(path):
