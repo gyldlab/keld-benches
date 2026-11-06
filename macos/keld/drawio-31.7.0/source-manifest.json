@@ -1,0 +1,27 @@
+{
+  "expected_pre_edit_geometry": [
+    {
+      "cell_id": "keld-test-rectangle",
+      "height": 100,
+      "width": 220,
+      "x": 190,
+      "y": 80
+    },
+    {
+      "cell_id": "x54JlCnLDrUjkCjbq0Pr-1",
+      "height": 30,
+      "width": 60,
+      "x": 320,
+      "y": 210
+    }
+  ],
+  "fixture": "drawio-original-31.7.0-common-preedit-scene",
+  "fixture_manifest_version": 1,
+  "historical_prelaunch_input_verified": false,
+  "ready_for_scored_performance_comparison": false,
+  "scene_bytes": 1040,
+  "scene_file": "scene.drawio",
+  "scene_sha256": "236ffe4a7936e1d541b50e26f070177085dcdf5779055e67de6ba379801ba7a3",
+  "source_kind": "retained_original_editor_application_created_pre_edit_backup",
+  "source_ledger": "KEL-90, 2026-11-06 input-stage-custody and prelaunch-seed comments"
+}
