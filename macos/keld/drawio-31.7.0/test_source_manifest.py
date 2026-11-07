@@ -164,6 +164,9 @@ def save_receipt_once(path: Path, receipt: dict) -> None:
         raise ValueError('receipt requires an absolute path with no symlinked parents')
     if not path.parent.is_dir() or path.name in ('', '.', '..'):
         raise ValueError('receipt parent must be an existing directory')
+    fixture_root = HERE.resolve(strict=True)
+    if path.parent == fixture_root or fixture_root in path.parent.parents:
+        raise ValueError('receipt must be outside the source fixture tree')
     payload = (json.dumps(receipt, sort_keys=True, allow_nan=False) + '\n').encode('utf-8')
     staged = None
     try:
@@ -240,7 +243,10 @@ class PrelaunchInputTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.directory = Path(self.tmp.name)
+        self.directory = Path(self.tmp.name) / 'source'
+        self.directory.mkdir()
+        self.receipts_directory = (Path(self.tmp.name) / 'receipts').resolve()
+        self.receipts_directory.mkdir()
         for name in ('scene.drawio', 'source-manifest.json'):
             shutil.copyfile(HERE / name, self.directory / name)
         self.override = patch.dict(globals(), {'HERE': self.directory})
@@ -317,7 +323,7 @@ class PrelaunchInputTests(unittest.TestCase):
 
     def test_exclusive_receipt_file_contains_only_prelaunch_proof(self) -> None:
         receipt = attest_before_launch('baseline', self.attempt_id)
-        output = (self.directory / 'evidence.json').resolve()
+        output = (self.receipts_directory / 'evidence.json').resolve()
         save_receipt_once(output, receipt)
         self.assertEqual(json.loads(output.read_text()), receipt)
         self.assertFalse(json.loads(output.read_text())['performance_admitted'])
@@ -331,16 +337,16 @@ class PrelaunchInputTests(unittest.TestCase):
 
     def test_existing_symlink_and_symlink_parent_never_receive_receipt(self) -> None:
         receipt = attest_before_launch('candidate', self.attempt_id)
-        outside = self.directory / 'untouched.txt'
+        outside = self.receipts_directory / 'untouched.txt'
         outside.write_text('unaltered')
-        malicious = self.directory / 'evidence.json'
+        malicious = self.receipts_directory / 'malicious-evidence.json'
         malicious.symlink_to(outside)
         with self.assertRaises(FileExistsError):
             save_receipt_once(malicious.resolve(strict=False).parent / malicious.name, receipt)
         self.assertEqual(outside.read_text(), 'unaltered')
-        real_parent = self.directory / 'actual-folder'
+        real_parent = self.receipts_directory / 'actual-folder'
         real_parent.mkdir()
-        linked_parent = self.directory / 'linked-folder'
+        linked_parent = self.receipts_directory / 'linked-folder'
         linked_parent.symlink_to(real_parent, target_is_directory=True)
         with self.assertRaisesRegex(ValueError, 'symlinked parents'):
             save_receipt_once(linked_parent / 'receipt.json', receipt)
@@ -349,7 +355,7 @@ class PrelaunchInputTests(unittest.TestCase):
     def test_cli_attestation_exclusive_success_and_second_run_refusal(self) -> None:
         module = self.directory / 'test_source_manifest.py'
         shutil.copyfile(Path(__file__), module)
-        output = (self.directory / 'cli-receipt.json').resolve()
+        output = (self.receipts_directory / 'cli-receipt.json').resolve()
         command = [
             sys.executable, '-B', str(module), '--attest-before-launch',
             '--arm', 'electron', '--attempt-id', self.attempt_id,
@@ -366,12 +372,18 @@ class PrelaunchInputTests(unittest.TestCase):
         self.assertNotIn('"performance_admitted": true', second.stdout)
         self.assertEqual(output.read_bytes(), before)
 
+    def test_output_inside_source_tree_is_rejected(self) -> None:
+        receipt = attest_before_launch('baseline', self.attempt_id)
+        with self.assertRaisesRegex(ValueError, 'outside the source'):
+            save_receipt_once((self.directory / 'forbidden.json').resolve(), receipt)
+        self.assertFalse((self.directory / 'forbidden.json').exists())
+
     def test_cli_tampered_source_creates_no_receipt(self) -> None:
         module = self.directory / 'test_source_manifest.py'
         shutil.copyfile(Path(__file__), module)
         source = self.directory / 'scene.drawio'
         source.write_bytes(source.read_bytes()[:-1] + b'X')
-        output = (self.directory / 'never-success.json').resolve()
+        output = (self.receipts_directory / 'never-success.json').resolve()
         import subprocess
         result = subprocess.run(
             [sys.executable, '-B', str(module), '--attest-before-launch',
