@@ -5,6 +5,7 @@ These are not native editor, RAM, CPU or successful IPC delivery tests.
 import hashlib
 import json
 import os
+import plistlib
 from pathlib import Path
 import shutil
 import subprocess
@@ -33,6 +34,20 @@ class FixtureNativeCorrectnessTests(unittest.TestCase):
         self.attempt = self.root / 'attempt-01'
         self.attempt.mkdir(mode=0o700)
         self.uid = str(uuid.uuid4())
+
+    def portable_bundle(self, arm_root, arm):
+        app = arm_root / 'NativeFixtureBoundary.app'
+        binary = app / 'Contents' / 'MacOS' / 'NativeFixtureBoundary'
+        binary.parent.mkdir(parents=True)
+        binary.write_bytes(b'#!/bin/sh\nexit 0\n')
+        binary.chmod(0o755)
+        with (app/'Contents'/'Info.plist').open('wb') as stream:
+            plistlib.dump({
+                'CFBundlePackageType': 'APPL',
+                'CFBundleExecutable': 'NativeFixtureBoundary',
+                'CFBundleIdentifier': f'com.gyldlab.keld.kel90.bench.{arm}',
+            }, stream)
+        return app
 
     def stage(self, arm='baseline'):
         return controller.stage_verified_input(arm, '01', self.attempt, self.fixture, self.uid)
@@ -135,9 +150,44 @@ class FixtureNativeCorrectnessTests(unittest.TestCase):
                 controller.go('baseline', '07')
         self.assertFalse((outside/'attempt-07').exists())
 
+    def test_other_arm_app_bundle_refused_before_creating_attempt(self):
+        pair = self.root / 'pair'
+        arm = pair / 'candidate'
+        arm.mkdir(parents=True)
+        self.portable_bundle(arm, 'baseline')
+        with patch.object(controller, 'pair', pair), patch.object(controller, 'family', return_value=[]), patch.object(controller, 'stage_verified_input', side_effect=RuntimeError('stage sentinel')):
+            with self.assertRaisesRegex(ValueError, 'native bundle arm identity'):
+                controller.go('candidate', '07')
+        self.assertFalse((arm/'attempt-07').exists())
+
+    def test_bundle_symlink_refused_before_creating_attempt(self):
+        pair = self.root / 'pair'
+        source = pair / 'baseline'
+        source.mkdir(parents=True)
+        self.portable_bundle(source, 'baseline')
+        arm = pair / 'candidate'
+        arm.mkdir()
+        (arm/'NativeFixtureBoundary.app').symlink_to(source/'NativeFixtureBoundary.app', target_is_directory=True)
+        with patch.object(controller, 'pair', pair), patch.object(controller, 'family', return_value=[]), patch.object(controller, 'stage_verified_input', side_effect=RuntimeError('stage sentinel')):
+            with self.assertRaisesRegex(ValueError, 'native bundle path'):
+                controller.go('candidate', '07')
+        self.assertFalse((arm/'attempt-07').exists())
+
+    def test_bundle_missing_executable_refused(self):
+        pair = self.root / 'pair'
+        arm = pair / 'candidate'
+        arm.mkdir(parents=True)
+        app = self.portable_bundle(arm, 'candidate')
+        (app/'Contents'/'MacOS'/'NativeFixtureBoundary').unlink()
+        with patch.object(controller, 'pair', pair), patch.object(controller, 'family', return_value=[]), patch.object(controller, 'stage_verified_input', side_effect=RuntimeError('stage sentinel')):
+            with self.assertRaisesRegex(ValueError, 'native bundle metadata or executable'):
+                controller.go('candidate', '07')
+        self.assertFalse((arm/'attempt-07').exists())
+
     def test_real_arm_reaches_stage_without_gui_launch(self):
         pair = self.root / 'pair'
         (pair/'baseline').mkdir(parents=True)
+        self.portable_bundle(pair/'baseline', 'baseline')
         with patch.object(controller, 'pair', pair), patch.object(controller, 'family', return_value=[]), patch.object(controller, 'stage_verified_input', side_effect=RuntimeError('stage sentinel')):
             with self.assertRaisesRegex(RuntimeError, 'stage sentinel'):
                 controller.go('baseline', '07')

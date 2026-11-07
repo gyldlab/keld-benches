@@ -150,6 +150,37 @@ def check_native_final_log(log):
                          ','.join(failures or ('no_binary_terminal_success',)))
     return True
 
+def checked_native_bundle(arm_root, arm):
+    """Necessary native app-path/arm identity preflight, not TCC or launch proof."""
+    import plistlib
+    import stat
+    bundle = arm_root / 'NativeFixtureBoundary.app'
+    contents = bundle / 'Contents'
+    macos = contents / 'MacOS'
+    info = contents / 'Info.plist'
+    executable = macos / 'NativeFixtureBoundary'
+    for item in (bundle, contents, macos, info, executable):
+        if item.is_symlink():
+            raise ValueError('native bundle path must not contain a symlink')
+    if not all(x.is_dir() for x in (bundle, contents, macos)):
+        raise ValueError('native bundle directories missing')
+    if not info.is_file() or not executable.is_file():
+        raise ValueError('native bundle metadata or executable missing')
+    if not stat.S_ISREG(executable.stat().st_mode) or not os.access(executable, os.X_OK):
+        raise ValueError('native bundle executable is not runnable')
+    try:
+        metadata = plistlib.loads(info.read_bytes())
+    except (ValueError, TypeError, OverflowError) as error:
+        raise ValueError('native bundle Info.plist unreadable') from error
+    expected = f'com.gyldlab.keld.kel90.bench.{arm}'
+    if (not isinstance(metadata, dict)
+        or metadata.get('CFBundleIdentifier') != expected
+        or metadata.get('CFBundlePackageType') != 'APPL'
+        or metadata.get('CFBundleExecutable') != 'NativeFixtureBoundary'):
+        raise ValueError('native bundle arm identity mismatch')
+    return bundle
+
+
 def go(arm,num):
  if arm not in ('baseline', 'candidate') or not re.fullmatch(r'[0-9]{2,3}', num):
   raise ValueError('native diagnostic requires a baseline/candidate arm and 2-3 digit attempt')
@@ -160,6 +191,7 @@ def go(arm,num):
  arm_root=pair/arm
  if arm_root.is_symlink() or not arm_root.is_dir():
   raise ValueError('arm root must be an existing real directory')
+ checked_native_bundle(arm_root,arm)
  dest=arm_root/('attempt-'+num)
  # One fresh process generation per attempt: even a failed setup is retained,
  # never retried under the same attempt directory / score slot.
@@ -174,7 +206,8 @@ def go(arm,num):
          binding['launch_document_mtime_ns'])
      or filehash(launch_file) != binding['launch_document_sha256']):
   raise ValueError('launch document mutated after verified stage')
- sp.run(['open','-n','-a',str(pair/arm/'NativeFixtureBoundary.app'),'--args',str(dest)],check=True)
+ checked_native_bundle(arm_root,arm)
+ sp.run(['open','-n','-a',str(arm_root/'NativeFixtureBoundary.app'),'--args',str(dest)],check=True)
  for tool in ['drive','work']:
   with (dest/(tool+'-strict.log')).open('x') as f:
    sp.run([sys.executable,'-u',str(out/(tool+'.py')),arm,num],stdout=f,stderr=sp.STDOUT,check=True,timeout=260)
