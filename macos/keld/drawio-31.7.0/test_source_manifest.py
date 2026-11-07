@@ -157,6 +157,34 @@ def attest_before_launch(arm: str, attempt_id: str) -> dict:
     }
 
 
+
+def save_receipt_once(path: Path, receipt: dict) -> None:
+    """Publish fully written evidence at a never-replaced path, not an app oracle."""
+    if not path.is_absolute() or path.parent.resolve(strict=True) != path.parent:
+        raise ValueError('receipt requires an absolute path with no symlinked parents')
+    if not path.parent.is_dir() or path.name in ('', '.', '..'):
+        raise ValueError('receipt parent must be an existing directory')
+    payload = (json.dumps(receipt, sort_keys=True, allow_nan=False) + '\n').encode('utf-8')
+    staged = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=path.parent, prefix='.source-receipt-', suffix='.pending',
+            delete=False,
+        ) as candidate:
+            staged = Path(candidate.name)
+            os.fchmod(candidate.fileno(), 0o600)
+            candidate.write(payload)
+            candidate.flush()
+            os.fsync(candidate.fileno())
+        # POSIX link is an atomic, exclusive create; it refuses existing
+        # regular files and even dangling destination symlinks.
+        os.link(staged, path, follow_symlinks=False)
+    finally:
+        if staged is not None:
+            staged.unlink(missing_ok=True)
+
+
+
 class SourceFixtureTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -286,6 +314,75 @@ class PrelaunchInputTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'file changed during prelaunch read'):
                 attest_before_launch('baseline', self.attempt_id)
 
+
+    def test_exclusive_receipt_file_contains_only_prelaunch_proof(self) -> None:
+        receipt = attest_before_launch('baseline', self.attempt_id)
+        output = (self.directory / 'evidence.json').resolve()
+        save_receipt_once(output, receipt)
+        self.assertEqual(json.loads(output.read_text()), receipt)
+        self.assertFalse(json.loads(output.read_text())['performance_admitted'])
+        self.assertFalse(json.loads(output.read_text())['app_loaded_source_verified'])
+        self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+        before = output.read_bytes()
+        with self.assertRaises(FileExistsError):
+            save_receipt_once(output, receipt)
+        self.assertEqual(output.read_bytes(), before)
+        self.assertFalse(list(self.directory.glob('.source-receipt-*.pending')))
+
+    def test_existing_symlink_and_symlink_parent_never_receive_receipt(self) -> None:
+        receipt = attest_before_launch('candidate', self.attempt_id)
+        outside = self.directory / 'untouched.txt'
+        outside.write_text('unaltered')
+        malicious = self.directory / 'evidence.json'
+        malicious.symlink_to(outside)
+        with self.assertRaises(FileExistsError):
+            save_receipt_once(malicious.resolve(strict=False).parent / malicious.name, receipt)
+        self.assertEqual(outside.read_text(), 'unaltered')
+        real_parent = self.directory / 'actual-folder'
+        real_parent.mkdir()
+        linked_parent = self.directory / 'linked-folder'
+        linked_parent.symlink_to(real_parent, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'symlinked parents'):
+            save_receipt_once(linked_parent / 'receipt.json', receipt)
+        self.assertFalse((real_parent / 'receipt.json').exists())
+
+    def test_cli_attestation_exclusive_success_and_second_run_refusal(self) -> None:
+        module = self.directory / 'test_source_manifest.py'
+        shutil.copyfile(Path(__file__), module)
+        output = (self.directory / 'cli-receipt.json').resolve()
+        command = [
+            sys.executable, '-B', str(module), '--attest-before-launch',
+            '--arm', 'electron', '--attempt-id', self.attempt_id,
+            '--receipt-out', str(output),
+        ]
+        import subprocess
+        first = subprocess.run(command, capture_output=True, text=True, check=False)
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual(json.loads(first.stdout), json.loads(output.read_text()))
+        self.assertEqual(json.loads(first.stdout)['arm'], 'electron')
+        before = output.read_bytes()
+        second = subprocess.run(command, capture_output=True, text=True, check=False)
+        self.assertEqual(second.returncode, 2)
+        self.assertNotIn('"performance_admitted": true', second.stdout)
+        self.assertEqual(output.read_bytes(), before)
+
+    def test_cli_tampered_source_creates_no_receipt(self) -> None:
+        module = self.directory / 'test_source_manifest.py'
+        shutil.copyfile(Path(__file__), module)
+        source = self.directory / 'scene.drawio'
+        source.write_bytes(source.read_bytes()[:-1] + b'X')
+        output = (self.directory / 'never-success.json').resolve()
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, '-B', str(module), '--attest-before-launch',
+             '--arm', 'baseline', '--attempt-id', self.attempt_id,
+             '--receipt-out', str(output)],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(output.exists())
+        self.assertNotIn('"status": "source_bytes_verified_only"', result.stdout)
+
     def test_missing_source_and_bad_attempt_refused(self) -> None:
         with self.assertRaisesRegex(ValueError, 'canonical UUID'):
             attest_before_launch('baseline', 'attempt-1')
@@ -302,12 +399,19 @@ if __name__ == '__main__':
         parser.add_argument('--attest-before-launch', action='store_true')
         parser.add_argument('--arm', required=True, choices=('baseline', 'candidate', 'electron'))
         parser.add_argument('--attempt-id', required=True)
+        parser.add_argument('--receipt-out', type=Path)
         arguments = parser.parse_args()
         try:
             receipt = attest_before_launch(arguments.arm, arguments.attempt_id)
         except (OSError, ValueError, json.JSONDecodeError) as error:
             print(f'prelaunch source NOT VERIFIED: {error}', file=sys.stderr)
             raise SystemExit(2) from error
+        if arguments.receipt_out is not None:
+            try:
+                save_receipt_once(arguments.receipt_out, receipt)
+            except (OSError, ValueError) as error:
+                print(f'prelaunch receipt NOT SAVED: {error}', file=sys.stderr)
+                raise SystemExit(2) from error
         print(json.dumps(receipt, sort_keys=True, allow_nan=False))
     else:
         unittest.main()
