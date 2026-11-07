@@ -182,6 +182,17 @@ def save_receipt_once(path: Path, receipt: dict) -> None:
         # POSIX link is an atomic, exclusive create; it refuses existing
         # regular files and even dangling destination symlinks.
         os.link(staged, path, follow_symlinks=False)
+        # File fsync seals bytes; syncing the containing directory makes the
+        # newly published receipt name durable across filesystem recovery.
+        directory_fd = os.open(
+            path.parent,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+            | getattr(os, 'O_CLOEXEC', 0),
+        )
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
     finally:
         if staged is not None:
             staged.unlink(missing_ok=True)
@@ -334,6 +345,34 @@ class PrelaunchInputTests(unittest.TestCase):
             save_receipt_once(output, receipt)
         self.assertEqual(output.read_bytes(), before)
         self.assertFalse(list(self.directory.glob('.source-receipt-*.pending')))
+
+    def test_published_receipt_fsyncs_containing_directory(self) -> None:
+        receipt = attest_before_launch('baseline', self.attempt_id)
+        output = self.receipts_directory / 'durable.json'
+        original = os.fsync
+        observed = []
+        def observed_fsync(fd):
+            observed.append(('directory' if stat.S_ISDIR(os.fstat(fd).st_mode) else 'file'))
+            return original(fd)
+        with patch.object(os, 'fsync', side_effect=observed_fsync):
+            save_receipt_once(output, receipt)
+        self.assertEqual(observed, ['file', 'directory'])
+        self.assertEqual(json.loads(output.read_text()), receipt)
+
+    def test_directory_sync_failure_refuses_success(self) -> None:
+        receipt = attest_before_launch('candidate', self.attempt_id)
+        output = self.receipts_directory / 'unqualified.json'
+        original = os.fsync
+        def fail_directory(fd):
+            if stat.S_ISDIR(os.fstat(fd).st_mode):
+                raise OSError('injected directory fsync failure')
+            return original(fd)
+        with patch.object(os, 'fsync', side_effect=fail_directory):
+            with self.assertRaisesRegex(OSError, 'injected directory fsync failure'):
+                save_receipt_once(output, receipt)
+        # Link may already exist; caller must refuse this attempt, not overwrite it.
+        self.assertTrue(output.exists())
+        self.assertFalse(receipt['performance_admitted'])
 
     def test_existing_symlink_and_symlink_parent_never_receive_receipt(self) -> None:
         receipt = attest_before_launch('candidate', self.attempt_id)
