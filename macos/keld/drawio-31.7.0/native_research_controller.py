@@ -139,6 +139,11 @@ def check_native_final_log(log):
         ('call_not_admitted', 'KELD-IPC-005'),
         ('main_ipc_delivery_failed', 'KELD main IPC delivery failed'),
     ) if marker.lower() in log.lower())
+    # An earlier/later failed cargo terminal invalidates the entire retained log.
+    # Seeing any successful terminal line alone is not sufficient.
+    binary_failed = bool(re.search(r'(?im)^\s*test result: FAILED\.', log))
+    if binary_failed:
+        failures += ('binary_terminal_failed',)
     binary_success = bool(re.search(r'(?m)^\s*test result: ok\.', log))
     if failures or not binary_success:
         raise ValueError('native close or delivery/admission check failed: '+
@@ -152,7 +157,10 @@ def go(arm,num):
   raise ValueError('runtime pair root is required')
  if family():raise ValueError('preexisting app or fixture: '+str(family()))
  note(('launch',arm,num))
- dest=pair/arm/('attempt-'+num)
+ arm_root=pair/arm
+ if arm_root.is_symlink() or not arm_root.is_dir():
+  raise ValueError('arm root must be an existing real directory')
+ dest=arm_root/('attempt-'+num)
  # One fresh process generation per attempt: even a failed setup is retained,
  # never retried under the same attempt directory / score slot.
  if dest.exists() or dest.is_symlink(): raise ValueError('attempt path reused')
