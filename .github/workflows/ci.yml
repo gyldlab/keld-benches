@@ -314,6 +314,11 @@ jobs:
           plutil -lint macos/swift/appkit-wk/Info.plist
           plutil -lint macos/swift/swiftui-wk/Info.plist
 
+      - name: Verify original draw.io 31.7.0 source fixture
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 macos/keld/drawio-31.7.0/test_source_manifest.py
+
       - name: Compile native Swift fixtures
         run: |
           host_arch="$(uname -m)"
