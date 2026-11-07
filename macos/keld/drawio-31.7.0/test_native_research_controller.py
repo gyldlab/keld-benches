@@ -98,7 +98,7 @@ class FixtureNativeCorrectnessTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 with self.assertRaisesRegex(ValueError, 'delivery/admission'):
                     controller.check_native_final_log(OK + marker + '\n')
-        with self.assertRaisesRegex(ValueError, 'no_binary_terminal_success'):
+        with self.assertRaisesRegex(ValueError, 'binary_terminal_failed'):
             controller.check_native_final_log('test result: FAILED.\n')
 
     def test_cli_source_stage_and_final_log_fail_closed(self):
@@ -116,6 +116,32 @@ class FixtureNativeCorrectnessTests(unittest.TestCase):
         checked = subprocess.run([sys.executable, '-B', str(code), 'screen-log', '--log', str(bad)],
                                  capture_output=True, text=True, check=False)
         self.assertEqual(checked.returncode, 2)
+
+    def test_mixed_binary_terminals_rejected(self):
+        for log in (OK + 'test result: FAILED. 0 passed; 1 failed; 0 ignored\n',
+                    'test result: FAILED. 0 passed; 1 failed; 0 ignored\n' + OK):
+            with self.subTest(log=log):
+                with self.assertRaisesRegex(ValueError, 'binary_terminal_failed'):
+                    controller.check_native_final_log(log)
+
+    def test_symlink_arm_refused_before_attempt_or_fifo(self):
+        pair = self.root / 'pair'
+        pair.mkdir()
+        outside = self.root / 'outside'
+        outside.mkdir()
+        (pair/'baseline').symlink_to(outside, target_is_directory=True)
+        with patch.object(controller, 'pair', pair), patch.object(controller, 'family', return_value=[]), patch.object(controller, 'stage_verified_input', side_effect=RuntimeError('stage sentinel')):
+            with self.assertRaisesRegex(ValueError, 'arm root must be an existing real directory'):
+                controller.go('baseline', '07')
+        self.assertFalse((outside/'attempt-07').exists())
+
+    def test_real_arm_reaches_stage_without_gui_launch(self):
+        pair = self.root / 'pair'
+        (pair/'baseline').mkdir(parents=True)
+        with patch.object(controller, 'pair', pair), patch.object(controller, 'family', return_value=[]), patch.object(controller, 'stage_verified_input', side_effect=RuntimeError('stage sentinel')):
+            with self.assertRaisesRegex(RuntimeError, 'stage sentinel'):
+                controller.go('baseline', '07')
+        self.assertTrue((pair/'baseline'/'attempt-07'/'control.fifo').exists())
 
     def test_native_run_invalid_arm_attempt_rejected_before_gui(self):
         with patch.object(controller.sp, 'run') as called:
