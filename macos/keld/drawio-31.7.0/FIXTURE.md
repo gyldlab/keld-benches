@@ -16,3 +16,34 @@ wc -c < scene.drawio
 ```
 
 Do not treat different post-Save `<mxfile host>` metadata as identical saved bytes, or normalize output errors. No new benchmark harness, metric, result document, permission grant or application policy is introduced by this fixture.
+
+### Non-scoring native correctness controller
+
+`native_research_controller.py` integrates the retained KEL-90 native
+correctness investigation with the immutable source checker above. It is a
+**fixture-local diagnostic**, not the OS `bench/` metric runner, a collector,
+or a substitute for the KEL-64 harness. Its three explicit actions are:
+
+- `stage`: use `--arm baseline|candidate --attempt 01 --attempt-id <UUID>
+  --attempt-dir <existing-absolute-real-directory>` to create an exclusive
+  source attestation, an identical staged document and a binding receipt. The
+  destination must be outside the source directory and have no symlinked
+  ancestors. It refuses a reused attempt or a changed checker/source.
+- `screen-log`: use `--log <actual-final-native-log>` to reject known denied
+  Guard/IPC calls and page failures even when the binary reports success. A
+  passed screen is **negative evidence only**, never editor/workload admission.
+- `run-native`: accepts an existing, OS-qualified `--pair-root` and
+  `--drivers-dir` for the **previously owned** diagnostic GUI workflow. Do not
+  invoke it without an exclusive Mac GUI session, authorized OS permissions,
+  fresh binary/source qualification and no competing measurement/build load.
+  Its output is explicitly non-scoring, including when the terminal is green.
+
+The native control regression suite is runnable with
+`python3 -B -m unittest -v test_native_research_controller` from this fixture
+folder. These tests stage real SHA-pinned files and launch the real checker
+subprocess, but intentionally do **not** launch a GUI or claim measured RAM/CPU.
+Retained historical native logs with `KELD-IPC-005` remain inadmissible; GH540
+owns delivery semantics and GH1404 owns the original-editor functional path.
+Fresh application-loaded-byte, Open→Edit→Save→fresh Reopen→Quit, entire
+process-coalition and independent matched-session proof remain separate
+requirements before any score or KELD/Electron comparison can be published.
