@@ -188,10 +188,34 @@ class FixtureNativeCorrectnessTests(unittest.TestCase):
         pair = self.root / 'pair'
         (pair/'baseline').mkdir(parents=True)
         self.portable_bundle(pair/'baseline', 'baseline')
-        with patch.object(controller, 'pair', pair), patch.object(controller, 'family', return_value=[]), patch.object(controller, 'stage_verified_input', side_effect=RuntimeError('stage sentinel')):
+        pinned = hashlib.sha256((pair/'baseline'/'NativeFixtureBoundary.app'/'Contents'/'MacOS'/'NativeFixtureBoundary').read_bytes()).hexdigest()
+        with patch.object(controller, 'REGISTERED_NATIVE_EXECUTABLE_SHA256', {'baseline': pinned}), \
+             patch.object(controller, 'pair', pair), \
+             patch.object(controller, 'family', return_value=[]), \
+             patch.object(controller, 'stage_verified_input', side_effect=RuntimeError('stage sentinel')):
             with self.assertRaisesRegex(RuntimeError, 'stage sentinel'):
                 controller.go('baseline', '07')
         self.assertTrue((pair/'baseline'/'attempt-07'/'control.fifo').exists())
+
+    def test_changed_executable_with_same_bundle_id_rejected_before_attempt(self):
+        pair = self.root / 'pair'
+        arm = pair / 'candidate'
+        arm.mkdir(parents=True)
+        app = self.portable_bundle(arm, 'candidate')
+        binary = app / 'Contents' / 'MacOS' / 'NativeFixtureBoundary'
+        pinned_digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+        with patch.object(controller, 'pair', pair), \
+             patch.object(controller, 'family', return_value=[]), \
+             patch.object(controller, 'stage_verified_input', side_effect=RuntimeError('stage sentinel')), \
+             patch.object(controller, 'REGISTERED_NATIVE_EXECUTABLE_SHA256', {'candidate': pinned_digest}, create=True):
+            with self.assertRaisesRegex(RuntimeError, 'stage sentinel'):
+                controller.go('candidate', '07')
+            self.assertTrue((arm / 'attempt-07').exists())
+            binary.write_bytes(binary.read_bytes() + b'\n# altered executable\n')
+            self.assertTrue(os.access(binary, os.X_OK))
+            with self.assertRaisesRegex(ValueError, 'native executable digest mismatch'):
+                controller.go('candidate', '08')
+            self.assertFalse((arm / 'attempt-08').exists())
 
     def test_native_run_invalid_arm_attempt_rejected_before_gui(self):
         with patch.object(controller.sp, 'run') as called:

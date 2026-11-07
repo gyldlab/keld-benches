@@ -3,6 +3,13 @@ from datetime import datetime,timezone
 # Runtime sources must be provided explicitly. No machine-specific paths are committed.
 out=pathlib.Path(__file__).parent
 pair=None
+# Exact signed macOS wrapper executable bytes registered for the retained
+# baseline/candidate pair. New builds require new registration and D1;
+# these hashes do not attest the Host, entitlements, runtime PID or editor work.
+REGISTERED_NATIVE_EXECUTABLE_SHA256 = {
+ 'baseline': '4e740ba3345997c5e608a176403cd80e44a2a3f9fa7cb62b6d45cda7b2357672',
+ 'candidate': '00dc31b0d0bcd262f7e43316d1a94cd7025e7af3279ef7a3a2555263e987ce91',
+}
 def note(s):print(datetime.now(timezone.utc).isoformat(),s,flush=True)
 def filehash(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def family():
@@ -178,6 +185,10 @@ def checked_native_bundle(arm_root, arm):
         or metadata.get('CFBundlePackageType') != 'APPL'
         or metadata.get('CFBundleExecutable') != 'NativeFixtureBoundary'):
         raise ValueError('native bundle arm identity mismatch')
+    # A matching bundle label or a valid signature is not the identity of this
+    # registered build. Reject substituted executables before attempt creation.
+    if filehash(executable) != REGISTERED_NATIVE_EXECUTABLE_SHA256[arm]:
+        raise ValueError('native executable digest mismatch with registered arm')
     return bundle
 
 
